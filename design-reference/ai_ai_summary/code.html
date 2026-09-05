@@ -1,0 +1,294 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>AI Pre-meeting Summary Panel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400&amp;family=Inter:wght@500&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#d9dadb",
+                        "on-primary-fixed-variant": "#3323cc",
+                        "on-secondary-fixed": "#002113",
+                        "on-background": "#191c1d",
+                        "on-surface-variant": "#464555",
+                        "primary-fixed": "#e2dfff",
+                        "inverse-primary": "#c3c0ff",
+                        "secondary-container": "#6cf8bb",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary": "#684000",
+                        "outline": "#777587",
+                        "on-tertiary-fixed": "#2a1700",
+                        "tertiary-container": "#885500",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-container": "#ffd4a4",
+                        "primary-container": "#4f46e5",
+                        "surface-container": "#edeeef",
+                        "surface-variant": "#e1e3e4",
+                        "surface-container-highest": "#e1e3e4",
+                        "secondary-fixed": "#6ffbbe",
+                        "surface-bright": "#f8f9fa",
+                        "secondary-fixed-dim": "#4edea3",
+                        "on-secondary-container": "#00714d",
+                        "inverse-on-surface": "#f0f1f2",
+                        "secondary": "#006c49",
+                        "on-error-container": "#93000a",
+                        "surface": "#f8f9fa",
+                        "on-primary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb95f",
+                        "on-secondary-fixed-variant": "#005236",
+                        "background": "#f8f9fa",
+                        "surface-container-low": "#f3f4f5",
+                        "outline-variant": "#c7c4d8",
+                        "on-tertiary-fixed-variant": "#653e00",
+                        "inverse-surface": "#2e3132",
+                        "on-surface": "#191c1d",
+                        "tertiary-fixed": "#ffddb8",
+                        "on-error": "#ffffff",
+                        "surface-tint": "#4d44e3",
+                        "on-primary-fixed": "#0f0069",
+                        "error": "#ba1a1a",
+                        "primary": "#3525cd",
+                        "primary-fixed-dim": "#c3c0ff",
+                        "on-primary-container": "#dad7ff",
+                        "surface-container-high": "#e7e8e9"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "card-padding": "20px",
+                        "container-margin": "24px",
+                        "stack-gap": "12px",
+                        "sidebar-width": "260px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Manrope"],
+                        "body-md": ["Be Vietnam Pro"],
+                        "display-lg": ["Manrope"],
+                        "body-lg": ["Be Vietnam Pro"],
+                        "headline-lg": ["Manrope"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #f8f9fa; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(199, 196, 216, 0.4);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md h-screen flex overflow-hidden">
+<!-- SideNavBar -->
+<nav class="w-sidebar-width h-screen fixed left-0 top-0 bg-surface shadow-sm flex flex-col h-full border-r border-outline-variant z-50">
+<div class="p-container-margin flex items-center gap-3 cursor-pointer" onclick="window.location.href='../_/code.html'">
+<div class="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined">meeting_room</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Smart Meeting</h1>
+<p class="font-label-md text-label-md text-on-surface-variant">Enterprise Suite</p>
+</div>
+</div>
+<div class="px-gutter mb-6">
+<button class="w-full bg-primary text-on-primary font-body-md text-body-md py-3 rounded-lg flex items-center justify-center gap-2 shadow-sm hover:opacity-90 transition-opacity" onclick="window.location.href='../form/code.html'">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+                นัดหมายใหม่
+            </button>
+</div>
+<ul class="flex-1 px-3 space-y-1 overflow-y-auto">
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../_/code.html">
+<span class="material-symbols-outlined">home</span>
+                    หน้าหลัก
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../people/code.html">
+<span class="material-symbols-outlined">person</span>
+                    ผู้คน
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../contact_groups/code.html">
+<span class="material-symbols-outlined">group</span>
+                    กลุ่ม
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../meetings/code.html">
+<span class="material-symbols-outlined">calendar_month</span>
+                    การประชุม
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary-container/10 text-primary font-bold font-body-md text-body-md" href="../projects/code.html">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment</span>
+                    โปรเจกต์
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../my_action_items/code.html">
+<span class="material-symbols-outlined">task_alt</span>
+                    งานของฉัน
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../reminders/code.html">
+<span class="material-symbols-outlined">notifications</span>
+                    การแจ้งเตือน
+                </a>
+</li>
+</ul>
+<div class="p-3 border-t border-outline-variant mt-auto">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="code.html">
+<span class="material-symbols-outlined text-primary">arrow_back_ios_new</span>
+                        ตัวช่วย AI
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../settings/code.html">
+<span class="material-symbols-outlined">settings</span>
+                        ตั้งค่า
+                    </a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="ml-[260px] flex-1 flex flex-col h-screen">
+<!-- TopNavBar -->
+<header class="h-16 flex items-center justify-between px-gutter z-40 border-b border-outline-variant bg-surface sticky top-0">
+<div class="flex items-center gap-4 text-on-surface-variant">
+<button class="hover:bg-surface-container-low p-2 rounded-full transition-all" onclick="window.location.href='../form/code.html'">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<div class="h-6 w-px bg-outline-variant"></div>
+<h2 class="font-headline-md text-headline-md text-on-surface">สร้างการประชุมใหม่: Project Alpha Phase 2</h2>
+</div>
+<div class="flex items-center gap-3">
+<button class="hover:bg-surface-container-low p-2 rounded-full transition-all text-on-surface-variant" onclick="window.location.href='../reminders/code.html'">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="hover:bg-surface-container-low p-2 rounded-full transition-all text-primary" onclick="window.location.href='code.html'">
+<span class="material-symbols-outlined">arrow_back_ios_new</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant ml-2 cursor-pointer" onclick="window.location.href='../settings/code.html'">
+<img class="w-full h-full object-cover" data-alt="A professional corporate headshot of a young professional in a modern, well-lit office setting. The lighting is soft and bright, emphasizing a clean, contemporary corporate aesthetic. The subject is wearing smart-casual business attire against a subtly blurred office background with glass partitions." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDXjzstPCs2ZwijPo4ubm8o16wKdFMJEaB_rO-iCw3s7TG3RjxwAN3HPlBDI_xpe6jjdphcZ942pW1kdudL3Yj_hTRb3RXM46qQBdZ9DUTLsnHQQ0sV_7KL1TnNiuFwFyjFgd648ffhyyk39HWvHdwoyofUR1q6AVxdJhgokT7URSqjMweYLkUIe_7aDuVFzb71qunAz47Vi8zPjmfTxXoYL2NU7xPFQJP-7KGVqjW1KTeunjhoLc1t">
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<main class="flex-1 overflow-y-auto p-container-margin bg-surface-container-lowest">
+<div class="max-w-5xl mx-auto grid grid-cols-12 gap-6">
+<!-- Left Column: Form (Simplified for context) -->
+<div class="col-span-12 lg:col-span-7 space-y-6">
+<div class="bg-surface p-card-padding rounded-xl border border-outline-variant">
+<h3 class="font-headline-md text-headline-md mb-4">รายละเอียดการประชุม</h3>
+<div class="space-y-4">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-1">หัวข้อ</label>
+<input class="w-full rounded-lg border-outline-variant bg-surface-container-lowest px-3 py-2 focus:ring-primary focus:border-primary font-body-md" type="text" value="Project Alpha Phase 2 Kickoff">
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-1">วันที่</label>
+<input class="w-full rounded-lg border-outline-variant bg-surface-container-lowest px-3 py-2 focus:ring-primary focus:border-primary font-body-md text-on-surface-variant" type="date">
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-1">เวลา</label>
+<input class="w-full rounded-lg border-outline-variant bg-surface-container-lowest px-3 py-2 focus:ring-primary focus:border-primary font-body-md text-on-surface-variant" type="time">
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: AI Pre-meeting Summary Panel -->
+<div class="col-span-12 lg:col-span-5">
+<div class="glass-panel rounded-xl overflow-hidden flex flex-col h-[calc(100vh-140px)] sticky top-24">
+<!-- AI Header -->
+<div class="bg-primary-container/5 px-card-padding py-4 border-b border-outline-variant flex items-start justify-between">
+<div class="flex gap-3">
+<div class="mt-1 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-primary-fixed-variant">AI สรุปข้อมูลก่อนการประชุม</h3>
+<p class="font-label-md text-label-md text-on-surface-variant mt-1">รวบรวมจากบันทึกที่ผ่านมาและงานที่เกี่ยวข้อง</p>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors p-1">
+<span class="material-symbols-outlined text-sm">refresh</span>
+</button>
+</div>
+<!-- AI Content Editable Area -->
+<div class="flex-1 overflow-y-auto p-card-padding">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary transition-all">
+<textarea class="w-full h-full min-h-[300px] p-4 bg-transparent border-none resize-none focus:ring-0 font-body-md text-body-md text-on-surface leading-relaxed" spellcheck="false">สรุปประเด็นต่อเนื่องสำหรับ Project Alpha Phase 2:
+
+1. สถานะงานค้าง (Pending Tasks):
+- ทีม Dev ต้องส่งมอบ API Docs ให้ทีม QA ภายในวันนี้ (รอตรวจสอบ)
+- งานออกแบบ UI หน้า Dashboard เสร็จสิ้นแล้ว 90% (เหลือปรับปรุงเรื่อง Responsive)
+
+2. การตัดสินใจจากการประชุมครั้งก่อน (Decisions from Last Meeting):
+- เลือกใช้ AWS สำหรับ Cloud Hosting แทนที่จะใช้ on-premise
+- เลื่อนกำหนดการเปิดตัว Beta ออกไป 1 สัปดาห์ (เป็นวันที่ 15 เดือนหน้า)
+
+3. ประเด็นที่ควรพิจารณา (Related Issues):
+- Issue #142: บั๊กการแสดงผลบน Safari ที่ยังแก้ไม่หาย
+- การจัดสรรงบประมาณสำหรับ Marketing Campaign ในไตรมาสหน้า
+                                </textarea>
+</div>
+<!-- Source Links -->
+<div class="mt-4">
+<p class="font-label-md text-label-md text-on-surface-variant mb-2">แหล่งที่มาอ้างอิง:</p>
+<div class="flex flex-wrap gap-2">
+<a class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-xs text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined text-[14px]">description</span>
+                                        Meeting Notes - 12 Oct
+                                    </a>
+<a class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-xs text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined text-[14px]">task_alt</span>
+                                        Jira Board - Alpha
+                                    </a>
+</div>
+</div>
+</div>
+<!-- AI Footer Disclaimer -->
+<div class="p-3 bg-surface-container-low border-t border-outline-variant flex items-center justify-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">info</span>
+<span class="font-label-md text-label-md">สร้างโดย AI — โปรดตรวจสอบความถูกต้องก่อนใช้งาน</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

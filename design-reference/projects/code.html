@@ -1,0 +1,417 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Smart Meeting - Projects List</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400&amp;family=Inter:wght@500&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error-container": "#ffdad6",
+                      "surface-dim": "#d9dadb",
+                      "on-primary-fixed-variant": "#3323cc",
+                      "on-secondary-fixed": "#002113",
+                      "on-background": "#191c1d",
+                      "on-surface-variant": "#464555",
+                      "primary-fixed": "#e2dfff",
+                      "inverse-primary": "#c3c0ff",
+                      "secondary-container": "#6cf8bb",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary": "#684000",
+                      "outline": "#777587",
+                      "on-tertiary-fixed": "#2a1700",
+                      "tertiary-container": "#885500",
+                      "on-tertiary": "#ffffff",
+                      "on-tertiary-container": "#ffd4a4",
+                      "primary-container": "#4f46e5",
+                      "surface-container": "#edeeef",
+                      "surface-variant": "#e1e3e4",
+                      "surface-container-highest": "#e1e3e4",
+                      "secondary-fixed": "#6ffbbe",
+                      "surface-bright": "#f8f9fa",
+                      "secondary-fixed-dim": "#4edea3",
+                      "on-secondary-container": "#00714d",
+                      "inverse-on-surface": "#f0f1f2",
+                      "secondary": "#006c49",
+                      "on-error-container": "#93000a",
+                      "surface": "#f8f9fa",
+                      "on-primary": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb95f",
+                      "on-secondary-fixed-variant": "#005236",
+                      "background": "#f8f9fa",
+                      "surface-container-low": "#f3f4f5",
+                      "outline-variant": "#c7c4d8",
+                      "on-tertiary-fixed-variant": "#653e00",
+                      "inverse-surface": "#2e3132",
+                      "on-surface": "#191c1d",
+                      "tertiary-fixed": "#ffddb8",
+                      "on-error": "#ffffff",
+                      "surface-tint": "#4d44e3",
+                      "on-primary-fixed": "#0f0069",
+                      "error": "#ba1a1a",
+                      "primary": "#3525cd",
+                      "primary-fixed-dim": "#c3c0ff",
+                      "on-primary-container": "#dad7ff",
+                      "surface-container-high": "#e7e8e9"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "16px",
+                      "card-padding": "20px",
+                      "container-margin": "24px",
+                      "stack-gap": "12px",
+                      "sidebar-width": "260px"
+              },
+              "fontFamily": {
+                      "headline-md": [
+                              "Manrope"
+                      ],
+                      "body-md": [
+                              "Be Vietnam Pro"
+                      ],
+                      "display-lg": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Be Vietnam Pro"
+                      ],
+                      "headline-lg": [
+                              "Manrope"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+            },
+          }
+        }
+    </script>
+<style>
+        body {
+            background-color: #f8f9fa; /* surface */
+            color: #191c1d; /* on-surface */
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 24px;
+        }
+        .bento-item {
+            background: #ffffff; /* surface-container-lowest */
+            border-radius: 0.75rem; /* xl */
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); /* ambient shadow */
+            padding: 24px;
+        }
+        
+        .bento-item-large { grid-column: span 12; }
+        @media (min-width: 768px) {
+            .bento-item-medium { grid-column: span 6; }
+            .bento-item-small { grid-column: span 4; }
+        }
+        @media (min-width: 1024px) {
+            .bento-item-large { grid-column: span 8; }
+            .bento-item-medium { grid-column: span 4; }
+        }
+    </style>
+</head>
+<body class="flex bg-surface font-body-md text-body-md text-on-surface">
+<!-- SideNavBar (from JSON) -->
+<nav class="w-sidebar-width h-screen fixed left-0 top-0 bg-surface shadow-sm flex flex-col h-full border-r border-outline-variant hidden md:flex z-50">
+<div class="p-gutter flex items-center gap-stack-gap border-b border-outline-variant pb-6 mb-4 cursor-pointer" onclick="window.location.href='../_/code.html'">
+<div class="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-lg shadow-sm">
+<span class="material-symbols-outlined" data-icon="corporate_fare">corporate_fare</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Smart Meeting</h1>
+<p class="font-label-md text-label-md text-on-surface-variant">Enterprise Suite</p>
+</div>
+</div>
+<div class="px-4 mb-6">
+<button class="w-full bg-primary text-on-primary font-body-md text-body-md font-medium rounded-lg py-3 px-4 flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 duration-200 shadow-sm transition-all" onclick="window.location.href='../form/code.html'">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                นัดหมายใหม่
+            </button>
+</div>
+<div class="flex-1 overflow-y-auto px-4 space-y-1">
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../_/code.html">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-body-md text-body-md">หน้าหลัก</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../people/code.html">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-body-md text-body-md">ผู้คน</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../contact_groups/code.html">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-md text-body-md">กลุ่ม</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../meetings/code.html">
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>
+<span class="font-body-md text-body-md">การประชุม</span>
+</a>
+<!-- Active (Projects Page) -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md bg-primary-container/10 text-primary font-bold active:scale-95 duration-200" href="code.html">
+<span class="material-symbols-outlined" data-icon="assignment" style="font-variation-settings: 'FILL' 1;">assignment</span>
+<span class="font-body-md text-body-md font-bold">โปรเจกต์</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../my_action_items/code.html">
+<span class="material-symbols-outlined" data-icon="task_alt">task_alt</span>
+<span class="font-body-md text-body-md">งานของฉัน</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../reminders/code.html">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-body-md text-body-md flex-1">การแจ้งเตือน</span>
+<span class="bg-error text-on-error rounded-full px-2 py-0.5 text-[10px] font-bold">3</span>
+</a>
+</div>
+<div class="p-4 border-t border-outline-variant space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../ai_ai_summary/code.html">
+<span class="material-symbols-outlined text-primary" data-icon="sparkles">arrow_back_ios_new</span>
+<span class="font-body-md text-body-md">ตัวช่วย AI</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../settings/code.html">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">ตั้งค่า</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 md:ml-[260px] min-h-screen flex flex-col">
+<!-- TopNavBar (from JSON) -->
+<header class="h-16 fixed top-0 right-0 w-full md:w-[calc(100%-260px)] bg-surface flex items-center justify-between px-gutter z-40 border-b border-outline-variant hidden md:flex transition-all">
+<!-- Search on Left -->
+<div class="flex items-center w-96">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant text-on-surface rounded-full pl-10 pr-4 py-2 font-body-md text-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-on-surface-variant/70" placeholder="ค้นหาโปรเจกต์, การประชุม..." type="text">
+</div>
+</div>
+<!-- Trailing Actions & Profile -->
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-all active:opacity-80" onclick="window.location.href='../reminders/code.html'">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-primary bg-primary-container/10 hover:bg-primary-container/20 transition-all active:opacity-80" onclick="window.location.href='../ai_ai_summary/code.html'">
+<span class="material-symbols-outlined" data-icon="sparkles">arrow_back_ios_new</span>
+</button>
+<div class="h-6 w-px bg-outline-variant mx-2"></div>
+<button class="flex items-center gap-2 hover:bg-surface-container-low p-1.5 rounded-full transition-all pr-4" onclick="window.location.href='../settings/code.html'">
+<img alt="User Avatar" class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="A clean, professional headshot of an Asian corporate employee against a solid light background, bright high-key lighting, modern corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3aH58mlAMZ3UKZjqCZuT_Z8qqJqeLZ-YXFtxQP_UR6tLwjN5L0eQ0b_UH29NJlm9ig4IdtSb0hydqJx5JBefbYUDKv-w3A59vusYrSAYpPuzrJHkumRvdMEIEEqhGGclSppgMsvSN5QVy140bfzgoXOTDam9ZbdME_ovFD4InsATzLGl2UA_1d6QrWsZOHEmQCWgGUlbk094vTVWY51U9ZMjYYxQ4ta9vYAWDYnoj-61cKO940jCo">
+<span class="font-label-md text-label-md font-medium">Somchai M.</span>
+<span class="material-symbols-outlined text-sm text-on-surface-variant">expand_more</span>
+</button>
+</div>
+</header>
+<!-- Canvas -->
+<main class="flex-1 p-container-margin pt-24 md:pt-24 mt-16 md:mt-0">
+<div class="mb-8 flex justify-between items-end">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-background mb-2">โปรเจกต์ทั้งหมด</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">จัดการและติดตามสถานะโปรเจกต์ของทีมคุณ</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-label-md text-label-md flex items-center gap-2 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                        ตัวกรอง
+                    </button>
+<button class="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md font-medium flex items-center gap-2 shadow-sm hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm">add</span>
+                        สร้างโปรเจกต์
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Layout for Projects -->
+<div class="bento-grid">
+<!-- Featured/High Priority Project -->
+<div class="bento-item bento-item-large bg-gradient-to-br from-surface-container-lowest to-surface-container-low relative overflow-hidden group border border-outline-variant/30 hover:border-primary/30 transition-colors cursor-pointer" onclick="window.location.href='../project_detail/code.html'">
+<!-- Subtle pattern overlay -->
+<div class="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#3525cd_1px,transparent_1px)] [background-size:16px_16px]"></div>
+<div class="relative z-10 flex flex-col md:flex-row gap-6 justify-between h-full">
+<div class="flex-1 flex flex-col">
+<div class="flex items-center gap-3 mb-4">
+<span class="px-2.5 py-1 rounded-full bg-[#e8f5e9] text-[#1b5e20] font-label-md text-label-md font-bold flex items-center gap-1.5 w-fit">
+<span class="w-1.5 h-1.5 rounded-full bg-[#2e7d32]"></span>
+                                    Active
+                                </span>
+<span class="font-label-md text-label-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">calendar_today</span>
+                                    Q3 2024
+                                </span>
+</div>
+<h3 class="font-headline-lg text-headline-lg mb-2 text-on-background group-hover:text-primary transition-colors">Enterprise Resource Planning (ERP) Migration</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6 max-w-2xl">การย้ายระบบ ERP เดิมไปสู่ระบบ Cloud รูปแบบใหม่ เพื่อรองรับการขยายตัวของธุรกิจในปีหน้า จำเป็นต้องประสานงานกับทุกแผนก</p>
+<div class="mt-auto pt-4 border-t border-outline-variant/50 flex items-center gap-6">
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined">forum</span>
+</div>
+<div>
+<p class="font-display-lg text-display-lg text-on-background leading-none">12</p>
+<p class="font-label-md text-label-md text-on-surface-variant">การประชุม</p>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined">group</span>
+</div>
+<div>
+<p class="font-display-lg text-display-lg text-on-background leading-none">8</p>
+<p class="font-label-md text-label-md text-on-surface-variant">ผู้เกี่ยวข้อง</p>
+</div>
+</div>
+</div>
+</div>
+<div class="md:w-1/3 flex flex-col justify-center items-end bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/50 shadow-sm relative overflow-hidden">
+<!-- Progress visualization -->
+<div class="w-32 h-32 relative flex items-center justify-center mb-4">
+<svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="40" stroke="#edeeef" stroke-width="8"></circle>
+<circle class="text-primary" cx="50" cy="50" fill="none" r="40" stroke="#3525cd" stroke-dasharray="251.2" stroke-dashoffset="62.8" stroke-linecap="round" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-display-lg text-[24px] font-bold text-on-background">75%</span>
+</div>
+</div>
+<p class="font-label-md text-label-md text-on-surface-variant text-center w-full">ความคืบหน้าโครงการ</p>
+</div>
+</div>
+</div>
+<!-- Standard Projects -->
+<div class="bento-item bento-item-medium flex flex-col cursor-pointer border border-transparent hover:border-outline-variant transition-colors group" onclick="window.location.href='../project_detail/code.html'">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center text-on-surface-variant group-hover:bg-primary-container/10 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined">campaign</span>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-[#e8f5e9] text-[#1b5e20] font-label-md text-label-md font-bold flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-[#2e7d32]"></span>
+                            Active
+                        </span>
+</div>
+<h3 class="font-headline-md text-headline-md mb-2 text-on-background group-hover:text-primary transition-colors">Q4 Marketing Campaign</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6 flex-1">แคมเปญการตลาดช่วงปลายปี เน้นไปที่ช่องทางออนไลน์เป็นหลัก</p>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant/50">
+<div class="flex -space-x-2">
+<img class="w-8 h-8 rounded-full border-2 border-surface-container-lowest object-cover z-30" data-alt="Small headshot of an Asian female marketing manager, professional, smiling slightly, clean bright background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzPWK5mUVhOy9rgSjBOTZCTSdXe1UYDZDU79tLW_Kt46QLor6axaJsNyFrRH9wKcrA1j9N51mvPYAetB91dOvlXuFNOacawR9Y0OWdDd_Q3girRrqS4yWdXpcfIFqfI9OA2_Z1HQi9wMFTCrLQ0OIa0VGzcYNFI5mws5z56tbEgH3zyjPv9mGCK-24baeqkyt51pSZm3WXfJVbOfBT8Gb53cE7ZdLlW5tx89IY_OtMrE7eiQa_lCII">
+<img class="w-8 h-8 rounded-full border-2 border-surface-container-lowest object-cover z-20" data-alt="Small headshot of an Asian male designer, creative professional look, clean bright background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0XYLfHkcseeYDaVBuWA57sbnhgUmI2yATg_7aAM3a_fftP2KzOjECY6M5J6-yJhpolq9W1lU5nsIQz4IR2Keq4tFMJr8ITk-r6HrEN3o89vCGCxS66JLZM_rO-R-rjkhptStnnZNmHblulgyS_qsoTxAM6E-yeTUw0HM_g6Pwq2deF0MxRHPp_rMaOBkR7fn5s3MjztReKTRuw2BIZbCYnzXQa3A9KY8JhjzgHUM6IOCtRS0QAwta">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold text-on-surface-variant z-10">+3</div>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">calendar_month</span>
+<span class="font-label-md text-label-md">5 การประชุม</span>
+</div>
+</div>
+</div>
+<div class="bento-item bento-item-medium flex flex-col cursor-pointer border border-transparent hover:border-outline-variant transition-colors group" onclick="window.location.href='../project_detail/code.html'">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center text-on-surface-variant group-hover:bg-primary-container/10 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined">web</span>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-[#fff8e1] text-[#f57f17] font-label-md text-label-md font-bold flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-[#fbc02d]"></span>
+                            Pending
+                        </span>
+</div>
+<h3 class="font-headline-md text-headline-md mb-2 text-on-background group-hover:text-primary transition-colors">Corporate Website Redesign</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6 flex-1">ปรับปรุงหน้าเว็บไซต์หลักของบริษัทให้ทันสมัย รองรับการใช้งานบนมือถือมากขึ้น</p>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant/50">
+<div class="flex -space-x-2">
+<img class="w-8 h-8 rounded-full border-2 border-surface-container-lowest object-cover z-20" data-alt="Small headshot of a young Asian male developer, professional, clean bright background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgCvkfZYfUDuQa5LimvjSLOqJ8TOvRFpVbvjIqL8aBG0EuPRVhmlhMhM6QnoYUJ7nwspfPGQq1aVdxvedDPnFw65NaXacmmwsiPGRreSG3VQIb7GwE91UXYHey5VyWfeqSGyjy1WBL1bAapjd5SknmdWPwESRoNgMawHRkuf7DT_rJ39020aDgBEwKC0z0Lje04gbIpkBsCmnO40roy7NrZlbarTBDr7biPdCfi4JLgjhDg5Xu60zB">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest bg-surface-container flex items-center justify-center text-[10px] font-bold text-on-surface-variant z-10">+1</div>
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">calendar_month</span>
+<span class="font-label-md text-label-md">2 การประชุม</span>
+</div>
+</div>
+</div>
+<div class="bento-item bento-item-medium flex flex-col cursor-pointer border border-transparent hover:border-outline-variant transition-colors group" onclick="window.location.href='../project_detail/code.html'">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-xl bg-surface-container flex items-center justify-center text-on-surface-variant group-hover:bg-primary-container/10 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined">shield</span>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-[#ffebee] text-[#c62828] font-label-md text-label-md font-bold flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-[#e53935]"></span>
+                            Delayed
+                        </span>
+</div>
+<h3 class="font-headline-md text-headline-md mb-2 text-on-background group-hover:text-primary transition-colors">Security Audit 2024</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6 flex-1">ตรวจสอบความปลอดภัยของระบบโครงสร้างพื้นฐานทั้งหมด (ติดปัญหาเอกสาร)</p>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant/50">
+<div class="flex -space-x-2">
+<img class="w-8 h-8 rounded-full border-2 border-surface-container-lowest object-cover z-20" data-alt="Small headshot of a senior Asian male IT professional, serious, clean bright background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLSuDdAtHeKB5GbUfBuQPAzdVyGr-_3bBfK0le0jmg1Smoj43qwRCl-fYZX9-4Nhyr_-LRnfsifwWMYUKL6ErAj8IHDOEklxCKvsK8ba1UfWs1hBqO4utm0mRuQ-aHv5FdpsN2AeIQ-6fovfgpUK0fg0-o56VHzY4HzZefDGNEh_0CKRi-qTHJe_kSVbKIVThAXzB7HBnmo9Qk6C_9IhJ6oLMjFmVEeTQzXhHFDsYlnwqYCFV7hRvk">
+</div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm">calendar_month</span>
+<span class="font-label-md text-label-md">8 การประชุม</span>
+</div>
+</div>
+</div>
+<!-- Create New Project Card (Glassmorphism inspired) -->
+<div class="bento-item bento-item-medium flex flex-col items-center justify-center text-center cursor-pointer border-2 border-dashed border-outline-variant/50 hover:border-primary hover:bg-surface-container-low transition-all bg-transparent shadow-none group py-12">
+<div class="w-16 h-16 rounded-full bg-surface-container-lowest shadow-sm flex items-center justify-center text-on-surface-variant group-hover:text-primary group-hover:bg-primary-container/10 transition-colors mb-4">
+<span class="material-symbols-outlined text-[32px]">add</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-background mb-1">สร้างโปรเจกต์ใหม่</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">เริ่มต้นจัดการงานและการประชุมใหม่</p>
+</div>
+</div>
+</main>
+</div>
+</body></html>

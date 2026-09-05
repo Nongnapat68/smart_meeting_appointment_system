@@ -1,0 +1,359 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Contact Groups - Smart Meeting</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error-container": "#ffdad6",
+                      "surface-dim": "#d9dadb",
+                      "on-primary-fixed-variant": "#3323cc",
+                      "on-secondary-fixed": "#002113",
+                      "on-background": "#191c1d",
+                      "on-surface-variant": "#464555",
+                      "primary-fixed": "#e2dfff",
+                      "inverse-primary": "#c3c0ff",
+                      "secondary-container": "#6cf8bb",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary": "#684000",
+                      "outline": "#777587",
+                      "on-tertiary-fixed": "#2a1700",
+                      "tertiary-container": "#885500",
+                      "on-tertiary": "#ffffff",
+                      "on-tertiary-container": "#ffd4a4",
+                      "primary-container": "#4f46e5",
+                      "surface-container": "#edeeef",
+                      "surface-variant": "#e1e3e4",
+                      "surface-container-highest": "#e1e3e4",
+                      "secondary-fixed": "#6ffbbe",
+                      "surface-bright": "#f8f9fa",
+                      "secondary-fixed-dim": "#4edea3",
+                      "on-secondary-container": "#00714d",
+                      "inverse-on-surface": "#f0f1f2",
+                      "secondary": "#006c49",
+                      "on-error-container": "#93000a",
+                      "surface": "#f8f9fa",
+                      "on-primary": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb95f",
+                      "on-secondary-fixed-variant": "#005236",
+                      "background": "#f8f9fa",
+                      "surface-container-low": "#f3f4f5",
+                      "outline-variant": "#c7c4d8",
+                      "on-tertiary-fixed-variant": "#653e00",
+                      "inverse-surface": "#2e3132",
+                      "on-surface": "#191c1d",
+                      "tertiary-fixed": "#ffddb8",
+                      "on-error": "#ffffff",
+                      "surface-tint": "#4d44e3",
+                      "on-primary-fixed": "#0f0069",
+                      "error": "#ba1a1a",
+                      "primary": "#3525cd",
+                      "primary-fixed-dim": "#c3c0ff",
+                      "on-primary-container": "#dad7ff",
+                      "surface-container-high": "#e7e8e9"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "16px",
+                      "card-padding": "20px",
+                      "container-margin": "24px",
+                      "stack-gap": "12px",
+                      "sidebar-width": "260px"
+              },
+              "fontFamily": {
+                      "headline-md": [
+                              "Manrope"
+                      ],
+                      "body-md": [
+                              "Be Vietnam Pro"
+                      ],
+                      "display-lg": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Be Vietnam Pro"
+                      ],
+                      "headline-lg": [
+                              "Manrope"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 1,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+        .nav-item-active {
+            font-variation-settings: 'FILL' 1;
+        }
+        .nav-item-inactive {
+            font-variation-settings: 'FILL' 0;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md h-screen overflow-hidden flex">
+<!-- SideNavBar -->
+<aside class="w-sidebar-width h-screen fixed left-0 top-0 bg-surface dark:bg-inverse-surface shadow-sm flex flex-col h-full border-r border-outline-variant dark:border-outline z-50">
+<!-- Brand / Header -->
+<div class="px-container-margin py-6 flex items-center gap-4 border-b border-outline-variant/50 cursor-pointer" onclick="window.location.href='../_/code.html'">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-on-primary font-bold text-xl shadow-sm">
+<span class="material-symbols-outlined" data-icon="corporate_fare" style="font-variation-settings: 'FILL' 1;">corporate_fare</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Smart Meeting</h1>
+<p class="font-label-md text-label-md text-on-surface-variant">Enterprise Suite</p>
+</div>
+</div>
+<!-- CTA -->
+<div class="px-container-margin py-4">
+<button class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary font-body-md py-3 px-4 rounded-xl shadow-sm hover:bg-primary/90 transition-colors active:scale-95 duration-200" onclick="window.location.href='../form/code.html'">
+<span class="material-symbols-outlined" data-icon="add" data-weight="fill">add</span>
+<span>นัดหมายใหม่</span>
+</button>
+</div>
+<!-- Main Navigation -->
+<nav class="flex-1 overflow-y-auto px-4 py-2 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../_/code.html">
+<span class="material-symbols-outlined nav-item-inactive" data-icon="home">home</span>
+<span class="font-body-md text-body-md">หน้าหลัก</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../people/code.html">
+<span class="material-symbols-outlined nav-item-inactive" data-icon="person">person</span>
+<span class="font-body-md text-body-md">ผู้คน</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-container/10 text-primary font-bold hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="code.html">
+<span class="material-symbols-outlined nav-item-active" data-icon="group" data-weight="fill">group</span>
+<span class="font-body-md text-body-md">กลุ่ม</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../meetings/code.html">
+<span class="material-symbols-outlined nav-item-inactive" data-icon="calendar_month">calendar_month</span>
+<span class="font-body-md text-body-md">การประชุม</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../projects/code.html">
+<span class="material-symbols-outlined nav-item-inactive" data-icon="assignment">assignment</span>
+<span class="font-body-md text-body-md">โปรเจกต์</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../my_action_items/code.html">
+<span class="material-symbols-outlined nav-item-inactive" data-icon="task_alt">task_alt</span>
+<span class="font-body-md text-body-md">งานของฉัน</span>
+</a>
+<a class="flex items-center justify-between px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../reminders/code.html">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined nav-item-inactive" data-icon="notifications">notifications</span>
+<span class="font-body-md text-body-md">การแจ้งเตือน</span>
+</div>
+<span class="bg-error text-on-error font-label-md text-label-md px-2 py-0.5 rounded-full">3</span>
+</a>
+</nav>
+<!-- Footer Navigation -->
+<div class="p-4 border-t border-outline-variant/50 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../ai_ai_summary/code.html">
+<span class="material-symbols-outlined text-secondary-fixed-dim nav-item-inactive" data-icon="sparkles">arrow_back_ios_new</span>
+<span class="font-body-md text-body-md">ตัวช่วย AI</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../settings/code.html">
+<span class="material-symbols-outlined nav-item-inactive" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">ตั้งค่า</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="h-16 fixed top-0 right-0 w-[calc(100%-260px)] bg-surface dark:bg-background flex items-center justify-between px-gutter z-40 border-b border-outline-variant">
+<!-- Search -->
+<div class="flex-1 max-w-md">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors" data-icon="search">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-full pl-10 pr-4 py-2 text-body-md font-body-md focus:ring-2 focus:ring-primary focus:bg-surface-container-lowest transition-all" placeholder="ค้นหากลุ่ม..." type="text">
+</div>
+</div>
+<!-- Actions & Profile -->
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-all active:opacity-80 relative" onclick="window.location.href='../ai_ai_summary/code.html'">
+<span class="material-symbols-outlined" data-icon="sparkles">arrow_back_ios_new</span>
+</button>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-all active:opacity-80 relative" onclick="window.location.href='../reminders/code.html'">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<div class="h-8 w-px bg-outline-variant mx-2"></div>
+<button class="flex items-center gap-2 hover:opacity-80 transition-opacity" onclick="window.location.href='../settings/code.html'">
+<img alt="User Avatar" class="w-9 h-9 rounded-full object-cover border border-outline-variant" data-alt="A professional headshot of a corporate employee in a light-mode modern office setting. The lighting is soft and flattering, highlighting a clean and modern aesthetic. The background is slightly blurred, focusing on the person. Soft whites, grays, and a touch of indigo are present." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCeSs1ssFg6DMwNndeoAzhxtOXG35mnnYlBwkr-qNsaX1V_AqerzjbX_x33ABf9-g8kKN9bWNR6FLsT3bulSc1oE-d25F__RtW0_TecqYHu9iIs6Jpoa_VuexTNcLt0OmuCBJPly7XiPAX2Ajz7fY9YAoG1Su7MroQPqMaH_ef8r169_ub06nukLI9B4PDQTkh92ZJUiksSF-5YA2bo8-IS2IeU1-6K6ziv-z5zbqvJf2XSqV-eNnV8">
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width pt-16 h-screen overflow-y-auto w-full">
+<div class="p-container-margin max-w-7xl mx-auto space-y-8">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-background">กลุ่มผู้ติดต่อ</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">จัดการกลุ่มและสมาชิกสำหรับการนัดหมาย</p>
+</div>
+<button class="flex items-center justify-center gap-2 bg-primary text-on-primary font-body-md py-2 px-4 rounded-lg shadow-sm hover:bg-primary/90 transition-colors">
+<span class="material-symbols-outlined" data-icon="group_add">group_add</span>
+<span>สร้างกลุ่มใหม่</span>
+</button>
+</div>
+<!-- Groups Grid (Bento Style) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-[0_4px_15px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 flex flex-col group relative overflow-hidden cursor-pointer" onclick="window.location.href='../group_detail/code.html'">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -z-0"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<div class="w-12 h-12 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="work" data-weight="fill">work</span>
+</div>
+<button class="text-on-surface-variant hover:text-on-background p-1 rounded hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="mb-6 relative z-10">
+<h3 class="font-headline-md text-headline-md text-on-background mb-1">ทีมโครงการ A</h3>
+<p class="font-body-md text-body-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-base" data-icon="person">person</span>
+                            12 สมาชิก
+                        </p>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/20 flex gap-2 relative z-10">
+<button class="flex-1 bg-surface-container-low hover:bg-surface-container flex items-center justify-center gap-1 py-2 rounded-lg text-body-md font-body-md text-on-background transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="person_add">person_add</span>
+                            เพิ่มสมาชิก
+                        </button>
+<button class="flex-1 bg-surface-container-low hover:bg-surface-container flex items-center justify-center gap-1 py-2 rounded-lg text-body-md font-body-md text-on-background transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="edit">edit</span>
+                            แก้ไขกลุ่ม
+                        </button>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-[0_4px_15px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 flex flex-col group relative overflow-hidden cursor-pointer" onclick="window.location.href='../group_detail/code.html'">
+<div class="absolute top-0 right-0 w-24 h-24 bg-secondary-fixed/10 rounded-bl-full -z-0"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<div class="w-12 h-12 rounded-lg bg-secondary-container flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined" data-icon="gavel" data-weight="fill">gavel</span>
+</div>
+<button class="text-on-surface-variant hover:text-on-background p-1 rounded hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="mb-6 relative z-10">
+<h3 class="font-headline-md text-headline-md text-on-background mb-1">คณะกรรมการ</h3>
+<p class="font-body-md text-body-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-base" data-icon="person">person</span>
+                            5 สมาชิก
+                        </p>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/20 flex gap-2 relative z-10">
+<button class="flex-1 bg-surface-container-low hover:bg-surface-container flex items-center justify-center gap-1 py-2 rounded-lg text-body-md font-body-md text-on-background transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="person_add">person_add</span>
+                            เพิ่มสมาชิก
+                        </button>
+<button class="flex-1 bg-surface-container-low hover:bg-surface-container flex items-center justify-center gap-1 py-2 rounded-lg text-body-md font-body-md text-on-background transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="edit">edit</span>
+                            แก้ไขกลุ่ม
+                        </button>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 border border-outline-variant/30 shadow-[0_4px_15px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_25px_rgba(0,0,0,0.08)] transition-all duration-300 flex flex-col group relative overflow-hidden cursor-pointer" onclick="window.location.href='../group_detail/code.html'">
+<div class="absolute top-0 right-0 w-24 h-24 bg-tertiary-fixed/20 rounded-bl-full -z-0"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<div class="w-12 h-12 rounded-lg bg-tertiary-container flex items-center justify-center text-on-tertiary">
+<span class="material-symbols-outlined" data-icon="campaign" data-weight="fill">campaign</span>
+</div>
+<button class="text-on-surface-variant hover:text-on-background p-1 rounded hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="mb-6 relative z-10">
+<h3 class="font-headline-md text-headline-md text-on-background mb-1">ฝ่ายการตลาด</h3>
+<p class="font-body-md text-body-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-base" data-icon="person">person</span>
+                            24 สมาชิก
+                        </p>
+</div>
+<div class="mt-auto pt-4 border-t border-outline-variant/20 flex gap-2 relative z-10">
+<button class="flex-1 bg-surface-container-low hover:bg-surface-container flex items-center justify-center gap-1 py-2 rounded-lg text-body-md font-body-md text-on-background transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="person_add">person_add</span>
+                            เพิ่มสมาชิก
+                        </button>
+<button class="flex-1 bg-surface-container-low hover:bg-surface-container flex items-center justify-center gap-1 py-2 rounded-lg text-body-md font-body-md text-on-background transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="edit">edit</span>
+                            แก้ไขกลุ่ม
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

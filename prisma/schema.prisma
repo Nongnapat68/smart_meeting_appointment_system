@@ -1,0 +1,392 @@
+// Smart Meeting Appointment System — Prisma schema
+// Dev DB: SQLite (file-based, zero setup). Swap `provider`/`url` for Postgres in production —
+// the schema below avoids SQLite-only quirks so the switch is a config change, not a rewrite.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth / Users
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  passwordHash          String
+  name                  String
+  avatarUrl             String?
+  phone                 String?
+  title                 String? // ตำแหน่ง
+  department            String?
+  role                  UserRole @default(MEMBER)
+  emailNotifications    Boolean  @default(true)
+  inAppNotifications    Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // A User is also represented as a Person in the contact directory so they
+  // can be invited to meetings / added to groups like any other contact.
+  person                Person?
+
+  organizedMeetings     Meeting[]        @relation("MeetingOrganizer")
+  assignedTasks         Task[]           @relation("TaskAssignee")
+  createdTasks          Task[]           @relation("TaskCreator")
+  taskComments          TaskComment[]
+  notifications         Notification[]
+  createdGroups         ContactGroup[]
+  managedProjects       Project[]        @relation("ProjectManager")
+  passwordResets        PasswordResetOtp[]
+}
+
+model PasswordResetOtp {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  otpHash   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// People / Contacts
+// ---------------------------------------------------------------------------
+
+enum PersonType {
+  INTERNAL // linked to a User who can log in
+  EXTERNAL // contact only, no login
+}
+
+enum PersonStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Person {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  phone        String?
+  avatarUrl    String?
+  title        String?
+  department   String?
+  type         PersonType   @default(EXTERNAL)
+  status       PersonStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  userId       String?      @unique
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  groupMemberships   ContactGroupMember[]
+  projectMemberships ProjectMember[]
+  meetingParticipations MeetingParticipant[]
+  assignedTaskItems  Task[]              @relation("TaskAssigneePerson")
+  organizedMeetingsAsPerson Meeting[]    @relation("MeetingOrganizerPerson")
+
+  @@index([type])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Contact Groups
+// ---------------------------------------------------------------------------
+
+model ContactGroup {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  icon        String   @default("group") // material symbol name
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  members     ContactGroupMember[]
+  meetings    Meeting[] @relation("MeetingGroups")
+}
+
+enum GroupRole {
+  LEADER // หัวหน้ากลุ่ม
+  MEMBER // สมาชิก
+}
+
+model ContactGroupMember {
+  id        String       @id @default(cuid())
+  groupId   String
+  group     ContactGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  role      GroupRole    @default(MEMBER)
+  joinedAt  DateTime     @default(now())
+
+  @@unique([groupId, personId])
+  @@index([personId])
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+enum ProjectStatus {
+  ACTIVE
+  PENDING
+  DELAYED
+  COMPLETED
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  managerId   String?
+  manager     User?         @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
+
+  members     ProjectMember[]
+  meetings    Meeting[]
+  tasks       Task[]
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@unique([projectId, personId])
+  @@index([personId])
+}
+
+// ---------------------------------------------------------------------------
+// Meetings
+// ---------------------------------------------------------------------------
+
+enum MeetingType {
+  SINGLE // ครั้งเดียว
+  PROJECT // เชื่อมโยงกับโปรเจกต์
+}
+
+enum MeetingStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+model Meeting {
+  id          String        @id @default(cuid())
+  title       String
+  description String? // agenda / notes
+  type        MeetingType   @default(SINGLE)
+  status      MeetingStatus @default(PENDING)
+  startTime   DateTime
+  endTime     DateTime
+  location    String? // room name or video link
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  organizerId String?
+  organizer   User?         @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: SetNull)
+  organizerPersonId String?
+  organizerPerson   Person? @relation("MeetingOrganizerPerson", fields: [organizerPersonId], references: [id], onDelete: SetNull)
+
+  projectId   String?
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  participants MeetingParticipant[]
+  groups       ContactGroup[]       @relation("MeetingGroups")
+  tasks        Task[]
+  reminders    Reminder[]
+  aiSummary    AISummary?
+
+  @@index([status])
+  @@index([startTime])
+}
+
+enum ParticipantRole {
+  ORGANIZER
+  ATTENDEE
+}
+
+enum RsvpStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model MeetingParticipant {
+  id         String          @id @default(cuid())
+  meetingId  String
+  meeting    Meeting         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  personId   String
+  person     Person          @relation(fields: [personId], references: [id], onDelete: Cascade)
+  role       ParticipantRole @default(ATTENDEE)
+  rsvpStatus RsvpStatus      @default(PENDING)
+
+  @@unique([meetingId, personId])
+  @@index([personId])
+}
+
+// ---------------------------------------------------------------------------
+// Tasks / Action Items
+// ---------------------------------------------------------------------------
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Task {
+  id           String       @id @default(cuid())
+  title        String
+  description  String?
+  status       TaskStatus   @default(NOT_STARTED)
+  priority     TaskPriority @default(MEDIUM)
+  dueDate      DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  completedAt  DateTime?
+
+  assigneeId       String?
+  assignee         User?    @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigneePersonId String?
+  assigneePerson   Person?  @relation("TaskAssigneePerson", fields: [assigneePersonId], references: [id], onDelete: SetNull)
+
+  createdById  String?
+  createdBy    User?    @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  meetingId    String?
+  meeting      Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+
+  comments     TaskComment[]
+  attachments  TaskAttachment[]
+
+  @@index([status])
+  @@index([assigneeId])
+  @@index([dueDate])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+}
+
+model TaskAttachment {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  uploadedAt  DateTime @default(now())
+
+  @@index([taskId])
+}
+
+// ---------------------------------------------------------------------------
+// Reminders
+// ---------------------------------------------------------------------------
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model Reminder {
+  id            String         @id @default(cuid())
+  meetingId     String
+  meeting       Meeting        @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  scheduledAt   DateTime
+  status        ReminderStatus @default(PENDING)
+  failureReason String?
+  sentAt        DateTime?
+  retryCount    Int            @default(0)
+  createdAt     DateTime       @default(now())
+
+  @@index([status])
+  @@index([meetingId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (in-app)
+// ---------------------------------------------------------------------------
+
+enum NotificationType {
+  MEETING_INVITE
+  MEETING_UPDATED
+  MEETING_CANCELLED
+  TASK_ASSIGNED
+  AI_SUMMARY_READY
+  REMINDER
+}
+
+model Notification {
+  id          String            @id @default(cuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  title       String
+  body        String?
+  isRead      Boolean           @default(false)
+  relatedId   String? // meetingId / taskId, interpreted by `type`
+  createdAt   DateTime          @default(now())
+
+  @@index([userId, isRead])
+}
+
+// ---------------------------------------------------------------------------
+// AI Summaries
+// ---------------------------------------------------------------------------
+
+model AISummary {
+  id          String   @id @default(cuid())
+  meetingId   String   @unique
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  content     String
+  sources     String? // JSON-encoded array of { label, refType, refId }
+  model       String
+  isEdited    Boolean  @default(false)
+  generatedAt DateTime @default(now())
+}

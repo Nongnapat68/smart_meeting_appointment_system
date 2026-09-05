@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Logout Confirmation - Smart Meeting</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#e2dfff", "surface-dim": "#d9dadb", "secondary-fixed-dim": "#4edea3",
+                        "on-surface-variant": "#464555", "surface-bright": "#f8f9fa", "surface": "#f8f9fa",
+                        "surface-container": "#edeeef", "surface-container-lowest": "#ffffff", "surface-container-highest": "#e1e3e4",
+                        "tertiary-fixed": "#ffddb8", "on-tertiary-fixed": "#2a1700", "secondary": "#006c49",
+                        "on-secondary-container": "#00714d", "primary": "#3525cd", "surface-container-high": "#e7e8e9",
+                        "surface-container-low": "#f3f4f5", "tertiary-fixed-dim": "#ffb95f", "error": "#ba1a1a",
+                        "secondary-container": "#6cf8bb", "primary-container": "#4f46e5", "on-secondary-fixed-variant": "#005236",
+                        "inverse-surface": "#2e3132", "secondary-fixed": "#6ffbbe", "on-error": "#ffffff",
+                        "outline-variant": "#c7c4d8", "on-error-container": "#93000a", "on-primary-fixed": "#0f0069",
+                        "on-primary-fixed-variant": "#3323cc", "on-surface": "#191c1d", "on-primary-container": "#dad7ff",
+                        "on-tertiary": "#ffffff", "inverse-on-surface": "#f0f1f2", "on-tertiary-container": "#ffd4a4",
+                        "outline": "#777587", "inverse-primary": "#c3c0ff", "on-tertiary-fixed-variant": "#653e00",
+                        "background": "#f8f9fa", "tertiary": "#684000", "on-secondary-fixed": "#002113",
+                        "tertiary-container": "#885500", "on-background": "#191c1d", "surface-variant": "#e1e3e4",
+                        "primary-fixed-dim": "#c3c0ff", "surface-tint": "#4d44e3", "on-secondary": "#ffffff",
+                        "error-container": "#ffdad6", "on-primary": "#ffffff"
+                    },
+                    "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                    "spacing": { "stack-gap": "12px", "gutter": "16px", "sidebar-width": "260px", "container-margin": "24px", "card-padding": "20px" },
+                    "fontFamily": { "body-lg": ["Be Vietnam Pro"], "body-md": ["Be Vietnam Pro"], "headline-md": ["Manrope"], "headline-lg": ["Manrope"], "display-lg": ["Manrope"], "label-md": ["Inter"] },
+                    "fontSize": {
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background font-body-md text-on-background h-screen flex flex-col relative overflow-hidden">
+<!-- Mock Background Content (Dashboard) -->
+<div class="flex-1 flex flex-col opacity-30 pointer-events-none">
+<header class="h-16 flex items-center justify-between px-gutter z-40 border-b border-outline-variant bg-surface">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Smart Meeting</h1>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-high"></div>
+</div>
+</header>
+<div class="flex flex-1">
+<nav class="w-sidebar-width h-full bg-surface shadow-sm border-r border-outline-variant hidden md:flex flex-col p-4 gap-2">
+<div class="h-10 rounded-lg bg-surface-container-high w-full"></div>
+<div class="h-10 rounded-lg bg-surface-container-low w-full"></div>
+<div class="h-10 rounded-lg bg-surface-container-low w-full"></div>
+</nav>
+<main class="flex-1 p-container-margin grid grid-cols-3 gap-6">
+<div class="h-64 rounded-xl bg-surface-container-lowest shadow-sm col-span-2"></div>
+<div class="h-64 rounded-xl bg-surface-container-lowest shadow-sm"></div>
+<div class="h-48 rounded-xl bg-surface-container-lowest shadow-sm col-span-3"></div>
+</main>
+</div>
+</div>
+<!-- Scrim / Dimmed Overlay -->
+<div class="fixed inset-0 bg-on-background/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity" id="modalOverlay">
+<!-- Modal Dialog -->
+<div aria-describedby="modalDesc" aria-labelledby="modalTitle" aria-modal="true" class="bg-surface-container-lowest rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.05)] w-full max-w-[400px] flex flex-col p-6 gap-6 transform transition-transform duration-200 scale-100" id="logoutModal" role="dialog">
+<div class="flex justify-center w-full">
+<div class="w-12 h-12 rounded-full bg-error-container flex items-center justify-center">
+<span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">logout</span>
+</div>
+</div>
+<div class="text-center flex flex-col gap-2">
+<h2 class="font-headline-md text-headline-md text-on-surface" id="modalTitle">ยืนยันการออกจากระบบ</h2>
+<p class="font-body-md text-body-md text-on-surface-variant" id="modalDesc">คุณต้องการออกจากระบบใช่หรือไม่?</p>
+</div>
+<div class="flex items-center justify-end gap-3 pt-2">
+<button class="px-4 py-2.5 rounded-full border border-outline text-on-surface font-label-md text-label-md hover:bg-surface-container-low transition-colors focus:ring-2 focus:ring-primary focus:outline-none w-full sm:w-auto" onclick="window.location.href='../_/code.html'" type="button">
+                    ยกเลิก
+                </button>
+<button class="px-4 py-2.5 rounded-full bg-error text-on-error font-label-md text-label-md hover:bg-on-error-container hover:text-white shadow-sm transition-colors focus:ring-2 focus:ring-error focus:ring-offset-2 focus:outline-none w-full sm:w-auto" onclick="window.location.href='../login/code.html'" type="button">
+                    ออกจากระบบ
+                </button>
+</div>
+</div>
+</div>
+<script>
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                window.location.href = '../_/code.html';
+            }
+        });
+    </script>
+</body></html>
