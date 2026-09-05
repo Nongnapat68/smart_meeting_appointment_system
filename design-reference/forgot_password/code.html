@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ลืมรหัสผ่าน? - Smart Meeting</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed-dim": "#ffb95f", "on-tertiary-fixed": "#2a1700", "on-primary-fixed-variant": "#3323cc",
+                    "secondary": "#006c49", "surface-container-highest": "#e1e3e4", "on-secondary-container": "#00714d",
+                    "outline": "#777587", "primary-fixed-dim": "#c3c0ff", "primary": "#3525cd", "tertiary": "#684000",
+                    "inverse-on-surface": "#f0f1f2", "background": "#f8f9fa", "surface-variant": "#e1e3e4",
+                    "on-surface-variant": "#464555", "on-primary": "#ffffff", "secondary-fixed": "#6ffbbe",
+                    "on-surface": "#191c1d", "surface-container-high": "#e7e8e9", "on-tertiary-fixed-variant": "#653e00",
+                    "outline-variant": "#c7c4d8", "on-background": "#191c1d", "on-primary-fixed": "#0f0069",
+                    "secondary-container": "#6cf8bb", "on-tertiary-container": "#ffd4a4", "tertiary-fixed": "#ffddb8",
+                    "surface-container-lowest": "#ffffff", "on-secondary-fixed-variant": "#005236", "surface-bright": "#f8f9fa",
+                    "tertiary-container": "#885500", "on-secondary": "#ffffff", "error": "#ba1a1a", "error-container": "#ffdad6",
+                    "inverse-primary": "#c3c0ff", "secondary-fixed-dim": "#4edea3", "surface": "#f8f9fa", "surface-tint": "#4d44e3",
+                    "on-secondary-fixed": "#002113", "surface-container-low": "#f3f4f5", "inverse-surface": "#2e3132",
+                    "on-error-container": "#93000a", "primary-container": "#4f46e5", "surface-container": "#edeeef",
+                    "on-tertiary": "#ffffff", "primary-fixed": "#e2dfff", "on-error": "#ffffff", "on-primary-container": "#dad7ff",
+                    "surface-dim": "#d9dadb"
+            },
+            "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+            "spacing": { "stack-gap": "12px", "card-padding": "20px", "container-margin": "24px", "gutter": "16px", "sidebar-width": "260px" },
+            "fontFamily": { "label-md": ["Inter"], "headline-md": ["Manrope"], "body-lg": ["Be Vietnam Pro"], "body-md": ["Be Vietnam Pro"], "display-lg": ["Manrope"], "headline-lg": ["Manrope"] },
+            "fontSize": {
+                    "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "600"}]
+            }
+          },
+        }
+      }
+    </script>
+<style>
+        .modal-overlay {
+            transition: opacity 0.2s ease;
+        }
+        .modal-card {
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+        .otp-input:focus {
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-background min-h-screen flex items-center justify-center font-body-md text-on-background selection:bg-primary-container selection:text-on-primary-container p-gutter">
+
+<!-- ================= STEP 1: Email Form ================= -->
+<div class="w-full max-w-md bg-surface-container-lowest rounded-xl shadow-sm p-8 sm:p-10 relative overflow-hidden ring-1 ring-outline-variant/30" id="step-email">
+<div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
+<div class="flex flex-col items-center mb-8">
+<div class="w-12 h-12 bg-primary rounded-lg flex items-center justify-center mb-4 shadow-sm">
+<span class="material-symbols-outlined text-on-primary text-[28px]">calendar_month</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-primary mb-2">Smart Meeting</h1>
+<p class="font-body-md text-body-md text-on-surface-variant text-center mt-2">Enterprise Suite</p>
+</div>
+<div class="text-center mb-8">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-3">ลืมรหัสผ่าน?</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">กรุณากรอกอีเมลของคุณเพื่อรับรหัสยืนยันสำหรับรีเซ็ตรหัสผ่าน</p>
+</div>
+<form class="flex flex-col gap-stack-gap" id="emailForm" onsubmit="return submitEmail(event)">
+<div class="relative">
+<label class="sr-only" for="email">อีเมล</label>
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-[20px]">mail</span>
+</div>
+<input class="block w-full pl-10 pr-3 py-3 border border-outline-variant rounded-lg bg-surface-bright text-on-surface placeholder-outline focus:ring-2 focus:ring-primary focus:border-primary focus:bg-surface-container-lowest transition-all duration-200 font-body-md text-body-md shadow-sm" id="email" name="email" placeholder="อีเมลของคุณ" required="" type="email"/>
+</div>
+<button class="w-full mt-4 bg-primary hover:bg-primary-fixed-dim text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg shadow-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2" type="submit">
+<span>ส่งรหัสยืนยัน (OTP)</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</form>
+<div class="mt-8 text-center">
+<a class="inline-flex items-center gap-2 font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors duration-200 group" href="../login/code.html">
+<span class="material-symbols-outlined text-[16px] group-hover:-translate-x-1 transition-transform">arrow_back</span>
+<span>กลับไปหน้าเข้าสู่ระบบ</span>
+</a>
+</div>
+</div>
+
+<!-- ================= MODAL: OTP Verification ================= -->
+<div class="fixed inset-0 bg-on-background/40 z-50 hidden items-center justify-center p-4 backdrop-blur-sm modal-overlay" id="otpOverlay">
+<div class="bg-surface-container-lowest rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.05)] w-full max-w-[420px] flex flex-col p-8 gap-6 modal-card" id="otpModal">
+<div class="flex justify-center w-full">
+<div class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[28px]">mark_email_read</span>
+</div>
+</div>
+<div class="text-center flex flex-col gap-2">
+<h2 class="font-headline-md text-headline-md text-on-surface">ยืนยันรหัส OTP</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">เราได้ส่งรหัส 6 หลักไปยังอีเมล<br/><span class="text-on-surface font-medium" id="otpEmailDisplay">abc@gmail.com</span></p>
+</div>
+<div class="flex justify-center gap-2" id="otpInputs">
+<input class="otp-input w-11 h-12 text-center text-xl font-bold border border-outline-variant rounded-lg bg-surface-bright text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all" inputmode="numeric" maxlength="1" type="text"/>
+<input class="otp-input w-11 h-12 text-center text-xl font-bold border border-outline-variant rounded-lg bg-surface-bright text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all" inputmode="numeric" maxlength="1" type="text"/>
+<input class="otp-input w-11 h-12 text-center text-xl font-bold border border-outline-variant rounded-lg bg-surface-bright text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all" inputmode="numeric" maxlength="1" type="text"/>
+<input class="otp-input w-11 h-12 text-center text-xl font-bold border border-outline-variant rounded-lg bg-surface-bright text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all" inputmode="numeric" maxlength="1" type="text"/>
+<input class="otp-input w-11 h-12 text-center text-xl font-bold border border-outline-variant rounded-lg bg-surface-bright text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all" inputmode="numeric" maxlength="1" type="text"/>
+<input class="otp-input w-11 h-12 text-center text-xl font-bold border border-outline-variant rounded-lg bg-surface-bright text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all" inputmode="numeric" maxlength="1" type="text"/>
+</div>
+<p class="text-center font-label-md text-label-md text-on-surface-variant" id="otpError" style="display:none; color: #ba1a1a;">รหัส OTP ไม่ถูกต้อง กรุณาลองใหม่</p>
+<div class="text-center">
+<span class="font-label-md text-label-md text-on-surface-variant" id="countdownText">ส่งรหัสอีกครั้งใน <span id="countdownTimer">00:59</span></span>
+<a class="font-label-md text-label-md text-primary hover:underline hidden" href="#" id="resendLink" onclick="resendOtp(event)">ส่งรหัสอีกครั้ง</a>
+</div>
+<div class="flex flex-col gap-3">
+<button class="w-full bg-primary hover:bg-primary-fixed-dim text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg shadow-sm transition-all duration-200 active:scale-[0.98]" onclick="verifyOtp()" type="button">
+                ยืนยัน
+            </button>
+<button class="w-full text-on-surface-variant font-label-md text-label-md py-2 hover:text-primary transition-colors" onclick="closeOtpModal()" type="button">
+                กลับไปแก้ไขอีเมล
+            </button>
+</div>
+</div>
+</div>
+
+<!-- ================= MODAL: Reset Password ================= -->
+<div class="fixed inset-0 bg-on-background/40 z-50 hidden items-center justify-center p-4 backdrop-blur-sm modal-overlay" id="resetOverlay">
+<div class="bg-surface-container-lowest rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.05)] w-full max-w-[420px] flex flex-col p-8 gap-6 modal-card">
+<div class="flex justify-center w-full">
+<div class="w-14 h-14 rounded-full bg-secondary-container/40 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-[28px]">lock_reset</span>
+</div>
+</div>
+<div class="text-center flex flex-col gap-2">
+<h2 class="font-headline-md text-headline-md text-on-surface">ตั้งรหัสผ่านใหม่</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">กรุณากรอกรหัสผ่านใหม่ของคุณ</p>
+</div>
+<form class="flex flex-col gap-4" onsubmit="return submitNewPassword(event)">
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant block text-left">รหัสผ่านใหม่</label>
+<input class="w-full px-4 py-2.5 bg-surface-bright border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none" id="newPassword" placeholder="อย่างน้อย 8 ตัวอักษร" required="" type="password"/>
+</div>
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant block text-left">ยืนยันรหัสผ่านใหม่</label>
+<input class="w-full px-4 py-2.5 bg-surface-bright border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none" id="confirmPassword" placeholder="กรอกรหัสผ่านใหม่อีกครั้ง" required="" type="password"/>
+</div>
+<p class="font-label-md text-label-md text-on-surface-variant text-left">รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร ประกอบด้วยตัวเลขและตัวพิมพ์ใหญ่</p>
+<p class="text-left font-label-md text-label-md" id="resetError" style="display:none; color: #ba1a1a;">รหัสผ่านไม่ตรงกัน หรือไม่ตรงตามเงื่อนไข</p>
+<button class="w-full bg-primary hover:bg-primary-fixed-dim text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg shadow-sm transition-all duration-200 active:scale-[0.98] mt-2" type="submit">
+                บันทึกรหัสผ่านใหม่
+            </button>
+</form>
+</div>
+</div>
+
+<!-- ================= MODAL: Success ================= -->
+<div class="fixed inset-0 bg-on-background/40 z-50 hidden items-center justify-center p-4 backdrop-blur-sm modal-overlay" id="successOverlay">
+<div class="bg-surface-container-lowest rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.05)] w-full max-w-[400px] flex flex-col items-center p-8 gap-4 text-center modal-card">
+<div class="w-14 h-14 rounded-full bg-secondary-container/40 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-[28px]">check_circle</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface">เปลี่ยนรหัสผ่านสำเร็จ</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">คุณสามารถเข้าสู่ระบบด้วยรหัสผ่านใหม่ได้ทันที</p>
+<button class="w-full bg-primary hover:bg-primary-fixed-dim text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg shadow-sm transition-all duration-200 active:scale-[0.98] mt-2" onclick="window.location.href='../login/code.html'" type="button">
+            ไปหน้าเข้าสู่ระบบ
+        </button>
+</div>
+</div>
+
+<script>
+    let countdownInterval;
+
+    function showModal(id) {
+        const el = document.getElementById(id);
+        el.classList.remove('hidden');
+        el.classList.add('flex');
+    }
+    function hideModal(id) {
+        const el = document.getElementById(id);
+        el.classList.add('hidden');
+        el.classList.remove('flex');
+    }
+
+    function submitEmail(e) {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        document.getElementById('otpEmailDisplay').textContent = email || 'abc@gmail.com';
+        showModal('otpOverlay');
+        startCountdown();
+        document.querySelector('.otp-input').focus();
+        return false;
+    }
+
+    function closeOtpModal() {
+        hideModal('otpOverlay');
+        clearInterval(countdownInterval);
+    }
+
+    // Auto-advance OTP inputs
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('.otp-input');
+        inputs.forEach((input, idx) => {
+            input.addEventListener('input', function() {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                if (this.value && idx < inputs.length - 1) {
+                    inputs[idx + 1].focus();
+                }
+            });
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && !this.value && idx > 0) {
+                    inputs[idx - 1].focus();
+                }
+            });
+        });
+    });
+
+    function startCountdown() {
+        let seconds = 59;
+        document.getElementById('countdownText').style.display = 'inline';
+        document.getElementById('resendLink').classList.add('hidden');
+        clearInterval(countdownInterval);
+        countdownInterval = setInterval(() => {
+            seconds--;
+            const display = '00:' + String(seconds).padStart(2, '0');
+            document.getElementById('countdownTimer').textContent = display;
+            if (seconds <= 0) {
+                clearInterval(countdownInterval);
+                document.getElementById('countdownText').style.display = 'none';
+                document.getElementById('resendLink').classList.remove('hidden');
+            }
+        }, 1000);
+    }
+
+    function resendOtp(e) {
+        e.preventDefault();
+        startCountdown();
+        document.getElementById('otpError').style.display = 'none';
+    }
+
+    function verifyOtp() {
+        const inputs = document.querySelectorAll('.otp-input');
+        let code = '';
+        inputs.forEach(i => code += i.value);
+
+        if (code.length !== 6) {
+            document.getElementById('otpError').style.display = 'block';
+            return;
+        }
+
+        // Demo mode: any 6-digit code is accepted.
+        document.getElementById('otpError').style.display = 'none';
+        clearInterval(countdownInterval);
+        hideModal('otpOverlay');
+        showModal('resetOverlay');
+    }
+
+    function submitNewPassword(e) {
+        e.preventDefault();
+        const pw = document.getElementById('newPassword').value;
+        const confirm = document.getElementById('confirmPassword').value;
+        const errorEl = document.getElementById('resetError');
+
+        const isValid = pw.length >= 8 && /[0-9]/.test(pw) && /[A-Z]/.test(pw);
+
+        if (!isValid || pw !== confirm) {
+            errorEl.style.display = 'block';
+            return false;
+        }
+
+        errorEl.style.display = 'none';
+        hideModal('resetOverlay');
+        showModal('successOverlay');
+        return false;
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeOtpModal();
+        }
+    });
+</script>
+</body></html>

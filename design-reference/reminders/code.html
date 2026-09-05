@@ -1,0 +1,447 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Reminders Management - Smart Meeting</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error-container": "#ffdad6",
+                      "surface-dim": "#d9dadb",
+                      "on-primary-fixed-variant": "#3323cc",
+                      "on-secondary-fixed": "#002113",
+                      "on-background": "#191c1d",
+                      "on-surface-variant": "#464555",
+                      "primary-fixed": "#e2dfff",
+                      "inverse-primary": "#c3c0ff",
+                      "secondary-container": "#6cf8bb",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary": "#684000",
+                      "outline": "#777587",
+                      "on-tertiary-fixed": "#2a1700",
+                      "tertiary-container": "#885500",
+                      "on-tertiary": "#ffffff",
+                      "on-tertiary-container": "#ffd4a4",
+                      "primary-container": "#4f46e5",
+                      "surface-container": "#edeeef",
+                      "surface-variant": "#e1e3e4",
+                      "surface-container-highest": "#e1e3e4",
+                      "secondary-fixed": "#6ffbbe",
+                      "surface-bright": "#f8f9fa",
+                      "secondary-fixed-dim": "#4edea3",
+                      "on-secondary-container": "#00714d",
+                      "inverse-on-surface": "#f0f1f2",
+                      "secondary": "#006c49",
+                      "on-error-container": "#93000a",
+                      "surface": "#f8f9fa",
+                      "on-primary": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb95f",
+                      "on-secondary-fixed-variant": "#005236",
+                      "background": "#f8f9fa",
+                      "surface-container-low": "#f3f4f5",
+                      "outline-variant": "#c7c4d8",
+                      "on-tertiary-fixed-variant": "#653e00",
+                      "inverse-surface": "#2e3132",
+                      "on-surface": "#191c1d",
+                      "tertiary-fixed": "#ffddb8",
+                      "on-error": "#ffffff",
+                      "surface-tint": "#4d44e3",
+                      "on-primary-fixed": "#0f0069",
+                      "error": "#ba1a1a",
+                      "primary": "#3525cd",
+                      "primary-fixed-dim": "#c3c0ff",
+                      "on-primary-container": "#dad7ff",
+                      "surface-container-high": "#e7e8e9"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "16px",
+                      "card-padding": "20px",
+                      "container-margin": "24px",
+                      "stack-gap": "12px",
+                      "sidebar-width": "260px"
+              },
+              "fontFamily": {
+                      "headline-md": [
+                              "Manrope"
+                      ],
+                      "body-md": [
+                              "Be Vietnam Pro"
+                      ],
+                      "display-lg": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Be Vietnam Pro"
+                      ],
+                      "headline-lg": [
+                              "Manrope"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1;
+        }
+      </style>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased overflow-x-hidden min-h-screen">
+<!-- TopNavBar -->
+<nav class="bg-surface dark:bg-background h-16 fixed top-0 right-0 w-full md:w-[calc(100%-260px)] flex items-center justify-between px-gutter z-40 border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<button class="md:hidden p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed md:hidden">Smart Meeting</span>
+<!-- Search Bar placeholder for spacing if needed -->
+<div class="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2 w-64 border border-outline-variant focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+<span class="material-symbols-outlined text-on-surface-variant mr-2 text-sm">search</span>
+<input class="bg-transparent border-none focus:outline-none focus:ring-0 text-sm w-full placeholder-on-surface-variant/70 text-on-surface" placeholder="ค้นหาการนัดหมาย..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-2 md:gap-4">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full transition-colors relative" onclick="window.location.href='../ai_ai_summary/code.html'">
+<span class="material-symbols-outlined" data-icon="sparkles">arrow_back_ios_new</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full transition-colors relative" onclick="window.location.href='code.html'">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant ml-2 cursor-pointer" onclick="window.location.href='../settings/code.html'">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A professional headshot of a corporate executive in a modern light-filled office. The lighting is bright and clean, reflecting a professional and agile corporate aesthetic with a focus on minimalism. The executive is looking confidently towards the camera." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD48EcxAI33q-iLf3J00o40KCbux6v-DH6GQpC4DuNgbF8nF-19P3Koq3DCrjbsSsPbYRpzVLotNU6T3NqoKAou8ZcEDJCJKUaeNazpfjAO8YJSoSOQBhv-Vvcdj4nR_bbgKxLV5nvwyRkPwa-LoemjAjBcqNVak6jy8Ub28KuXYETZXvO3plEb1XBGwoU5fJw8pUqrnVW9L239EIs_d2GFm3LDq_7E6ZIeEzU_Za-8pigNVNzJNB4h">
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="bg-surface dark:bg-inverse-surface w-sidebar-width h-screen fixed left-0 top-0 shadow-sm flex flex-col h-full border-r border-outline-variant dark:border-outline hidden md:flex z-50">
+<div class="p-6 flex items-center gap-3 cursor-pointer" onclick="window.location.href='../_/code.html'">
+<div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+<span class="material-symbols-outlined icon-fill">meeting_room</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Smart Meeting</h1>
+<p class="text-xs text-on-surface-variant">Enterprise Suite</p>
+</div>
+</div>
+<div class="px-4 mb-6">
+<button class="w-full bg-primary text-on-primary py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 duration-200 transition-all shadow-sm font-label-md text-label-md" onclick="window.location.href='../form/code.html'">
+<span class="material-symbols-outlined text-sm">add</span>
+                นัดหมายใหม่
+            </button>
+</div>
+<nav class="flex-1 overflow-y-auto px-4 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../_/code.html">
+<span class="material-symbols-outlined text-[20px]" data-icon="home">home</span>
+<span class="font-body-md text-body-md">หน้าหลัก</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../people/code.html">
+<span class="material-symbols-outlined text-[20px]" data-icon="person">person</span>
+<span class="font-body-md text-body-md">ผู้คน</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../contact_groups/code.html">
+<span class="material-symbols-outlined text-[20px]" data-icon="group">group</span>
+<span class="font-body-md text-body-md">กลุ่ม</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../meetings/code.html">
+<span class="material-symbols-outlined text-[20px]" data-icon="calendar_month">calendar_month</span>
+<span class="font-body-md text-body-md">การประชุม</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../projects/code.html">
+<span class="material-symbols-outlined text-[20px]" data-icon="assignment">assignment</span>
+<span class="font-body-md text-body-md">โปรเจกต์</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../my_action_items/code.html">
+<span class="material-symbols-outlined text-[20px]" data-icon="task_alt">task_alt</span>
+<span class="font-body-md text-body-md">งานของฉัน</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-container/10 text-primary font-bold active:scale-95 duration-200 transition-colors" href="code.html">
+<span class="material-symbols-outlined text-[20px] icon-fill" data-icon="notifications">notifications</span>
+<span class="font-body-md text-body-md">การแจ้งเตือน</span>
+</a>
+</nav>
+<div class="p-4 border-t border-outline-variant dark:border-outline mt-auto flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../ai_ai_summary/code.html">
+<span class="material-symbols-outlined text-[20px]" data-icon="sparkles">arrow_back_ios_new</span>
+<span class="font-body-md text-body-md">ตัวช่วย AI</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../settings/code.html">
+<span class="material-symbols-outlined text-[20px]" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">ตั้งค่า</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="md:ml-sidebar-width pt-16 min-h-screen p-container-margin">
+<div class="max-w-7xl mx-auto space-y-container-margin">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">จัดการการแจ้งเตือน (Reminders)</h2>
+<p class="text-on-surface-variant mt-1">ตรวจสอบสถานะการส่งการแจ้งเตือนการประชุมทั้งหมด</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 flex items-center gap-2 text-sm shadow-sm">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">filter_list</span>
+<span class="font-label-md text-label-md text-on-surface">ตัวกรอง</span>
+</div>
+<button class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 flex items-center gap-2 text-sm shadow-sm hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">refresh</span>
+</button>
+</div>
+</div>
+<!-- Bento Grid Stats -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-stack-gap">
+<div class="bg-surface-container-lowest p-card-padding rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between h-32 relative overflow-hidden">
+<div class="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-4 -mt-4"></div>
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">ทั้งหมด (วันนี้)</span>
+<span class="material-symbols-outlined text-primary text-[20px]">mark_email_read</span>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">128</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-card-padding rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between h-32">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">รอส่ง</span>
+<span class="material-symbols-outlined text-[#d97706] text-[20px]">schedule</span>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">45</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-card-padding rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between h-32">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">ส่งแล้ว</span>
+<span class="material-symbols-outlined text-secondary text-[20px]">check_circle</span>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">81</span>
+</div>
+</div>
+<div class="bg-error-container p-card-padding rounded-xl border border-error/20 shadow-sm flex flex-col justify-between h-32">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-error-container">ส่งไม่สำเร็จ</span>
+<span class="material-symbols-outlined text-error text-[20px]">error</span>
+</div>
+<div class="flex items-end justify-between">
+<span class="font-display-lg text-display-lg text-on-error-container">2</span>
+<button class="text-xs text-error underline hover:text-on-error-container font-label-md">ดูรายละเอียด</button>
+</div>
+</div>
+</div>
+<!-- Data Table Card -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden flex flex-col">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant">
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant">การประชุม</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant">เวลาที่แจ้งเตือน</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant">ผู้รับ</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant">สถานะ</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant text-right">จัดการ</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Failed Row -->
+<tr class="hover:bg-surface-bright transition-colors bg-error-container/10">
+<td class="py-4 px-4">
+<div class="font-body-md text-body-md font-medium text-on-surface cursor-pointer" onclick="window.location.href='../meeting_detail/code.html'">Q3 Strategy Review</div>
+<div class="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">videocam</span> Online (Zoom)
+                                    </div>
+</td>
+<td class="py-4 px-4 text-on-surface-variant text-sm">
+                                    10 ต.ค. 2023, 08:45
+                                </td>
+<td class="py-4 px-4 text-sm">
+<div class="flex -space-x-2">
+<div class="w-6 h-6 rounded-full bg-surface-variant border border-surface-container-lowest flex items-center justify-center text-[10px] font-bold">+5</div>
+</div>
+</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-error-container text-on-error-container font-label-md text-[11px]">
+<span class="material-symbols-outlined text-[12px]">error</span> ส่งไม่สำเร็จ
+                                    </span>
+</td>
+<td class="py-4 px-4 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="text-xs px-2 py-1 border border-outline rounded text-on-surface hover:bg-surface-container-low transition-colors font-label-md" title="ดูสาเหตุที่ส่งไม่สำเร็จ">
+                                            สาเหตุ
+                                        </button>
+<button class="text-xs px-2 py-1 bg-primary text-on-primary rounded hover:bg-primary/90 transition-colors font-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">replay</span> ลองใหม่
+                                        </button>
+</div>
+</td>
+</tr>
+<!-- Pending Row -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="py-4 px-4">
+<div class="font-body-md text-body-md font-medium text-on-surface cursor-pointer" onclick="window.location.href='../meeting_detail/code.html'">Weekly Team Sync</div>
+<div class="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">meeting_room</span> Room A, Floor 12
+                                    </div>
+</td>
+<td class="py-4 px-4 text-on-surface-variant text-sm">
+                                    10 ต.ค. 2023, 14:45
+                                </td>
+<td class="py-4 px-4 text-sm">
+<div class="flex -space-x-2">
+<div class="w-6 h-6 rounded-full bg-surface-variant border border-surface-container-lowest"></div>
+<div class="w-6 h-6 rounded-full bg-surface-container-high border border-surface-container-lowest"></div>
+<div class="w-6 h-6 rounded-full bg-surface-variant border border-surface-container-lowest flex items-center justify-center text-[10px] font-bold">+8</div>
+</div>
+</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[#fef3c7] text-[#92400e] font-label-md text-[11px]">
+<span class="material-symbols-outlined text-[12px]">schedule</span> รอส่ง (อีก 2 ชม.)
+                                    </span>
+</td>
+<td class="py-4 px-4 text-right">
+<button class="text-on-surface-variant hover:text-error transition-colors" title="ยกเลิกการแจ้งเตือน">
+<span class="material-symbols-outlined text-[18px]">cancel</span>
+</button>
+</td>
+</tr>
+<!-- Sent Row -->
+<tr class="hover:bg-surface-bright transition-colors">
+<td class="py-4 px-4">
+<div class="font-body-md text-body-md font-medium text-on-surface cursor-pointer" onclick="window.location.href='../meeting_detail/code.html'">Client Onboarding: Project X</div>
+<div class="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">call</span> Google Meet
+                                    </div>
+</td>
+<td class="py-4 px-4 text-on-surface-variant text-sm">
+                                    10 ต.ค. 2023, 09:00
+                                </td>
+<td class="py-4 px-4 text-sm">
+<div class="flex -space-x-2">
+<div class="w-6 h-6 rounded-full bg-surface-variant border border-surface-container-lowest"></div>
+<div class="w-6 h-6 rounded-full bg-surface-container-high border border-surface-container-lowest"></div>
+</div>
+</td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-secondary-container text-on-secondary-container font-label-md text-[11px]">
+<span class="material-symbols-outlined text-[12px]">check</span> ส่งแล้ว
+                                    </span>
+</td>
+<td class="py-4 px-4 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Cancelled Row -->
+<tr class="hover:bg-surface-bright transition-colors opacity-60">
+<td class="py-4 px-4">
+<div class="font-body-md text-body-md font-medium text-on-surface line-through">Lunch with Vendor</div>
+<div class="text-xs text-on-surface-variant mt-0.5">ถูกยกเลิกโดยผู้จัด</div>
+</td>
+<td class="py-4 px-4 text-on-surface-variant text-sm line-through">
+                                    10 ต.ค. 2023, 11:30
+                                </td>
+<td class="py-4 px-4 text-sm">
+                                    -
+                                </td>
+<td class="py-4 px-4">
+<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-variant text-on-surface-variant font-label-md text-[11px]">
+<span class="material-symbols-outlined text-[12px]">block</span> ยกเลิกแล้ว
+                                    </span>
+</td>
+<td class="py-4 px-4 text-right">
+                                    -
+                                </td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="border-t border-outline-variant p-4 flex items-center justify-between bg-surface">
+<span class="text-sm text-on-surface-variant">แสดง 1-4 จาก 128 รายการ</span>
+<div class="flex items-center gap-1">
+<button class="p-1 rounded text-on-surface-variant hover:bg-surface-container-high disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded bg-primary text-on-primary font-label-md text-sm flex items-center justify-center">1</button>
+<button class="w-8 h-8 rounded text-on-surface hover:bg-surface-container-high font-label-md text-sm flex items-center justify-center">2</button>
+<button class="w-8 h-8 rounded text-on-surface hover:bg-surface-container-high font-label-md text-sm flex items-center justify-center">3</button>
+<span class="px-1 text-on-surface-variant">...</span>
+<button class="p-1 rounded text-on-surface hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

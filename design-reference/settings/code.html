@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Smart Meeting - Settings &amp; Profile</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary": "#3525cd",
+                    "secondary": "#006c49",
+                    "surface-dim": "#d9dadb",
+                    "on-background": "#191c1d",
+                    "on-error-container": "#93000a",
+                    "primary-container": "#4f46e5",
+                    "secondary-fixed-dim": "#4edea3",
+                    "on-surface-variant": "#464555",
+                    "surface-container": "#edeeef",
+                    "surface-bright": "#f8f9fa",
+                    "on-surface": "#191c1d",
+                    "background": "#f8f9fa",
+                    "on-primary-container": "#dad7ff",
+                    "on-secondary-fixed": "#002113",
+                    "error-container": "#ffdad6",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#c3c0ff",
+                    "tertiary-container": "#885500",
+                    "on-primary-fixed-variant": "#3323cc",
+                    "inverse-surface": "#2e3132",
+                    "on-error": "#ffffff",
+                    "outline-variant": "#c7c4d8",
+                    "inverse-on-surface": "#f0f1f2",
+                    "surface-container-lowest": "#ffffff",
+                    "surface": "#f8f9fa",
+                    "secondary-fixed": "#6ffbbe",
+                    "surface-container-high": "#e7e8e9",
+                    "tertiary-fixed": "#ffddb8",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "surface-container-highest": "#e1e3e4",
+                    "on-tertiary-fixed-variant": "#653e00",
+                    "error": "#ba1a1a",
+                    "on-tertiary-container": "#ffd4a4",
+                    "surface-tint": "#4d44e3",
+                    "surface-variant": "#e1e3e4",
+                    "on-secondary-fixed-variant": "#005236",
+                    "primary-fixed": "#e2dfff",
+                    "tertiary-fixed-dim": "#ffb95f",
+                    "on-secondary-container": "#00714d",
+                    "outline": "#777587",
+                    "on-primary-fixed": "#0f0069",
+                    "tertiary": "#684000",
+                    "secondary-container": "#6cf8bb",
+                    "on-tertiary-fixed": "#2a1700",
+                    "primary-fixed-dim": "#c3c0ff",
+                    "surface-container-low": "#f3f4f5"
+            },
+            "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+            "spacing": { "sidebar-width": "260px", "card-padding": "20px", "gutter": "16px", "stack-gap": "12px", "container-margin": "24px" },
+            "fontFamily": { "body-md": ["Be Vietnam Pro"], "label-md": ["Inter"], "display-lg": ["Manrope"], "headline-lg": ["Manrope"], "headline-md": ["Manrope"], "body-lg": ["Be Vietnam Pro"] },
+            "fontSize": {
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          },
+        }
+      }
+    </script>
+<style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+    </style>
+</head>
+<body class="bg-surface font-body-md text-on-surface antialiased min-h-screen">
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 left-[260px] h-16 bg-background/80 dark:bg-background/80 backdrop-blur-md border-b border-outline-variant/30 flex justify-between items-center px-container-margin w-[calc(100%-260px)] z-40">
+<div class="flex items-center gap-4 w-full max-w-md">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border-transparent focus:bg-surface-container-lowest focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-full font-body-md text-body-md text-on-surface placeholder:text-outline transition-all duration-200" placeholder="Search..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container-low flex items-center justify-center">
+<span class="material-symbols-outlined">help</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-surface-container-low flex items-center justify-center">
+<span class="material-symbols-outlined">apps</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-outline-variant/50 ml-2 cursor-pointer" onclick="window.location.href='code.html'">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCSFmtLORaA4_jW0p8X-fIvzoa7hsDhc15Z6RKUjMe6EpCNnbfNG9UkQIR68wEXkiRxK0mS34Wp7iZKd4PibYhu6IG8_HlzkMUa4iKjBFg_hi_37lLyubh5SzbjJCjE5ApVw1NrsRnfkKTGnyqZur5yt83v99nPAouy_UhQRLgipigVyOxyhY3TMlcuMmOAo0JhJ-wWt_2WKukjOKjZ9_iVDWrUHARzkmCOjnnuCQCWg5pQY3gQgxjx"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-full w-[260px] bg-surface-container-lowest shadow-[4px_0px_15px_rgba(0,0,0,0.05)] z-50 flex flex-col gap-stack-gap p-gutter">
+<div class="flex items-center gap-3 px-2 py-4 mb-4 cursor-pointer" onclick="window.location.href='../_/code.html'">
+<div class="w-10 h-10 rounded bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined fill text-2xl">event</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Smart Meeting</h1>
+<p class="font-label-md text-label-md text-on-surface-variant">Enterprise Hub</p>
+</div>
+</div>
+<div class="flex flex-col gap-1 flex-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../_/code.html">
+<span class="material-symbols-outlined">home</span>
+                หน้าหลัก
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../people/code.html">
+<span class="material-symbols-outlined">group</span>
+                ผู้คน
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../contact_groups/code.html">
+<span class="material-symbols-outlined">hub</span>
+                กลุ่ม
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../meetings/code.html">
+<span class="material-symbols-outlined">calendar_today</span>
+                การประชุม
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../projects/code.html">
+<span class="material-symbols-outlined">folder_shared</span>
+                โปรเจกต์
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../my_action_items/code.html">
+<span class="material-symbols-outlined">assignment</span>
+                งานของฉัน
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../reminders/code.html">
+<span class="material-symbols-outlined">notifications</span>
+                การแจ้งเตือน
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors font-body-md text-body-md" href="../ai_ai_summary/code.html">
+<span class="material-symbols-outlined">smart_toy</span>
+                ตัวช่วย AI
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary/10 text-primary font-bold font-body-md text-body-md transition-all duration-200 ease-in-out" href="code.html">
+<span class="material-symbols-outlined fill">settings</span>
+                ตั้งค่า
+            </a>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="ml-[260px] pt-16 p-container-margin min-h-screen">
+<div class="max-w-4xl mx-auto">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-8">ตั้งค่าบัญชีผู้ใช้ (Settings &amp; Profile)</h2>
+<div class="grid grid-cols-1 gap-8">
+<!-- Profile Card -->
+<div class="bg-surface-container-lowest rounded-xl p-card-padding shadow-sm border border-outline-variant/20 flex flex-col md:flex-row items-center md:items-start gap-8">
+<div class="flex flex-col items-center gap-4">
+<div class="relative w-32 h-32 rounded-full overflow-hidden border-4 border-surface shadow-sm group">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgH7NxH64nXoQwmUaxocatH7BfAofwG994D8eie6Zh5CPVQSlL83x2-YxF6uSD-iPQIHR64ASOCAIEYKMXSILf6OcKBLHfRsg-sFzwy7NHVh0Z7Ilnp9EIFVqrgyt1Nf1r0jeCRiBKMfgTDyymLrbl6seLv958oum6AEXj6H-Lv9R-ddsXP0U7xaSdxCsgejh7XSB_DbDIUBrhP-w4-1yPwu9J0cbCBFTdWra_Cw3C3FGsiJLdRwsa"/>
+<div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+<span class="material-symbols-outlined text-white">photo_camera</span>
+</div>
+</div>
+<button class="px-4 py-2 bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant rounded-full font-label-md text-label-md transition-colors border border-outline-variant/50">
+                            เปลี่ยนรูปโปรไฟล์
+                        </button>
+</div>
+<div class="flex-1 w-full space-y-6">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-4">ข้อมูลส่วนตัว</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant block">ชื่อ - นามสกุล</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all outline-none" type="text" value="สมชาย ใจดี"/>
+</div>
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant block">อีเมล</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all outline-none" type="email" value="somchai.j@company.com"/>
+</div>
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant block">เบอร์โทรศัพท์</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all outline-none" type="tel" value="081-234-5678"/>
+</div>
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant block">ตำแหน่ง</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all outline-none" type="text" value="Senior Product Manager"/>
+</div>
+<div class="space-y-1 md:col-span-2">
+<label class="font-label-md text-label-md text-on-surface-variant block">แผนก</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all outline-none" type="text" value="Product &amp; Engineering"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Password Card -->
+<div class="bg-surface-container-lowest rounded-xl p-card-padding shadow-sm border border-outline-variant/20">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">lock</span>
+                        เปลี่ยนรหัสผ่าน
+                    </h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+<div class="space-y-1 md:col-span-2">
+<label class="font-label-md text-label-md text-on-surface-variant block">รหัสผ่านปัจจุบัน</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all outline-none" placeholder="••••••••" type="password"/>
+</div>
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant block">รหัสผ่านใหม่</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all outline-none" placeholder="ตั้งรหัสผ่านใหม่" type="password"/>
+</div>
+<div class="space-y-1">
+<label class="font-label-md text-label-md text-on-surface-variant block">ยืนยันรหัสผ่านใหม่</label>
+<input class="w-full px-4 py-2.5 bg-surface-container-low border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all outline-none" placeholder="กรอกรหัสผ่านใหม่อีกครั้ง" type="password"/>
+</div>
+</div>
+</div>
+<!-- Notifications Card -->
+<div class="bg-surface-container-lowest rounded-xl p-card-padding shadow-sm border border-outline-variant/20">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">notifications_active</span>
+                        การแจ้งเตือน
+                    </h3>
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<div>
+<h4 class="font-body-lg text-body-lg text-on-surface font-medium">การแจ้งเตือนผ่านอีเมล (Email Notifications)</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">รับการแจ้งเตือนเมื่อมีการเชิญประชุม หรืออัปเดตตารางงาน</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="w-full h-px bg-outline-variant/20"></div>
+<div class="flex items-center justify-between">
+<div>
+<h4 class="font-body-lg text-body-lg text-on-surface font-medium">การแจ้งเตือนในระบบ (In-app Notifications)</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">แสดงการแจ้งเตือนป๊อปอัปเมื่อใช้งานแอปพลิเคชัน</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex items-center justify-between pt-4">
+<button class="flex items-center gap-2 px-6 py-2.5 rounded-lg border border-error/50 text-error hover:bg-error/10 transition-colors font-label-md text-label-md" onclick="window.location.href='../logout/code.html'">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+                        ออกจากระบบ
+                    </button>
+<button class="flex items-center gap-2 px-8 py-3 bg-primary text-on-primary rounded-lg shadow-sm hover:bg-primary/90 transition-colors font-label-md text-label-md font-bold" onclick="window.location.href='../_/code.html'">
+<span class="material-symbols-outlined text-[20px]">save</span>
+                        บันทึกการเปลี่ยนแปลง
+                    </button>
+</div>
+</div>
+</div>
+</main>
+</body></html>
