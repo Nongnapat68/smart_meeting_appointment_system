@@ -1,0 +1,433 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>My Action Items - Smart Meeting</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700&amp;family=Be+Vietnam+Pro:wght@400&amp;family=Inter:wght@500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d9dadb",
+                    "on-primary-fixed-variant": "#3323cc",
+                    "on-secondary-fixed": "#002113",
+                    "on-background": "#191c1d",
+                    "on-surface-variant": "#464555",
+                    "primary-fixed": "#e2dfff",
+                    "inverse-primary": "#c3c0ff",
+                    "secondary-container": "#6cf8bb",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary": "#684000",
+                    "outline": "#777587",
+                    "on-tertiary-fixed": "#2a1700",
+                    "tertiary-container": "#885500",
+                    "on-tertiary": "#ffffff",
+                    "on-tertiary-container": "#ffd4a4",
+                    "primary-container": "#4f46e5",
+                    "surface-container": "#edeeef",
+                    "surface-variant": "#e1e3e4",
+                    "surface-container-highest": "#e1e3e4",
+                    "secondary-fixed": "#6ffbbe",
+                    "surface-bright": "#f8f9fa",
+                    "secondary-fixed-dim": "#4edea3",
+                    "on-secondary-container": "#00714d",
+                    "inverse-on-surface": "#f0f1f2",
+                    "secondary": "#006c49",
+                    "on-error-container": "#93000a",
+                    "surface": "#f8f9fa",
+                    "on-primary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb95f",
+                    "on-secondary-fixed-variant": "#005236",
+                    "background": "#f8f9fa",
+                    "surface-container-low": "#f3f4f5",
+                    "outline-variant": "#c7c4d8",
+                    "on-tertiary-fixed-variant": "#653e00",
+                    "inverse-surface": "#2e3132",
+                    "on-surface": "#191c1d",
+                    "tertiary-fixed": "#ffddb8",
+                    "on-error": "#ffffff",
+                    "surface-tint": "#4d44e3",
+                    "on-primary-fixed": "#0f0069",
+                    "error": "#ba1a1a",
+                    "primary": "#3525cd",
+                    "primary-fixed-dim": "#c3c0ff",
+                    "on-primary-container": "#dad7ff",
+                    "surface-container-high": "#e7e8e9"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "card-padding": "20px",
+                    "container-margin": "24px",
+                    "stack-gap": "12px",
+                    "sidebar-width": "260px"
+            },
+            "fontFamily": {
+                    "headline-md": [
+                            "Manrope"
+                    ],
+                    "body-md": [
+                            "Be Vietnam Pro"
+                    ],
+                    "display-lg": [
+                            "Manrope"
+                    ],
+                    "body-lg": [
+                            "Be Vietnam Pro"
+                    ],
+                    "headline-lg": [
+                            "Manrope"
+                    ],
+                    "label-md": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "headline-md": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "display-lg": [
+                            "36px",
+                            {
+                                    "lineHeight": "44px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "500"
+                            }
+                    ]
+            }
+        }
+        }
+      }
+    </script>
+<style>
+        body { background-color: #F9FAFB; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .glass-panel { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        
+        /* Level 1 Elevation */
+        .elevation-1 { box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: #e1e3e4; border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background-color: #c7c4d8; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md text-body-md antialiased overflow-hidden h-screen flex">
+<!-- SideNavBar -->
+<aside class="w-sidebar-width h-screen fixed left-0 top-0 bg-surface shadow-sm flex flex-col h-full border-r border-outline-variant z-50">
+<!-- Header -->
+<div class="p-container-margin flex items-center gap-stack-gap border-b border-outline-variant/50 cursor-pointer" onclick="window.location.href='../_/code.html'">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">corporate_fare</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Smart Meeting</h1>
+<p class="font-label-md text-label-md text-on-surface-variant">Enterprise Suite</p>
+</div>
+</div>
+<!-- Main Navigation -->
+<nav class="flex-1 overflow-y-auto py-stack-gap px-gutter flex flex-col gap-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../_/code.html">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-body-md text-body-md">หน้าหลัก</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../people/code.html">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-body-md text-body-md">ผู้คน</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../contact_groups/code.html">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-md text-body-md">กลุ่ม</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../meetings/code.html">
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>
+<span class="font-body-md text-body-md">การประชุม</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../projects/code.html">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+<span class="font-body-md text-body-md">โปรเจกต์</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-container/10 text-primary font-bold active:scale-95 duration-200" href="code.html">
+<span class="material-symbols-outlined" data-icon="task_alt" style="font-variation-settings: 'FILL' 1;">task_alt</span>
+<span class="font-body-md text-body-md">งานของฉัน</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors active:scale-95 duration-200" href="../reminders/code.html">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-body-md text-body-md">การแจ้งเตือน</span>
+</a>
+</nav>
+<!-- Footer Actions -->
+<div class="p-gutter border-t border-outline-variant/50 flex flex-col gap-2">
+<button class="w-full flex items-center justify-center gap-2 py-3 bg-primary text-on-primary rounded-lg font-body-md text-body-md font-medium hover:bg-primary/90 transition-colors shadow-sm mb-4" onclick="window.location.href='../form/code.html'">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add</span>
+                นัดหมายใหม่
+            </button>
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors" href="../ai_ai_summary/code.html">
+<span class="material-symbols-outlined text-secondary-container" data-icon="sparkles" style="font-variation-settings: 'FILL' 1;">arrow_back_ios_new</span>
+<span class="font-body-md text-body-md">ตัวช่วย AI</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors" href="../settings/code.html">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">ตั้งค่า</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-[260px] flex-1 flex flex-col h-screen relative bg-background">
+<!-- TopNavBar (Embedded into Canvas for fluidity, adhering to constraints) -->
+<header class="h-16 w-full bg-surface border-b border-outline-variant flex items-center justify-between px-container-margin z-40 shrink-0">
+<div class="flex items-center gap-4">
+<!-- Search -->
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" style="font-size: 20px;">search</span>
+<input class="w-full pl-10 pr-4 py-2 rounded-full border border-outline-variant bg-surface-container-lowest focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant/70" placeholder="ค้นหางาน..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors relative" onclick="window.location.href='../reminders/code.html'">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface"></span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-secondary-container hover:bg-surface-container-low transition-colors" onclick="window.location.href='../ai_ai_summary/code.html'">
+<span class="material-symbols-outlined" data-icon="sparkles">arrow_back_ios_new</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant cursor-pointer hover:opacity-80 transition-opacity" onclick="window.location.href='../settings/code.html'">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A professional headshot of a corporate employee in a bright, modern office setting. Light mode aesthetic with soft, natural lighting. The person is smiling slightly, exuding competence and approachability. High-quality corporate avatar style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0Xpwj4uDL7buwrGKLeMs7FREVsHXAUcrsL-0kOCqyaIyxlgj_-RnYYlznKZSAsz8TuI330_lGyRcLvyq1syucjXbyOHjuw9dTu1Lt9j-Twq7L4yAXLEpRHJSepD8An2FYTbgHQ8Vwees7gyXzLBPEJDRu0uKeMePt1s8asHwgt12A-bsP0ttCt6fiHHWUd--1hSSNNIxy2WzFhPRCfPN20XHL686EOhPPvC_eE_a8VwjD7-gE96wa">
+</div>
+</div>
+</header>
+<!-- Canvas Content -->
+<div class="flex-1 overflow-y-auto p-container-margin scroll-smooth">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-2">งานของฉัน (Action Items)</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant">จัดการและติดตามงานที่ได้รับมอบหมายจากการประชุม</p>
+</div>
+<!-- Filters -->
+<div class="flex bg-surface-container-lowest rounded-lg p-1 elevation-1 border border-outline-variant/30">
+<button class="px-4 py-2 rounded-md bg-primary/10 text-primary font-label-md text-label-md font-semibold transition-all">ทั้งหมด (12)</button>
+<button class="px-4 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low font-label-md text-label-md transition-all">ยังไม่เริ่ม (3)</button>
+<button class="px-4 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low font-label-md text-label-md transition-all">กำลังดำเนินการ (5)</button>
+<button class="px-4 py-2 rounded-md text-on-surface-variant hover:bg-surface-container-low font-label-md text-label-md transition-all">เสร็จสิ้น (4)</button>
+</div>
+</div>
+<!-- Dashboard Layout (Bento Grid Style) -->
+<div class="grid grid-cols-12 gap-6 pb-12">
+<!-- Highlights Section (Overdue & Critical) -->
+<div class="col-span-12 lg:col-span-4 flex flex-col gap-6">
+<!-- Overdue Alert Card -->
+<div class="bg-error-container/20 rounded-xl p-card-padding border border-error/20 relative overflow-hidden elevation-1">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-error/5 rounded-full blur-xl"></div>
+<div class="flex items-center gap-3 mb-4 text-error">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">error</span>
+<h3 class="font-headline-md text-headline-md">งานที่เกินกำหนด (2)</h3>
+</div>
+<div class="flex flex-col gap-3">
+<div class="bg-surface-container-lowest p-4 rounded-lg border border-error/10 hover:border-error/30 transition-colors cursor-pointer shadow-sm">
+<div class="flex justify-between items-start mb-2">
+<span class="px-2 py-1 bg-error/10 text-error rounded text-[10px] font-bold tracking-wide uppercase">Overdue 2 Days</span>
+<span class="text-error font-label-md text-label-md flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 12 ต.ค.</span>
+</div>
+<h4 class="font-body-lg text-body-lg font-semibold text-on-surface mb-1 cursor-pointer" onclick="window.location.href='../task_detail/code.html'">สรุปงบประมาณ Q4</h4>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-1">จาก: ประชุมวางแผนประจำไตรมาส</p>
+</div>
+<div class="bg-surface-container-lowest p-4 rounded-lg border border-error/10 hover:border-error/30 transition-colors cursor-pointer shadow-sm">
+<div class="flex justify-between items-start mb-2">
+<span class="px-2 py-1 bg-error/10 text-error rounded text-[10px] font-bold tracking-wide uppercase">Overdue 1 Day</span>
+<span class="text-error font-label-md text-label-md flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 13 ต.ค.</span>
+</div>
+<h4 class="font-body-lg text-body-lg font-semibold text-on-surface mb-1 cursor-pointer" onclick="window.location.href='../task_detail/code.html'">ส่งแบบร่าง UI/UX ใหม่</h4>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-1">จาก: Design Sync Weekly</p>
+</div>
+</div>
+</div>
+<!-- AI Insights Panel (Glassmorphism) -->
+<div class="glass-panel rounded-xl p-card-padding relative overflow-hidden elevation-1">
+<div class="absolute top-0 right-0 w-32 h-32 bg-secondary-container/20 rounded-full blur-2xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary-container" style="font-variation-settings: 'FILL' 1;">arrow_back_ios_new</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">AI ผู้ช่วย</h3>
+</div>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4 leading-relaxed">
+                            คุณมีงานที่ใกล้ถึงกำหนดส่ง 3 รายการในสัปดาห์นี้ แนะนำให้จัดลำดับความสำคัญของ "เตรียมเอกสาร Pitching" เป็นอันดับแรกเนื่องจากมีความเชื่อมโยงกับโปรเจกต์หลัก
+                        </p>
+<button class="w-full py-2 border border-outline-variant rounded-lg text-on-surface hover:bg-surface-container-low transition-colors font-label-md text-label-md flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+                            สร้างตารางการทำงานอัตโนมัติ
+                        </button>
+</div>
+</div>
+<!-- Main Task List (In Progress & Not Started) -->
+<div class="col-span-12 lg:col-span-8 flex flex-col gap-6">
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 elevation-1 overflow-hidden">
+<!-- Header -->
+<div class="px-6 py-4 border-b border-outline-variant/30 bg-surface-bright flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md text-on-surface">งานที่ต้องดำเนินการ</h3>
+<button class="text-primary hover:bg-primary/5 p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+</div>
+<!-- Task Items -->
+<div class="divide-y divide-outline-variant/20">
+<!-- Task 1 (In Progress) -->
+<div class="p-6 hover:bg-surface-container-lowest transition-colors group cursor-pointer relative">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-tertiary-fixed-dim rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<div class="flex items-start gap-4">
+<label class="flex items-center cursor-pointer mt-1 relative">
+<input class="peer sr-only" type="checkbox">
+<div class="w-5 h-5 border-2 border-outline rounded-sm peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-[16px] opacity-0 peer-checked:opacity-100" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</label>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<h4 class="font-body-lg text-body-lg font-semibold text-on-surface group-hover:text-primary transition-colors" onclick="window.location.href='../task_detail/code.html'">เตรียมเอกสาร Pitching ลูกค้าใหม่</h4>
+<span class="px-3 py-1 bg-tertiary-fixed/30 text-on-tertiary-fixed-variant rounded-full font-label-md text-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">progress_activity</span>
+                                                In Progress
+                                            </span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-3 line-clamp-2">
+                                            รวบรวมข้อมูลสถิติจากไตรมาสที่ผ่านมาและจัดทำเป็น Presentation 15 หน้า เน้นย้ำเรื่อง ROI ที่คาดหวัง
+                                        </p>
+<div class="flex flex-wrap items-center gap-x-6 gap-y-2 font-label-md text-label-md text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">event</span>
+<span>กำหนดส่ง: 18 ต.ค. (อีก 4 วัน)</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">folder_open</span>
+<span>โปรเจกต์: Project Phoenix</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">groups</span>
+<span>จาก: ประชุมทีมการตลาด</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Task 2 (Not Started) -->
+<div class="p-6 hover:bg-surface-container-lowest transition-colors group cursor-pointer relative">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-surface-variant rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<div class="flex items-start gap-4">
+<label class="flex items-center cursor-pointer mt-1 relative">
+<input class="peer sr-only" type="checkbox">
+<div class="w-5 h-5 border-2 border-outline rounded-sm peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-[16px] opacity-0 peer-checked:opacity-100" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</label>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<h4 class="font-body-lg text-body-lg font-semibold text-on-surface group-hover:text-primary transition-colors" onclick="window.location.href='../task_detail/code.html'">ทบทวนสัญญาจ้างซัพพลายเออร์</h4>
+<span class="px-3 py-1 bg-surface-variant text-on-surface-variant rounded-full font-label-md text-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">hourglass_empty</span>
+                                                Not Started
+                                            </span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-3 line-clamp-2">
+                                            ตรวจสอบเงื่อนไข SLA ใหม่ที่ฝ่ายกฎหมายเพิ่งส่งมา เพื่อเตรียมสำหรับการต่อสัญญาปีหน้า
+                                        </p>
+<div class="flex flex-wrap items-center gap-x-6 gap-y-2 font-label-md text-label-md text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">event</span>
+<span>กำหนดส่ง: 20 ต.ค. (อีก 6 วัน)</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">folder_open</span>
+<span>โปรเจกต์: Vendor Management</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">person</span>
+<span>มอบหมายโดย: คุณสมชาย (Legal)</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Task 3 (In Progress) -->
+<div class="p-6 hover:bg-surface-container-lowest transition-colors group cursor-pointer relative">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-tertiary-fixed-dim rounded-r-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<div class="flex items-start gap-4">
+<label class="flex items-center cursor-pointer mt-1 relative">
+<input class="peer sr-only" type="checkbox">
+<div class="w-5 h-5 border-2 border-outline rounded-sm peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-[16px] opacity-0 peer-checked:opacity-100" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</label>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-1">
+<h4 class="font-body-lg text-body-lg font-semibold text-on-surface group-hover:text-primary transition-colors" onclick="window.location.href='../task_detail/code.html'">สัมภาษณ์ผู้สมัครตำแหน่ง Senior Dev</h4>
+<span class="px-3 py-1 bg-tertiary-fixed/30 text-on-tertiary-fixed-variant rounded-full font-label-md text-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">progress_activity</span>
+                                                In Progress
+                                            </span>
+</div>
+<div class="flex flex-wrap items-center gap-x-6 gap-y-2 mt-3 font-label-md text-label-md text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">event</span>
+<span>กำหนดส่ง: 22 ต.ค.</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">groups</span>
+<span>จาก: แผนก HR Sync</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
