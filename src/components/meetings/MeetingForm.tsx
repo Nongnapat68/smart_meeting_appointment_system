@@ -6,8 +6,26 @@ import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner } from "@/components/ui/Feedback";
-import { toDatetimeLocalValue } from "@/lib/format";
-import type { ContactGroup, Meeting, MeetingParticipant, Person, Project } from "@prisma/client";
+import { toDatetimeLocalValue, formatDateTime } from "@/lib/format";
+import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
+import type { ContactGroup, Meeting, MeetingParticipant, OnlineMeetingResource, Person, Project, Reminder } from "@prisma/client";
+
+// FR-10 example offsets straight from the requirements doc (7d/2d/1d/1h before).
+const REMINDER_PRESETS = [
+  { label: "7 วันก่อน", minutes: 7 * 24 * 60 },
+  { label: "2 วันก่อน", minutes: 2 * 24 * 60 },
+  { label: "1 วันก่อน", minutes: 24 * 60 },
+  { label: "1 ชั่วโมงก่อน", minutes: 60 },
+  { label: "30 นาทีก่อน", minutes: 30 },
+];
+
+function offsetLabel(minutes: number): string {
+  const preset = REMINDER_PRESETS.find((p) => p.minutes === minutes);
+  if (preset) return preset.label;
+  if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)} วันก่อน`;
+  if (minutes % 60 === 0) return `${minutes / 60} ชั่วโมงก่อน`;
+  return `${minutes} นาทีก่อน`;
+}
 
 export interface MeetingFormInitial {
   meeting: Meeting & { participants: (MeetingParticipant & { person: Person })[] };
@@ -38,6 +56,25 @@ export function MeetingForm({
   const [projectId, setProjectId] = useState(initial?.meeting.projectId ?? "");
   const [projects, setProjects] = useState<Project[]>([]);
 
+  // FR-07/BR-09: reusable Online Meeting Resource — pick an existing one or
+  // create a new one inline, instead of retyping the URL into `location`.
+  const [onlineResources, setOnlineResources] = useState<OnlineMeetingResource[]>([]);
+  const [onlineMeetingResourceId, setOnlineMeetingResourceId] = useState(
+    initial?.meeting.onlineMeetingResourceId ?? ""
+  );
+  const [showNewResourceForm, setShowNewResourceForm] = useState(false);
+  const [newResourceName, setNewResourceName] = useState("");
+  const [newResourceUrl, setNewResourceUrl] = useState("");
+  const [creatingResource, setCreatingResource] = useState(false);
+
+  // FR-10/BR-11: multiple reminder offsets. Create mode builds the list
+  // locally and sends it with the meeting; edit mode manages real reminders
+  // live via /api/reminders since the meeting already exists.
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([30]);
+  const [newOffsetInput, setNewOffsetInput] = useState("");
+  const [existingReminders, setExistingReminders] = useState<Reminder[]>([]);
+  const [addingReminder, setAddingReminder] = useState(false);
+
   const [selectedPeople, setSelectedPeople] = useState<Person[]>(
     initial?.meeting.participants.map((p) => p.person) ?? []
   );
@@ -55,7 +92,27 @@ export function MeetingForm({
       .get<{ items: (ContactGroup & { _count: { members: number } })[] }>("/api/groups")
       .then((r) => setGroups(r.items))
       .catch(() => {});
+    api
+      .get<{ items: OnlineMeetingResource[] }>("/api/online-resources")
+      .then((r) => setOnlineResources(r.items))
+      .catch(() => {});
   }, []);
+
+  // Edit mode: reminders already exist on the meeting, so load and manage
+  // them live instead of bundling offsets into the save payload.
+  const loadReminders = async () => {
+    if (!initial) return;
+    try {
+      const res = await api.get<{ items: Reminder[] }>(`/api/reminders?meetingId=${initial.meeting.id}`);
+      setExistingReminders(res.items);
+    } catch {
+      // non-critical — reminder list just stays empty
+    }
+  };
+  useEffect(() => {
+    loadReminders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial?.meeting.id]);
 
   // Prefill from query params (e.g. "นัดประชุม" from a person or group detail page).
   useEffect(() => {
@@ -132,6 +189,61 @@ export function MeetingForm({
     setExternalEmail("");
   }
 
+  async function createOnlineResource() {
+    if (!newResourceName.trim() || !newResourceUrl.trim()) return;
+    setCreatingResource(true);
+    try {
+      const res = await api.post<{ resource: OnlineMeetingResource }>("/api/online-resources", {
+        name: newResourceName,
+        url: newResourceUrl,
+      });
+      setOnlineResources((prev) => [...prev, res.resource]);
+      setOnlineMeetingResourceId(res.resource.id);
+      setShowNewResourceForm(false);
+      setNewResourceName("");
+      setNewResourceUrl("");
+      showToast("สร้างลิงก์ประชุมสำเร็จ", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "สร้างลิงก์ไม่สำเร็จ", "error");
+    } finally {
+      setCreatingResource(false);
+    }
+  }
+
+  function addReminderOffset(minutes: number) {
+    if (!Number.isFinite(minutes) || minutes <= 0) return;
+    setReminderOffsets((prev) => (prev.includes(minutes) ? prev : [...prev, minutes].sort((a, b) => a - b)));
+    setNewOffsetInput("");
+  }
+
+  function removeReminderOffset(minutes: number) {
+    setReminderOffsets((prev) => prev.filter((m) => m !== minutes));
+  }
+
+  async function addExistingMeetingReminder(minutes: number) {
+    if (!initial || !Number.isFinite(minutes) || minutes <= 0) return;
+    setAddingReminder(true);
+    try {
+      await api.post("/api/reminders", { meetingId: initial.meeting.id, offsetMinutes: minutes });
+      setNewOffsetInput("");
+      await loadReminders();
+      showToast("เพิ่มการแจ้งเตือนสำเร็จ", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "เพิ่มการแจ้งเตือนไม่สำเร็จ", "error");
+    } finally {
+      setAddingReminder(false);
+    }
+  }
+
+  async function cancelExistingReminder(id: string) {
+    try {
+      await api.post(`/api/reminders/${id}/cancel`);
+      await loadReminders();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "ยกเลิกไม่สำเร็จ", "error");
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -146,9 +258,13 @@ export function MeetingForm({
         endTime: new Date(endTime).toISOString(),
         location,
         projectId: projectId || null,
+        onlineMeetingResourceId: onlineMeetingResourceId || null,
         participantPersonIds: selectedPeople.map((p) => p.id),
         groupIds: [] as string[],
         externalEmails,
+        // Only meaningful on create — reminders on an existing meeting are
+        // managed live via /api/reminders (see the "การแจ้งเตือน" section).
+        ...(isEdit ? {} : { reminderOffsetMinutes: reminderOffsets }),
       };
 
       if (isEdit && initial) {
@@ -275,7 +391,7 @@ export function MeetingForm({
                   />
                 </FieldLabel>
               </div>
-              <FieldLabel label="สถานที่ / ลิงก์การประชุม">
+              <FieldLabel label="สถานที่ (ห้องประชุมจริง)">
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
                     location_on
@@ -283,12 +399,205 @@ export function MeetingForm({
                   <input
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    placeholder="ระบุห้องประชุม หรือลิงก์ (เช่น Zoom, Meet)"
+                    placeholder="ระบุห้องประชุม (ถ้ามี)"
                     className="w-full pl-10 pr-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   />
                 </div>
               </FieldLabel>
+
+              <FieldLabel label="ลิงก์ประชุมออนไลน์ (ใช้ซ้ำได้กับหลายนัดหมาย)">
+                <div className="space-y-2">
+                  <select
+                    value={showNewResourceForm ? "__new__" : onlineMeetingResourceId}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        setShowNewResourceForm(true);
+                      } else {
+                        setShowNewResourceForm(false);
+                        setOnlineMeetingResourceId(e.target.value);
+                      }
+                    }}
+                    className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
+                  >
+                    <option value="">-- ไม่ใช้ลิงก์ที่บันทึกไว้ --</option>
+                    {onlineResources.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                    <option value="__new__">+ สร้างลิงก์ใหม่...</option>
+                  </select>
+
+                  {!showNewResourceForm && onlineMeetingResourceId && (
+                    <p className="text-xs text-on-surface-variant truncate">
+                      {onlineResources.find((r) => r.id === onlineMeetingResourceId)?.url}
+                    </p>
+                  )}
+
+                  {showNewResourceForm && (
+                    <div className="flex flex-col gap-2 p-3 rounded-lg bg-surface-container-low border border-outline-variant">
+                      <input
+                        value={newResourceName}
+                        onChange={(e) => setNewResourceName(e.target.value)}
+                        placeholder="ชื่อลิงก์ เช่น Zoom Room B"
+                        className="w-full px-3 py-1.5 rounded-lg border border-outline-variant bg-surface text-sm"
+                      />
+                      <input
+                        value={newResourceUrl}
+                        onChange={(e) => setNewResourceUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full px-3 py-1.5 rounded-lg border border-outline-variant bg-surface text-sm"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNewResourceForm(false);
+                            setNewResourceName("");
+                            setNewResourceUrl("");
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-label-md"
+                        >
+                          ยกเลิก
+                        </button>
+                        <button
+                          type="button"
+                          onClick={createOnlineResource}
+                          disabled={creatingResource || !newResourceName.trim() || !newResourceUrl.trim()}
+                          className="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-label-md disabled:opacity-60"
+                        >
+                          {creatingResource ? "กำลังสร้าง..." : "สร้างและใช้ลิงก์นี้"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </FieldLabel>
             </div>
+          </div>
+
+          <div className="bg-surface-container-lowest rounded-xl p-card-padding shadow-sm border border-outline-variant">
+            <h3 className="font-headline-md text-headline-md text-on-surface mb-4 pb-2 border-b border-outline-variant">
+              การแจ้งเตือน (Reminders)
+            </h3>
+            {!isEdit ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {reminderOffsets.map((m) => (
+                    <span
+                      key={m}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary-container text-on-primary-container text-sm"
+                    >
+                      {offsetLabel(m)}
+                      <button
+                        type="button"
+                        onClick={() => removeReminderOffset(m)}
+                        className="hover:text-error"
+                        aria-label="ลบ"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">close</span>
+                      </button>
+                    </span>
+                  ))}
+                  {reminderOffsets.length === 0 && (
+                    <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีการแจ้งเตือน — เพิ่มด้านล่าง</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {REMINDER_PRESETS.filter((p) => !reminderOffsets.includes(p.minutes)).map((p) => (
+                    <button
+                      key={p.minutes}
+                      type="button"
+                      onClick={() => addReminderOffset(p.minutes)}
+                      className="px-3 py-1.5 rounded-full border border-outline-variant text-xs font-label-md text-on-surface-variant hover:bg-surface-container-low"
+                    >
+                      + {p.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    min={1}
+                    value={newOffsetInput}
+                    onChange={(e) => setNewOffsetInput(e.target.value)}
+                    placeholder="กำหนดเอง (นาที)"
+                    className="w-40 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addReminderOffset(parseInt(newOffsetInput, 10))}
+                    disabled={!newOffsetInput.trim()}
+                    className="px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">add</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  {existingReminders.length === 0 && (
+                    <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีการแจ้งเตือน</p>
+                  )}
+                  {existingReminders.map((r) => {
+                    const badge = reminderStatusBadge(r.status);
+                    return (
+                      <div
+                        key={r.id}
+                        className="flex items-center justify-between p-2 rounded-lg bg-surface-container-low"
+                      >
+                        <span className="text-sm text-on-surface">{formatDateTime(r.scheduledAt)}</span>
+                        <div className="flex items-center gap-2">
+                          <StatusBadge {...badge} />
+                          {r.status === "PENDING" && (
+                            <button
+                              type="button"
+                              onClick={() => cancelExistingReminder(r.id)}
+                              className="text-on-surface-variant hover:text-error"
+                              title="ยกเลิกการแจ้งเตือน"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">cancel</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {REMINDER_PRESETS.map((p) => (
+                    <button
+                      key={p.minutes}
+                      type="button"
+                      disabled={addingReminder}
+                      onClick={() => addExistingMeetingReminder(p.minutes)}
+                      className="px-3 py-1.5 rounded-full border border-outline-variant text-xs font-label-md text-on-surface-variant hover:bg-surface-container-low disabled:opacity-50"
+                    >
+                      + {p.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    min={1}
+                    value={newOffsetInput}
+                    onChange={(e) => setNewOffsetInput(e.target.value)}
+                    placeholder="กำหนดเอง (นาที)"
+                    className="w-40 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={addingReminder || !newOffsetInput.trim()}
+                    onClick={() => addExistingMeetingReminder(parseInt(newOffsetInput, 10))}
+                    className="px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">add</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
