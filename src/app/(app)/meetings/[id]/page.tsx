@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { formatDateTime } from "@/lib/format";
 import { meetingStatusBadge, StatusBadge, taskStatusBadge } from "@/components/ui/StatusBadge";
 import { MeetingActions } from "./MeetingActions";
+import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./MeetingContext";
 
 export default async function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,6 +18,10 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
       participants: { include: { person: true } },
       tasks: true,
       aiSummary: true,
+      onlineMeetingResource: true,
+      notes: { include: { author: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
+      decisions: { include: { decidedBy: { select: { name: true } } }, orderBy: { decidedAt: "desc" } },
+      resources: { include: { addedBy: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
     },
   });
   if (!meeting) notFound();
@@ -64,10 +69,10 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
               {meeting.location && (
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">
-                    <span className="material-symbols-outlined text-[18px]">videocam</span>
+                    <span className="material-symbols-outlined text-[18px]">meeting_room</span>
                   </div>
                   <div>
-                    <p className="text-xs text-outline">สถานที่ / ลิงก์</p>
+                    <p className="text-xs text-outline">สถานที่</p>
                     {isLink ? (
                       <a className="font-medium text-primary hover:underline flex items-center gap-1" href={meeting.location} target="_blank" rel="noreferrer">
                         {meeting.location}
@@ -76,6 +81,25 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                     ) : (
                       <p className="font-medium text-on-surface">{meeting.location}</p>
                     )}
+                  </div>
+                </div>
+              )}
+              {meeting.onlineMeetingResource && (
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">
+                    <span className="material-symbols-outlined text-[18px]">videocam</span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-outline">ลิงก์ประชุมออนไลน์</p>
+                    <a
+                      className="font-medium text-primary hover:underline flex items-center gap-1"
+                      href={meeting.onlineMeetingResource.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {meeting.onlineMeetingResource.name}
+                      <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                    </a>
                   </div>
                 </div>
               )}
@@ -132,6 +156,12 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
               </div>
             </div>
           )}
+
+          {/* FR-11/12/13: Notes / Decisions / Related Resources — each backed
+              by its own entity, each supporting multiple rows per meeting. */}
+          <MeetingNotesCard meetingId={meeting.id} initialNotes={meeting.notes} />
+          <MeetingDecisionsCard meetingId={meeting.id} initialDecisions={meeting.decisions} />
+          <MeetingResourcesCard meetingId={meeting.id} initialResources={meeting.resources} />
         </div>
 
         <div className="space-y-6">

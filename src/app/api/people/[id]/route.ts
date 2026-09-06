@@ -64,6 +64,20 @@ export const DELETE = withApiErrors(async (_request: Request, { params }: Params
   // the record belongs to.
   assertOwner(user, false, "เฉพาะผู้ดูแลระบบเท่านั้นที่ลบผู้ติดต่อได้");
 
+  // BR-02: hard-deleting a person who has ever attended a meeting must not
+  // silently destroy that meeting's attendance history. MeetingParticipant.
+  // personId is onDelete: Restrict at the DB level as the actual guarantee —
+  // this check just turns that into a clear error instead of a raw FK
+  // constraint failure. Contacts with no meeting history can still be
+  // hard-deleted; anyone else must be set to "ไม่ใช้งาน" (PUT, status) instead.
+  const participationCount = await prisma.meetingParticipant.count({ where: { personId: id } });
+  if (participationCount > 0) {
+    throw new ApiError(
+      409,
+      "ไม่สามารถลบผู้ติดต่อนี้ได้เพราะมีประวัติเข้าร่วมประชุมอยู่ — เปลี่ยนสถานะเป็น \"ไม่ใช้งาน\" แทน เพื่อไม่ให้ประวัติการประชุมหายไป"
+    );
+  }
+
   await prisma.person.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 });

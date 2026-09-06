@@ -17,11 +17,15 @@ async function main() {
   await prisma.notification.deleteMany();
   await prisma.aISummary.deleteMany();
   await prisma.reminder.deleteMany();
+  await prisma.meetingNote.deleteMany();
+  await prisma.decision.deleteMany();
+  await prisma.relatedResource.deleteMany();
   await prisma.taskAttachment.deleteMany();
   await prisma.taskComment.deleteMany();
   await prisma.task.deleteMany();
   await prisma.meetingParticipant.deleteMany();
   await prisma.meeting.deleteMany();
+  await prisma.onlineMeetingResource.deleteMany();
   await prisma.projectMember.deleteMany();
   await prisma.project.deleteMany();
   await prisma.contactGroupMember.deleteMany();
@@ -228,6 +232,17 @@ async function main() {
   const days = (n: number) => new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
   const hours = (base: Date, h: number) => new Date(base.getTime() + h * 60 * 60 * 1000);
 
+  // --- Reusable online meeting links (FR-07/BR-09/BR-10) ---
+  // Two meetings below point at `zoomRoomB` to demonstrate reuse: editing its
+  // name/url in one place would update both, and neither meeting stores its
+  // own copy of the URL.
+  const zoomRoomB = await prisma.onlineMeetingResource.create({
+    data: { name: "Zoom Room B — ทีมการตลาด", url: "https://zoom.us/j/1234567890", createdById: siriporn.id },
+  });
+  const googleMeetSales = await prisma.onlineMeetingResource.create({
+    data: { name: "Google Meet — ทีมขาย/พาร์ทเนอร์", url: "https://meet.google.com/abc-defg-hij", createdById: siriporn.id },
+  });
+
   // --- Meetings ---
   const pastMeeting = await prisma.meeting.create({
     data: {
@@ -243,9 +258,11 @@ async function main() {
       projectId: erpProject.id,
       participants: {
         create: [
-          { personId: pSomchai.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED" },
-          { personId: pWichai.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED" },
-          { personId: pKittichai.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED" },
+          { personId: pSomchai.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED", source: "DIRECT" },
+          // These two came in because "ทีมโครงการ A" was added wholesale —
+          // demonstrates BR-04's source tracking (GROUP + which group).
+          { personId: pWichai.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED", source: "GROUP", sourceGroupId: projectTeamGroup.id },
+          { personId: pKittichai.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED", source: "GROUP", sourceGroupId: projectTeamGroup.id },
         ],
       },
     },
@@ -260,16 +277,18 @@ async function main() {
       status: "ACTIVE",
       startTime: days(2),
       endTime: hours(days(2), 1.5),
-      location: "Zoom Room B — https://zoom.us/j/1234567890",
+      onlineMeetingResourceId: zoomRoomB.id,
       organizerId: siriporn.id,
       organizerPersonId: pSiriporn.id,
       projectId: marketingProject.id,
       participants: {
         create: [
-          { personId: pSiriporn.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED" },
-          { personId: pSomying.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED" },
-          { personId: pNarin.id, role: "ATTENDEE", rsvpStatus: "PENDING" },
-          { personId: pVichit.id, role: "ATTENDEE", rsvpStatus: "PENDING" },
+          { personId: pSiriporn.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED", source: "DIRECT" },
+          { personId: pSomying.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED", source: "GROUP", sourceGroupId: marketingGroup.id },
+          { personId: pNarin.id, role: "ATTENDEE", rsvpStatus: "PENDING", source: "GROUP", sourceGroupId: marketingGroup.id },
+          // Illustrates the EXTERNAL source: added by typing their address into
+          // "อีเมลภายนอก" rather than picked from the directory or a group.
+          { personId: pVichit.id, role: "ATTENDEE", rsvpStatus: "PENDING", source: "EXTERNAL" },
         ],
       },
     },
@@ -304,13 +323,35 @@ async function main() {
       status: "PENDING",
       startTime: days(4),
       endTime: hours(days(4), 1),
-      location: "Google Meet",
+      onlineMeetingResourceId: googleMeetSales.id,
       organizerId: siriporn.id,
       organizerPersonId: pSiriporn.id,
       participants: {
         create: [
-          { personId: pSiriporn.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED" },
-          { personId: pVichit.id, role: "ATTENDEE", rsvpStatus: "PENDING" },
+          { personId: pSiriporn.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED", source: "DIRECT" },
+          { personId: pVichit.id, role: "ATTENDEE", rsvpStatus: "PENDING", source: "EXTERNAL" },
+        ],
+      },
+    },
+  });
+
+  // Second meeting reusing `googleMeetSales` — same link, independent record,
+  // proving reuse doesn't require copy-pasting the URL again (BR-09).
+  await prisma.meeting.create({
+    data: {
+      title: "Partner Corp — ทบทวนสัญญาประจำไตรมาส",
+      description: "ทบทวนเงื่อนไขสัญญาและ SLA กับ Partner Corp ก่อนต่อสัญญา",
+      type: "SINGLE",
+      status: "PENDING",
+      startTime: days(9),
+      endTime: hours(days(9), 1),
+      onlineMeetingResourceId: googleMeetSales.id,
+      organizerId: siriporn.id,
+      organizerPersonId: pSiriporn.id,
+      participants: {
+        create: [
+          { personId: pSiriporn.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED", source: "DIRECT" },
+          { personId: pVichit.id, role: "ATTENDEE", rsvpStatus: "PENDING", source: "DIRECT" },
         ],
       },
     },
@@ -349,6 +390,66 @@ async function main() {
         ],
       },
     },
+  });
+
+  // --- Meeting Notes / Decisions / Related Resources (FR-11/12/13, BR-15) ---
+  // pastMeeting is COMPLETED, so it carries the kind of post-meeting record
+  // these entities exist for: what was discussed, what was decided, and what
+  // was shared — several rows each, individually attributed.
+  await prisma.meetingNote.createMany({
+    data: [
+      {
+        meetingId: pastMeeting.id,
+        content: "ทีมเห็นตรงกันว่าจะเริ่ม Phase 1 ของการย้ายระบบ ERP ในเดือนหน้า โดยเริ่มจากแผนก Finance ก่อน",
+        authorId: somchai.id,
+      },
+      {
+        meetingId: pastMeeting.id,
+        content: "วิชัยรับผิดชอบเตรียมแผน Data Migration เบื้องต้น ส่งภายในสัปดาห์หน้า",
+        authorId: somchai.id,
+      },
+    ],
+  });
+
+  await prisma.decision.createMany({
+    data: [
+      {
+        meetingId: pastMeeting.id,
+        content: "อนุมัติงบประมาณเฟส 1 ของโครงการ ERP Migration ที่ 2.5 ล้านบาท",
+        decidedById: somchai.id,
+      },
+      {
+        meetingId: pastMeeting.id,
+        content: "เลือกใช้ผู้ให้บริการ Cloud รายเดิม (AWS) แทนการเปลี่ยนผู้ให้บริการ",
+        decidedById: somchai.id,
+      },
+    ],
+  });
+
+  await prisma.relatedResource.createMany({
+    data: [
+      {
+        meetingId: pastMeeting.id,
+        title: "แผนโครงการ ERP Migration (Master Plan)",
+        url: "https://drive.example.com/erp-master-plan",
+        type: "DOCUMENT",
+        addedById: somchai.id,
+      },
+      {
+        meetingId: activeMeeting.id,
+        title: "Brand Guideline ผลิตภัณฑ์ใหม่ Q3",
+        url: "https://drive.example.com/brand-guideline-q3",
+        type: "DOCUMENT",
+        addedById: siriporn.id,
+      },
+      {
+        meetingId: activeMeeting.id,
+        title: "Dashboard ยอดขาย Real-time",
+        url: "https://dashboard.example.com/sales",
+        type: "LINK",
+        addedById: siriporn.id,
+      },
+    ],
   });
 
   // --- AI Summary (pre-generated example, not calling the live API during seed) ---
@@ -473,6 +574,17 @@ async function main() {
   });
 
   // --- Reminders (mix of statuses, tied to real meetings) ---
+  // activeMeeting gets two reminders at different offsets — demonstrates
+  // BR-11 (a meeting can have more than one reminder), which the create-meeting
+  // flow now supports via `reminderOffsetMinutes` instead of always hardcoding
+  // a single "30 minutes before" row.
+  await prisma.reminder.create({
+    data: {
+      meetingId: activeMeeting.id,
+      scheduledAt: hours(days(2), -24),
+      status: "PENDING",
+    },
+  });
   await prisma.reminder.create({
     data: {
       meetingId: activeMeeting.id,

@@ -113,9 +113,14 @@ export const meetingSchema = z
     endTime: nonEmpty("กรุณาระบุเวลาสิ้นสุด"),
     location: z.string().trim().optional().nullable(),
     projectId: z.string().trim().optional().nullable(),
+    onlineMeetingResourceId: z.string().trim().optional().nullable(),
     participantPersonIds: z.array(z.string()).optional().default([]),
     groupIds: z.array(z.string()).optional().default([]),
     externalEmails: z.array(email()).optional().default([]),
+    // FR-10/BR-11: minutes-before-start for each reminder to create. Defaults
+    // to the single "30 minutes before" reminder the app always created
+    // before this was configurable, so existing callers keep working unchanged.
+    reminderOffsetMinutes: z.array(z.number().int().positive()).optional().default([30]),
   })
   .refine((d) => new Date(d.endTime) > new Date(d.startTime), {
     message: "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม",
@@ -131,6 +136,7 @@ export const updateMeetingSchema = z.object({
   endTime: z.string().trim().optional(),
   location: z.string().trim().optional().nullable(),
   projectId: z.string().trim().optional().nullable(),
+  onlineMeetingResourceId: z.string().trim().optional().nullable(),
   participantPersonIds: z.array(z.string()).optional(),
   groupIds: z.array(z.string()).optional(),
 });
@@ -138,6 +144,31 @@ export const updateMeetingSchema = z.object({
 export const rescheduleMeetingSchema = z.object({
   startTime: nonEmpty("กรุณาระบุเวลาเริ่มใหม่"),
   endTime: nonEmpty("กรุณาระบุเวลาสิ้นสุดใหม่"),
+});
+
+// --- Reusable Online Meeting Link (FR-07) --------------------------------
+
+export const onlineMeetingResourceSchema = z.object({
+  name: nonEmpty("กรุณาตั้งชื่อลิงก์ประชุม"),
+  url: nonEmpty("กรุณากรอก URL"),
+});
+
+export const updateOnlineMeetingResourceSchema = onlineMeetingResourceSchema.partial();
+
+// --- Meeting context: Notes / Decisions / Related Resources (FR-11/12/13) --
+
+export const meetingNoteSchema = z.object({
+  content: nonEmpty("กรุณากรอกเนื้อหาบันทึก"),
+});
+
+export const decisionSchema = z.object({
+  content: nonEmpty("กรุณากรอกมติที่ประชุม"),
+});
+
+export const relatedResourceSchema = z.object({
+  title: nonEmpty("กรุณากรอกชื่อเอกสาร/ลิงก์"),
+  url: nonEmpty("กรุณากรอก URL"),
+  type: z.enum(["LINK", "DOCUMENT", "FILE"]).default("LINK"),
 });
 
 // --- Tasks --------------------------------------------------------------
@@ -163,4 +194,11 @@ export const taskCommentSchema = z.object({
 
 export const reminderQuerySchema = z.object({
   status: z.enum(["PENDING", "SENT", "FAILED", "CANCELLED"]).optional(),
+});
+
+// Add one more reminder to an already-created meeting (FR-10/BR-11) — the
+// initial batch is created inline via meetingSchema.reminderOffsetMinutes.
+export const createReminderSchema = z.object({
+  meetingId: nonEmpty("ต้องระบุการประชุม"),
+  offsetMinutes: z.number().int().positive("ต้องเป็นจำนวนนาทีก่อนเริ่มประชุมที่มากกว่า 0"),
 });
