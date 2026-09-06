@@ -63,6 +63,8 @@ export function reminderStatusBadge(status: string) {
   switch (status) {
     case "PENDING":
       return { label: "รอส่ง", variant: "warning" as const };
+    case "PROCESSING":
+      return { label: "กำลังส่ง", variant: "primary" as const };
     case "SENT":
       return { label: "ส่งแล้ว", variant: "success" as const };
     case "FAILED":

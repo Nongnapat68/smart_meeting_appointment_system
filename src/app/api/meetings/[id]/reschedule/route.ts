@@ -18,15 +18,24 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
   const endTime = new Date(body.endTime);
   if (endTime <= startTime) throw new ApiError(400, "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม");
 
-  const meeting = await prisma.meeting.update({
-    where: { id },
-    data: { startTime, endTime, status: "POSTPONED" },
-  });
-
-  // Keep the reminder in sync with the new time.
-  await prisma.reminder.updateMany({
-    where: { meetingId: id, status: "PENDING" },
-    data: { scheduledAt: new Date(startTime.getTime() - 30 * 60 * 1000) },
+  const meeting = await prisma.$transaction(async (tx) => {
+    const pendingReminders = await tx.reminder.findMany({
+      where: { meetingId: id, status: "PENDING" },
+      select: { id: true, offsetMinutes: true },
+    });
+    const updatedMeeting = await tx.meeting.update({
+      where: { id },
+      data: { startTime, endTime, status: "POSTPONED" },
+    });
+    await Promise.all(
+      pendingReminders.map((reminder) =>
+        tx.reminder.update({
+          where: { id: reminder.id },
+          data: { scheduledAt: new Date(startTime.getTime() - reminder.offsetMinutes * 60 * 1000) },
+        })
+      )
+    );
+    return updatedMeeting;
   });
 
   return NextResponse.json({ meeting });

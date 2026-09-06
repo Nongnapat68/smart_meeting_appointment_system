@@ -1,0 +1,1 @@
+ALTER TABLE "Reminder" ADD COLUMN "offsetMinutes" INTEGER NOT NULL DEFAULT 30;

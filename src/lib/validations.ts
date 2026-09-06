@@ -26,8 +26,19 @@ export const verifyOtpSchema = z.object({
 const strongPassword = z
   .string()
   .min(8, "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร")
-  .regex(/[0-9]/, "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว")
-  .regex(/[A-Z]/, "รหัสผ่านต้องมีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว");
+  .regex(/^[A-Za-z0-9]+$/, "รหัสผ่านใช้ได้เฉพาะตัวอักษรภาษาอังกฤษ A-Z, a-z และตัวเลข 0-9 เท่านั้น");
+
+export const signUpSchema = z
+  .object({
+    name: nonEmpty("กรุณากรอกชื่อ-นามสกุล").max(120, "ชื่อยาวเกินไป"),
+    email: email(),
+    password: strongPassword,
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "รหัสผ่านไม่ตรงกัน",
+    path: ["confirmPassword"],
+  });
 
 export const resetPasswordSchema = z
   .object({
@@ -139,6 +150,7 @@ export const updateMeetingSchema = z.object({
   onlineMeetingResourceId: z.string().trim().optional().nullable(),
   participantPersonIds: z.array(z.string()).optional(),
   groupIds: z.array(z.string()).optional(),
+  externalEmails: z.array(email()).optional(),
 });
 
 export const rescheduleMeetingSchema = z.object({
@@ -193,7 +205,7 @@ export const taskCommentSchema = z.object({
 // --- Reminders --------------------------------------------------------
 
 export const reminderQuerySchema = z.object({
-  status: z.enum(["PENDING", "SENT", "FAILED", "CANCELLED"]).optional(),
+  status: z.enum(["PENDING", "PROCESSING", "SENT", "FAILED", "CANCELLED"]).optional(),
 });
 
 // Add one more reminder to an already-created meeting (FR-10/BR-11) — the

@@ -113,7 +113,7 @@ async function setupFixtures() {
       organizerId: userA.id,
       organizerPersonId: personA.id,
       participants: { create: [{ personId: personA.id, role: "ORGANIZER" }] },
-      reminders: { create: [{ scheduledAt: new Date(Date.now() + 1800_000) }] },
+      reminders: { create: [{ scheduledAt: new Date(Date.now() + 1800_000), offsetMinutes: 30 }] },
     },
   });
 

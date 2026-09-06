@@ -3,7 +3,7 @@ import { jwtVerify } from "jose";
 import { SESSION_COOKIE } from "@/lib/auth";
 
 // Routes that don't require a logged-in session.
-const PUBLIC_PATHS = ["/login", "/forgot-password"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password"];
 const PUBLIC_API_PREFIXES = ["/api/auth/"];
 
 function isPublicPath(pathname: string) {

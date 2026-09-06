@@ -265,7 +265,7 @@ export default function ForgotPasswordPage() {
               />
             </div>
             <p className="font-label-md text-label-md text-on-surface-variant text-left">
-              รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร ประกอบด้วยตัวเลขและตัวพิมพ์ใหญ่
+              รหัสผ่านต้องมีอย่างน้อย 8 ตัว ใช้อักษรอังกฤษ A-Z, a-z และตัวเลข 0-9 ได้
             </p>
             {error && <p className="text-left font-label-md text-label-md text-error">{error}</p>}
             <button

@@ -3,10 +3,8 @@
  *
  * In development (no SMTP_* env vars set) this just logs to the server
  * console so OTP codes and notifications are visible without any setup.
- * In production, set SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD/SMTP_FROM
- * and swap the body of `sendEmail` for a real transport (nodemailer, Resend,
- * SES, etc.) — every call site in this codebase goes through this one
- * function, so that's the only place that needs to change.
+ * In production, SMTP settings are required and delivery failures are thrown
+ * to the caller so records are never incorrectly marked as sent.
  */
 
 interface SendEmailInput {
@@ -16,9 +14,12 @@ interface SendEmailInput {
 }
 
 export async function sendEmail({ to, subject, text }: SendEmailInput): Promise<void> {
-  const configured = Boolean(process.env.SMTP_HOST);
+  const host = process.env.SMTP_HOST;
 
-  if (!configured) {
+  if (!host) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SMTP_HOST must be configured in production");
+    }
     console.log(
       [
         "\n──────── [dev email — not actually sent] ────────",
@@ -32,11 +33,26 @@ export async function sendEmail({ to, subject, text }: SendEmailInput): Promise<
     return;
   }
 
-  // TODO: wire up a real SMTP/API transport here using SMTP_HOST/SMTP_PORT/
-  // SMTP_USER/SMTP_PASSWORD/SMTP_FROM once those are set in the environment.
-  console.log(`[email] would send to ${to}: ${subject}`);
+  const { createTransport } = await import("nodemailer");
+  const port = Number(process.env.SMTP_PORT ?? "587");
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASSWORD;
+  const from = process.env.SMTP_FROM;
+  if (!Number.isInteger(port) || port < 1 || port > 65535 || !user || !pass || !from) {
+    throw new Error("SMTP_PORT, SMTP_USER, SMTP_PASSWORD and SMTP_FROM must be configured with SMTP_HOST");
+  }
+
+  const transport = createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+  await transport.sendMail({ from, to, subject, text });
 }
 
 export function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // crypto.randomInt avoids the predictable Math.random sequence.
+  return randomInt(100000, 1_000_000).toString();
 }
+import { randomInt } from "crypto";

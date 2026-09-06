@@ -29,7 +29,7 @@ export const GET = withApiErrors(async (request: Request) => {
     prisma.reminder.groupBy({ by: ["status"], _count: true }),
   ]);
 
-  const counts = { PENDING: 0, SENT: 0, FAILED: 0, CANCELLED: 0 } as Record<ReminderStatus, number>;
+  const counts = { PENDING: 0, PROCESSING: 0, SENT: 0, FAILED: 0, CANCELLED: 0 } as Record<ReminderStatus, number>;
   statusCounts.forEach((c) => {
     counts[c.status] = c._count;
   });
@@ -55,6 +55,7 @@ export const POST = withApiErrors(async (request: Request) => {
     data: {
       meetingId: body.meetingId,
       scheduledAt: new Date(meeting.startTime.getTime() - body.offsetMinutes * 60 * 1000),
+      offsetMinutes: body.offsetMinutes,
     },
   });
 

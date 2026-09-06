@@ -18,6 +18,7 @@ export default function RemindersPage() {
   const [items, setItems] = useState<ReminderRow[]>([]);
   const [counts, setCounts] = useState<Record<ReminderStatus, number>>({
     PENDING: 0,
+    PROCESSING: 0,
     SENT: 0,
     FAILED: 0,
     CANCELLED: 0,
@@ -75,7 +76,7 @@ export default function RemindersPage() {
     }
   }
 
-  const total = counts.PENDING + counts.SENT + counts.FAILED + counts.CANCELLED;
+  const total = counts.PENDING + counts.PROCESSING + counts.SENT + counts.FAILED + counts.CANCELLED;
 
   return (
     <div className="max-w-7xl mx-auto p-container-margin space-y-container-margin">

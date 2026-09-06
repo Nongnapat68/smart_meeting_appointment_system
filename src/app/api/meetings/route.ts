@@ -129,6 +129,7 @@ export const POST = withApiErrors(async (request: Request) => {
       reminders: {
         create: body.reminderOffsetMinutes.map((mins) => ({
           scheduledAt: new Date(new Date(body.startTime).getTime() - mins * 60 * 1000),
+          offsetMinutes: mins,
         })),
       },
     },

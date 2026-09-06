@@ -32,7 +32,12 @@ export async function apiFetch<T = unknown>(
 export const api = {
   get: <T = unknown>(url: string) => apiFetch<T>(url),
   post: <T = unknown>(url: string, body?: unknown) =>
-    apiFetch<T>(url, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+    apiFetch<T>(url, {
+      method: "POST",
+      // Multipart FormData must be sent unchanged so the browser supplies its
+      // boundary; serializing it to JSON drops the selected file.
+      body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+    }),
   put: <T = unknown>(url: string, body?: unknown) =>
     apiFetch<T>(url, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
   patch: <T = unknown>(url: string, body?: unknown) =>

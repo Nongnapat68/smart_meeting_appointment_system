@@ -1,0 +1,89 @@
+
+> stitch_smart_meeting_appointment_system@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.4 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.50.16.218:3000
+- Environments: .env
+✓ Ready in 885ms
+✓ Running next.config.ts took 45ms
+
+ GET /signup 200 in 2.4s (next.js: 1970ms, proxy.ts: 271ms, application-code: 170ms)
+ GET /signup 200 in 184ms (next.js: 37ms, proxy.ts: 27ms, application-code: 120ms)
+ GET /login 200 in 1094ms (next.js: 913ms, proxy.ts: 20ms, application-code: 162ms)
+ GET /signup 200 in 143ms (next.js: 21ms, proxy.ts: 21ms, application-code: 101ms)
+ POST /api/auth/signup 400 in 1739ms (next.js: 1598ms, proxy.ts: 18ms, application-code: 123ms)
+✓ Compiled in 333ms
+ GET /signup 200 in 135ms (next.js: 44ms, proxy.ts: 24ms, application-code: 67ms)
+✓ Compiled in 236ms
+ GET /signup 200 in 156ms (next.js: 34ms, proxy.ts: 21ms, application-code: 102ms)
+ GET /login 200 in 145ms (next.js: 25ms, proxy.ts: 18ms, application-code: 102ms)
+ GET /signup 200 in 137ms (next.js: 21ms, proxy.ts: 19ms, application-code: 97ms)
+ POST /api/auth/signup 400 in 64ms (next.js: 17ms, proxy.ts: 13ms, application-code: 34ms)
+✓ Compiled in 247ms
+ GET /signup 200 in 218ms (next.js: 47ms, proxy.ts: 25ms, application-code: 145ms)
+ GET /signup 200 in 163ms (next.js: 27ms, proxy.ts: 23ms, application-code: 113ms)
+ POST /api/auth/signup 201 in 276ms (next.js: 19ms, proxy.ts: 10ms, application-code: 247ms)
+ GET /dashboard 200 in 2.2s (next.js: 1644ms, proxy.ts: 22ms, application-code: 503ms)
+ GET /dashboard 200 in 302ms (next.js: 99ms, proxy.ts: 33ms, application-code: 169ms)
+ GET /settings 200 in 1302ms (next.js: 1200ms, proxy.ts: 14ms, application-code: 87ms)
+ GET /api/auth/me 200 in 811ms (next.js: 758ms, proxy.ts: 17ms, application-code: 36ms)
+ GET /api/auth/me 200 in 86ms (next.js: 11ms, proxy.ts: 18ms, application-code: 57ms)
+TypeError: Content-Type was not one of "multipart/form-data" or "application/x-www-form-urlencoded".
+    at ignore-listed frames
+ POST /api/users/me/avatar 500 in 779ms (next.js: 701ms, proxy.ts: 22ms, application-code: 57ms)
+TypeError: Content-Type was not one of "multipart/form-data" or "application/x-www-form-urlencoded".
+    at ignore-listed frames
+ POST /api/users/me/avatar 500 in 57ms (next.js: 13ms, proxy.ts: 16ms, application-code: 29ms)
+✓ Compiled in 318ms
+ GET /settings 200 in 166ms (next.js: 31ms, proxy.ts: 12ms, application-code: 123ms)
+ POST /api/auth/login 200 in 643ms (next.js: 375ms, proxy.ts: 10ms, application-code: 258ms)
+ POST /api/auth/login 200 in 208ms (next.js: 16ms, proxy.ts: 14ms, application-code: 179ms)
+ POST /api/users/me/avatar 200 in 137ms (next.js: 22ms, proxy.ts: 13ms, application-code: 102ms)
+ GET /settings 200 in 394ms (next.js: 33ms, proxy.ts: 22ms, application-code: 339ms)
+ GET /api/auth/me 200 in 80ms (next.js: 23ms, proxy.ts: 15ms, application-code: 43ms)
+ GET /api/auth/me 200 in 77ms (next.js: 16ms, proxy.ts: 16ms, application-code: 45ms)
+ POST /api/users/me/avatar 200 in 100ms (next.js: 14ms, proxy.ts: 23ms, application-code: 63ms)
+ GET /settings 200 in 153ms (next.js: 23ms, proxy.ts: 30ms, application-code: 101ms)
+[browser] A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://react.dev/link/controlled-components 
+ PATCH /api/users/me 200 in 904ms (next.js: 811ms, proxy.ts: 16ms, application-code: 77ms)
+ GET /settings 200 in 226ms (next.js: 130ms, proxy.ts: 23ms, application-code: 72ms)
+ PATCH /api/users/me 200 in 101ms (next.js: 26ms, proxy.ts: 14ms, application-code: 61ms)
+ GET /settings 200 in 115ms (next.js: 35ms, proxy.ts: 11ms, application-code: 69ms)
+ GET /ai-assistant 200 in 1086ms (next.js: 1018ms, proxy.ts: 12ms, application-code: 56ms)
+ GET /api/meetings/cmtpjvenw002c7kqooxj4wdvs/ai-summary 200 in 2.7s (next.js: 2.7s, proxy.ts: 16ms, application-code: 49ms)
+ GET /api/meetings/cmtpjvenw002c7kqooxj4wdvs/ai-summary 200 in 97ms (next.js: 45ms, proxy.ts: 15ms, application-code: 37ms)
+ POST /api/meetings/cmtpjvenw002c7kqooxj4wdvs/ai-summary 403 in 84ms (next.js: 45ms, proxy.ts: 12ms, application-code: 27ms)
+ GET /api/meetings/cmtpjveos002l7kqo0wqosdin/ai-summary 200 in 178ms (next.js: 52ms, proxy.ts: 25ms, application-code: 100ms)
+ GET /ai-assistant?meetingId=cmtpjveos002l7kqo0wqosdin 200 in 178ms (next.js: 90ms, proxy.ts: 29ms, application-code: 59ms)
+ GET /ai-assistant?meetingId=cmtpjvenh00277kqonu0ypb92 200 in 112ms (next.js: 20ms, proxy.ts: 15ms, application-code: 77ms)
+ GET /api/meetings/cmtpjvenh00277kqonu0ypb92/ai-summary 200 in 116ms (next.js: 80ms, proxy.ts: 16ms, application-code: 21ms)
+ GET /api/meetings/cmtpjvemn001u7kqo5ecqnusi/ai-summary 200 in 178ms (next.js: 117ms, proxy.ts: 24ms, application-code: 37ms)
+ GET /ai-assistant?meetingId=cmtpjvemn001u7kqo5ecqnusi 200 in 171ms (next.js: 28ms, proxy.ts: 20ms, application-code: 124ms)
+ GET /ai-assistant?meetingId=cmtpjvemn001u7kqo5ecqnusi 200 in 84ms (next.js: 15ms, proxy.ts: 11ms, application-code: 57ms)
+ GET /tasks 200 in 1130ms (next.js: 1056ms, proxy.ts: 15ms, application-code: 58ms)
+ GET /api/tasks? 200 in 918ms (next.js: 878ms, proxy.ts: 12ms, application-code: 28ms)
+ GET /api/tasks? 200 in 64ms (next.js: 9ms, proxy.ts: 15ms, application-code: 40ms)
+ GET /projects 200 in 1128ms (next.js: 1054ms, proxy.ts: 19ms, application-code: 55ms)
+ GET /api/projects 200 in 831ms (next.js: 771ms, proxy.ts: 19ms, application-code: 40ms)
+ GET /api/projects 200 in 57ms (next.js: 10ms, proxy.ts: 10ms, application-code: 37ms)
+ GET /meetings 200 in 1313ms (next.js: 1211ms, proxy.ts: 17ms, application-code: 84ms)
+ GET /api/meetings?page=1&pageSize=10 200 in 871ms (next.js: 813ms, proxy.ts: 16ms, application-code: 41ms)
+ GET /people 200 in 1078ms (next.js: 977ms, proxy.ts: 11ms, application-code: 90ms)
+ GET /api/people?pageSize=50 200 in 806ms (next.js: 746ms, proxy.ts: 15ms, application-code: 45ms)
+ GET /dashboard 200 in 207ms (next.js: 40ms, proxy.ts: 11ms, application-code: 156ms)
+ GET /ai-assistant?meetingId=cmtpjvemn001u7kqo5ecqnusi 200 in 102ms (next.js: 28ms, proxy.ts: 12ms, application-code: 62ms)
+ GET /api/meetings/cmtpjvemn001u7kqo5ecqnusi/ai-summary 200 in 114ms (next.js: 54ms, proxy.ts: 12ms, application-code: 48ms)
+ GET /api/meetings/cmtpjvemn001u7kqo5ecqnusi/ai-summary 200 in 73ms (next.js: 20ms, proxy.ts: 19ms, application-code: 34ms)
+ GET /settings 200 in 110ms (next.js: 44ms, proxy.ts: 14ms, application-code: 52ms)
+ GET /api/auth/me 200 in 74ms (next.js: 22ms, proxy.ts: 19ms, application-code: 33ms)
+ GET /api/auth/me 200 in 60ms (next.js: 10ms, proxy.ts: 15ms, application-code: 35ms)
+ PATCH /api/users/me 200 in 116ms (next.js: 18ms, proxy.ts: 17ms, application-code: 81ms)
+ GET /settings 200 in 225ms (next.js: 129ms, proxy.ts: 27ms, application-code: 69ms)
+ GET /meetings 200 in 77ms (next.js: 24ms, proxy.ts: 11ms, application-code: 42ms)
+ GET /api/meetings?page=1&pageSize=10 200 in 81ms (next.js: 18ms, proxy.ts: 15ms, application-code: 48ms)
+ GET /settings 200 in 83ms (next.js: 21ms, proxy.ts: 15ms, application-code: 48ms)
+ GET /api/auth/me 200 in 64ms (next.js: 11ms, proxy.ts: 9ms, application-code: 44ms)
+ GET /api/auth/me 200 in 58ms (next.js: 13ms, proxy.ts: 13ms, application-code: 32ms)
+^C^C

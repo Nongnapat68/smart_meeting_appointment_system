@@ -98,6 +98,12 @@ export function LoginForm({ nextUrl }: { nextUrl: string }) {
       >
         {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
       </button>
+      <p className="text-center font-body-md text-body-md text-on-surface-variant">
+        ยังไม่มีบัญชี?{" "}
+        <a className="font-label-md text-primary hover:underline" href="/signup">
+          สมัครสมาชิก
+        </a>
+      </p>
     </form>
   );
 }

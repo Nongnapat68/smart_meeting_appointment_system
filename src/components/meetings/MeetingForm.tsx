@@ -79,6 +79,7 @@ export function MeetingForm({
     initial?.meeting.participants.map((p) => p.person) ?? []
   );
   const [groups, setGroups] = useState<(ContactGroup & { _count: { members: number } })[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [personQuery, setPersonQuery] = useState("");
   const [personResults, setPersonResults] = useState<Person[]>([]);
   const [externalEmail, setExternalEmail] = useState("");
@@ -172,6 +173,7 @@ export function MeetingForm({
         const ids = new Set(prev.map((p) => p.id));
         return [...prev, ...members.filter((m) => !ids.has(m.id))];
       });
+      setSelectedGroupIds((prev) => (prev.includes(groupId) ? prev : [...prev, groupId]));
     } catch {
       showToast("โหลดสมาชิกกลุ่มไม่สำเร็จ", "error");
     }
@@ -260,7 +262,7 @@ export function MeetingForm({
         projectId: projectId || null,
         onlineMeetingResourceId: onlineMeetingResourceId || null,
         participantPersonIds: selectedPeople.map((p) => p.id),
-        groupIds: [] as string[],
+        groupIds: selectedGroupIds,
         externalEmails,
         // Only meaningful on create — reminders on an existing meeting are
         // managed live via /api/reminders (see the "การแจ้งเตือน" section).
@@ -654,7 +656,7 @@ export function MeetingForm({
                   -- เลือกกลุ่มเพื่อเพิ่มสมาชิกทั้งหมด --
                 </option>
                 {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
+                  <option key={g.id} value={g.id} disabled={selectedGroupIds.includes(g.id)}>
                     {g.name} ({g._count.members})
                   </option>
                 ))}

@@ -582,6 +582,7 @@ async function main() {
     data: {
       meetingId: activeMeeting.id,
       scheduledAt: hours(days(2), -24),
+      offsetMinutes: 24 * 60,
       status: "PENDING",
     },
   });
@@ -589,6 +590,7 @@ async function main() {
     data: {
       meetingId: activeMeeting.id,
       scheduledAt: hours(days(2), -0.5),
+      offsetMinutes: 30,
       status: "PENDING",
     },
   });
@@ -596,6 +598,7 @@ async function main() {
     data: {
       meetingId: pastMeeting.id,
       scheduledAt: hours(days(-30), -0.5),
+      offsetMinutes: 30,
       status: "SENT",
       sentAt: hours(days(-30), -0.5),
       retryCount: 1,
@@ -605,6 +608,7 @@ async function main() {
     data: {
       meetingId: cancelledMeeting.id,
       scheduledAt: hours(days(-2), -0.5),
+      offsetMinutes: 30,
       status: "FAILED",
       failureReason: "ไม่สามารถเชื่อมต่อผู้ให้บริการอีเมลได้ (SMTP timeout)",
       retryCount: 2,
@@ -614,6 +618,7 @@ async function main() {
     data: {
       meetingId: cancelledMeeting.id,
       scheduledAt: hours(days(-2), -1),
+      offsetMinutes: 60,
       status: "CANCELLED",
     },
   });
