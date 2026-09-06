@@ -37,6 +37,12 @@ export interface MeetingSummaryInput {
   projectName: string | null;
   relatedTasks: { title: string; status: string; dueDate: Date | null }[];
   pastMeetings: { title: string; startTime: Date }[];
+  // FR-15: now that Decision/MeetingNote/RelatedResource exist as their own
+  // entities, the pre-meeting summary can draw on what was actually decided,
+  // noted and shared last time, not just task/meeting titles.
+  pastDecisions: { content: string; meetingTitle: string }[];
+  pastNotes: { content: string; meetingTitle: string }[];
+  resources: { title: string; url: string }[];
 }
 
 /** Generates a pre-meeting briefing: pending items, decisions to revisit, open issues. */
@@ -64,6 +70,21 @@ export async function generateMeetingSummary(input: MeetingSummaryInput): Promis
     input.pastMeetings.length
       ? `การประชุมก่อนหน้าของโปรเจกต์/กลุ่มเดียวกัน:\n${input.pastMeetings
           .map((m) => `- ${m.title} (${m.startTime.toLocaleDateString("th-TH")})`)
+          .join("\n")}`
+      : null,
+    input.pastDecisions.length
+      ? `มติ/การตัดสินใจจากการประชุมก่อนหน้า:\n${input.pastDecisions
+          .map((d) => `- [${d.meetingTitle}] ${d.content}`)
+          .join("\n")}`
+      : null,
+    input.pastNotes.length
+      ? `บันทึกจากการประชุมก่อนหน้า:\n${input.pastNotes
+          .map((n) => `- [${n.meetingTitle}] ${n.content}`)
+          .join("\n")}`
+      : null,
+    input.resources.length
+      ? `เอกสาร/ลิงก์อ้างอิงที่เกี่ยวข้องกับการประชุมนี้:\n${input.resources
+          .map((r) => `- ${r.title}: ${r.url}`)
           .join("\n")}`
       : null,
   ]

@@ -18,6 +18,10 @@ export const GET = withApiErrors(async (_request: Request, { params }: Params) =
       groups: true,
       tasks: true,
       aiSummary: true,
+      onlineMeetingResource: true,
+      notes: { include: { author: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
+      decisions: { include: { decidedBy: { select: { name: true } } }, orderBy: { decidedAt: "desc" } },
+      resources: { include: { addedBy: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
     },
   });
   if (!meeting) throw new ApiError(404, "ไม่พบการประชุมนี้");

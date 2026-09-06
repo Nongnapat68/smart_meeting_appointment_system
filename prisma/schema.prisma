@@ -47,6 +47,10 @@ model User {
   createdGroups         ContactGroup[]
   managedProjects       Project[]        @relation("ProjectManager")
   passwordResets        PasswordResetOtp[]
+  meetingNotes          MeetingNote[]
+  decisions             Decision[]
+  addedResources        RelatedResource[]
+  onlineMeetingResources OnlineMeetingResource[]
 }
 
 model PasswordResetOtp {
@@ -118,6 +122,10 @@ model ContactGroup {
 
   members     ContactGroupMember[]
   meetings    Meeting[] @relation("MeetingGroups")
+  // Meetings where this group was the *source* a participant was pulled in from
+  // (MeetingParticipant.sourceGroupId) — kept even if the group is later deleted
+  // (see MeetingParticipant.sourceGroupId onDelete: SetNull).
+  participantSources MeetingParticipant[] @relation("ParticipantSourceGroup")
 }
 
 enum GroupRole {
@@ -199,12 +207,12 @@ enum MeetingStatus {
 model Meeting {
   id          String        @id @default(cuid())
   title       String
-  description String? // agenda / notes
+  description String? // agenda / notes written at scheduling time (see MeetingNote for post-meeting, multi-entry notes)
   type        MeetingType   @default(SINGLE)
   status      MeetingStatus @default(PENDING)
   startTime   DateTime
   endTime     DateTime
-  location    String? // room name or video link
+  location    String? // physical room name, or a raw text link for meetings not using a reusable OnlineMeetingResource
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -216,14 +224,23 @@ model Meeting {
   projectId   String?
   project     Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
+  // Reusable online meeting link (FR-07/BR-09/BR-10) — nullable because a meeting
+  // may instead use a physical `location`, or a one-off text link typed into it.
+  onlineMeetingResourceId String?
+  onlineMeetingResource   OnlineMeetingResource? @relation(fields: [onlineMeetingResourceId], references: [id], onDelete: SetNull)
+
   participants MeetingParticipant[]
   groups       ContactGroup[]       @relation("MeetingGroups")
   tasks        Task[]
   reminders    Reminder[]
   aiSummary    AISummary?
+  notes        MeetingNote[]
+  decisions    Decision[]
+  resources    RelatedResource[]
 
   @@index([status])
   @@index([startTime])
+  @@index([onlineMeetingResourceId])
 }
 
 enum ParticipantRole {
@@ -237,17 +254,117 @@ enum RsvpStatus {
   DECLINED
 }
 
+// How a participant ended up on a meeting's invite list (BR-04) — resolved once
+// at creation time by resolveParticipants() in src/app/api/meetings/route.ts and
+// never recomputed later, consistent with the snapshot behavior already
+// verified for BR-03.
+enum ParticipantSource {
+  DIRECT // picked individually in "ค้นหาบุคคล"
+  GROUP // pulled in because their group was added ("เพิ่มทั้งกลุ่ม")
+  EXTERNAL // added via a raw external email address
+}
+
 model MeetingParticipant {
   id         String          @id @default(cuid())
   meetingId  String
   meeting    Meeting         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   personId   String
-  person     Person          @relation(fields: [personId], references: [id], onDelete: Cascade)
+  // Restrict (not Cascade): hard-deleting a Person who has ever attended a
+  // meeting must fail loudly rather than silently erase that meeting's
+  // attendance history (BR-02). See DELETE /api/people/[id] for the
+  // app-level check that turns this into a friendly error, and
+  // docs/DESIGN_DECISIONS.md for why this was chosen over a nullable
+  // personId + name/email snapshot.
+  person     Person          @relation(fields: [personId], references: [id], onDelete: Restrict)
   role       ParticipantRole @default(ATTENDEE)
   rsvpStatus RsvpStatus      @default(PENDING)
+  source     ParticipantSource @default(DIRECT)
+  sourceGroupId String?
+  sourceGroup   ContactGroup? @relation("ParticipantSourceGroup", fields: [sourceGroupId], references: [id], onDelete: SetNull)
 
   @@unique([meetingId, personId])
   @@index([personId])
+  @@index([sourceGroupId])
+}
+
+// ---------------------------------------------------------------------------
+// Meeting context: Notes / Decisions / Related Resources (FR-11/12/13, BR-15)
+// ---------------------------------------------------------------------------
+// Each is a separate, multi-row entity keyed to one Meeting — replacing the old
+// single `Meeting.description` field (kept only for the pre-meeting agenda) so
+// a meeting can accumulate many notes, decisions and resource links over time,
+// all individually traceable back to who added them and when.
+
+model MeetingNote {
+  id        String   @id @default(cuid())
+  meetingId String
+  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  content   String
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([meetingId])
+}
+
+model Decision {
+  id          String   @id @default(cuid())
+  meetingId   String
+  meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  content     String
+  decidedById String?
+  decidedBy   User?    @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  // Traced back to a project via meeting.projectId (FR-13's "trace back to
+  // project" requirement) — no separate projectId here, so a decision can
+  // never point to a different project than its own meeting does.
+  @@index([meetingId])
+}
+
+enum ResourceType {
+  LINK
+  DOCUMENT
+  FILE
+}
+
+model RelatedResource {
+  id        String       @id @default(cuid())
+  meetingId String
+  meeting   Meeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  title     String
+  url       String
+  type      ResourceType @default(LINK)
+  addedById String?
+  addedBy   User?        @relation(fields: [addedById], references: [id], onDelete: SetNull)
+  createdAt DateTime     @default(now())
+
+  @@index([meetingId])
+}
+
+// ---------------------------------------------------------------------------
+// Reusable Online Meeting Link (FR-07, BR-09/BR-10)
+// ---------------------------------------------------------------------------
+// A named link (e.g. "ทีม Marketing — Zoom Room B") that many meetings can
+// point to via Meeting.onlineMeetingResourceId, instead of copy-pasting the
+// same URL into `location` every time. Editing name/url here updates every
+// meeting that references it in one place (BR-10); deleting it only detaches
+// meetings (SetNull) rather than destroying their history.
+
+model OnlineMeetingResource {
+  id          String    @id @default(cuid())
+  name        String
+  url         String
+  createdById String?
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  meetings    Meeting[]
+
+  @@index([name])
 }
 
 // ---------------------------------------------------------------------------

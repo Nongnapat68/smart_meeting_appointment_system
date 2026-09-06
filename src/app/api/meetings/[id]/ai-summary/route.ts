@@ -23,6 +23,7 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
       organizer: { select: { name: true } },
       project: { select: { id: true, name: true } },
       participants: { include: { person: true } },
+      resources: true,
     },
   });
   if (!meeting) throw new ApiError(404, "ไม่พบการประชุมนี้");
@@ -49,6 +50,29 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
       : Promise.resolve([]),
   ]);
 
+  // FR-15: pull decisions logged against those same past meetings — this is
+  // what actually makes "context from previous meetings" concrete now that
+  // Decision is a real entity instead of buried inside free-text description.
+  const pastMeetingIds = pastMeetingsRaw.map((m) => m.id);
+  const [pastDecisionsRaw, pastNotesRaw] = await Promise.all([
+    pastMeetingIds.length
+      ? prisma.decision.findMany({
+          where: { meetingId: { in: pastMeetingIds } },
+          include: { meeting: { select: { title: true } } },
+          orderBy: { decidedAt: "desc" },
+          take: 10,
+        })
+      : Promise.resolve([]),
+    pastMeetingIds.length
+      ? prisma.meetingNote.findMany({
+          where: { meetingId: { in: pastMeetingIds } },
+          include: { meeting: { select: { title: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        })
+      : Promise.resolve([]),
+  ]);
+
   let content: string;
   try {
     content = await generateMeetingSummary({
@@ -62,6 +86,9 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
       projectName: meeting.project?.name ?? null,
       relatedTasks: relatedTasksRaw.map((t) => ({ title: t.title, status: t.status, dueDate: t.dueDate })),
       pastMeetings: pastMeetingsRaw.map((m) => ({ title: m.title, startTime: m.startTime })),
+      pastDecisions: pastDecisionsRaw.map((d) => ({ content: d.content, meetingTitle: d.meeting.title })),
+      pastNotes: pastNotesRaw.map((n) => ({ content: n.content, meetingTitle: n.meeting.title })),
+      resources: meeting.resources.map((r) => ({ title: r.title, url: r.url })),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "ไม่สามารถสร้างสรุปด้วย AI ได้";
@@ -71,6 +98,9 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
   const sources = [
     ...relatedTasksRaw.map((t) => ({ label: t.title, refType: "task", refId: t.id })),
     ...pastMeetingsRaw.map((m) => ({ label: m.title, refType: "meeting", refId: m.id })),
+    ...pastDecisionsRaw.map((d) => ({ label: d.content, refType: "decision", refId: d.id })),
+    ...pastNotesRaw.map((n) => ({ label: n.content, refType: "note", refId: n.id })),
+    ...meeting.resources.map((r) => ({ label: r.title, refType: "resource", refId: r.id })),
   ];
 
   const summary = await prisma.aISummary.upsert({
