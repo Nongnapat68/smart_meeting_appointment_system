@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rescheduleMeetingSchema } from "@/lib/validations";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { notifyMeetingParticipants } from "@/lib/meeting-notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -35,7 +36,15 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
         })
       )
     );
-    return updatedMeeting;
+return updatedMeeting;
+  });
+
+  await notifyMeetingParticipants({
+    meetingId: id,
+    type: "MEETING_UPDATED",
+    title: "มีการเลื่อนเวลาการประชุม",
+    emailPrefix: "เลื่อนเวลาการประชุม",
+    excludeUserId: user.id,
   });
 
   return NextResponse.json({ meeting });

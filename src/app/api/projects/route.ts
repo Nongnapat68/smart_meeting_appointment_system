@@ -4,8 +4,16 @@ import { projectSchema } from "@/lib/validations";
 import { parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 
 export const GET = withApiErrors(async () => {
-  await requireUser();
+  const user = await requireUser();
+  const userPerson = await prisma.person.findUnique({ where: { userId: user.id } });
+
   const projects = await prisma.project.findMany({
+    where: {
+      OR: [
+        { managerId: user.id },
+        ...(userPerson ? [{ members: { some: { personId: userPerson.id } } }] : []),
+      ],
+    },
     orderBy: { createdAt: "desc" },
     include: {
       manager: { select: { name: true } },

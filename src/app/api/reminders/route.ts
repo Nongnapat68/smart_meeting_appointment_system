@@ -5,14 +5,22 @@ import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/
 import { ReminderStatus, type Prisma } from "@prisma/client";
 
 export const GET = withApiErrors(async (request: Request) => {
-  await requireUser();
+  const user = await requireUser();
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
   const meetingId = searchParams.get("meetingId");
 
+  const userPerson = await prisma.person.findUnique({ where: { userId: user.id } });
+
   const where: Prisma.ReminderWhereInput = {
     ...(status && status in ReminderStatus ? { status: status as ReminderStatus } : {}),
     ...(meetingId ? { meetingId } : {}),
+    meeting: {
+      OR: [
+        { organizerId: user.id },
+        ...(userPerson ? [{ participants: { some: { personId: userPerson.id } } }] : []),
+      ],
+    },
   };
 
   const [items, statusCounts] = await Promise.all([
@@ -26,7 +34,7 @@ export const GET = withApiErrors(async (request: Request) => {
       },
       take: 100,
     }),
-    prisma.reminder.groupBy({ by: ["status"], _count: true }),
+    prisma.reminder.groupBy({ by: ["status"], where, _count: true }),
   ]);
 
   const counts = { PENDING: 0, PROCESSING: 0, SENT: 0, FAILED: 0, CANCELLED: 0 } as Record<ReminderStatus, number>;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ApiError, assertOwner, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { notifyMeetingParticipants } from "@/lib/meeting-notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -17,6 +18,14 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
   await prisma.reminder.updateMany({
     where: { meetingId: id, status: "PENDING" },
     data: { status: "CANCELLED" },
+  });
+
+  await notifyMeetingParticipants({
+    meetingId: id,
+    type: "MEETING_CANCELLED",
+    title: "การประชุมถูกยกเลิก",
+    emailPrefix: "แจ้งยกเลิกการประชุม",
+    excludeUserId: user.id,
   });
 
   return NextResponse.json({ meeting });

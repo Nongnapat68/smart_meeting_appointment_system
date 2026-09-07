@@ -14,6 +14,9 @@ export const GET = withApiErrors(async () => {
       role: user.role,
       title: user.title,
       department: user.department,
+      phone: user.phone,
+      emailNotifications: user.emailNotifications,
+      inAppNotifications: user.inAppNotifications,
     },
   });
 });

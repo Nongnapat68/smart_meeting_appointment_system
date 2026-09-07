@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 export function TopBar({
   userName,
@@ -34,16 +35,7 @@ export function TopBar({
         >
           <span className="material-symbols-outlined icon-fill">auto_awesome</span>
         </Link>
-        <Link
-          href="/reminders"
-          className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-all active:opacity-80 relative"
-          title="การแจ้งเตือน"
-        >
-          <span className="material-symbols-outlined">notifications</span>
-          {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full" />
-          )}
-        </Link>
+        <NotificationBell initialUnreadCount={unreadCount} />
         <Link href="/settings" className="ml-1" title="ตั้งค่าบัญชี">
           <Avatar name={userName} src={avatarUrl} size={36} className="hover:ring-2 ring-primary transition-all" />
         </Link>

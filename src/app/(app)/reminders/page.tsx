@@ -76,30 +76,32 @@ export default function RemindersPage() {
     }
   }
 
-  const total = counts.PENDING + counts.PROCESSING + counts.SENT + counts.FAILED + counts.CANCELLED;
+const total = counts.PENDING + counts.PROCESSING + counts.SENT + counts.FAILED + counts.CANCELLED;
 
   return (
     <div className="max-w-7xl mx-auto p-container-margin space-y-container-margin">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="font-headline-lg text-headline-lg text-on-surface">จัดการการแจ้งเตือน (Reminders)</h2>
-          <p className="text-on-surface-variant mt-1">ตรวจสอบสถานะการส่งการแจ้งเตือนการประชุมทั้งหมด</p>
+          <p className="text-on-surface-variant mt-1">ตรวจสอบสถานะการส่งการแจ้งเตือนการประชุมของตัวเอง</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-stack-gap">
-        <StatCard label="ทั้งหมด" value={total} icon="mark_email_read" onClick={() => setStatusFilter("")} active={!statusFilter} />
-        <StatCard label="รอส่ง" value={counts.PENDING} icon="schedule" onClick={() => setStatusFilter("PENDING")} active={statusFilter === "PENDING"} />
-        <StatCard label="ส่งแล้ว" value={counts.SENT} icon="check_circle" onClick={() => setStatusFilter("SENT")} active={statusFilter === "SENT"} />
-        <StatCard
-          label="ส่งไม่สำเร็จ"
-          value={counts.FAILED}
-          icon="error"
-          onClick={() => setStatusFilter("FAILED")}
-          active={statusFilter === "FAILED"}
-          danger
-        />
-      </div>
+      {total > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-stack-gap">
+          <StatCard label="ทั้งหมด" value={total} icon="mark_email_read" onClick={() => setStatusFilter("")} active={!statusFilter} />
+          <StatCard label="รอส่ง" value={counts.PENDING} icon="schedule" onClick={() => setStatusFilter("PENDING")} active={statusFilter === "PENDING"} />
+          <StatCard label="ส่งแล้ว" value={counts.SENT} icon="check_circle" onClick={() => setStatusFilter("SENT")} active={statusFilter === "SENT"} />
+          <StatCard
+            label="ส่งไม่สำเร็จ"
+            value={counts.FAILED}
+            icon="error"
+            onClick={() => setStatusFilter("FAILED")}
+            active={statusFilter === "FAILED"}
+            danger
+          />
+        </div>
+      )}
 
       <div className="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden flex flex-col">
         {loading && <FullPageSpinner />}

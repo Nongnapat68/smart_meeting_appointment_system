@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { taskSchema } from "@/lib/validations";
-import { parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { isAdmin, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { TaskStatus, type Prisma } from "@prisma/client";
 
 export const GET = withApiErrors(async (request: Request) => {
   const user = await requireUser();
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
-  const scope = searchParams.get("scope") ?? "mine"; // "mine" | "all"
+  const scope = searchParams.get("scope") ?? "mine";
+
+  const canViewAll = isAdmin(user) && scope === "all";
 
   const where: Prisma.TaskWhereInput = {
-    ...(scope === "mine" ? { assigneeId: user.id } : {}),
+    ...(canViewAll ? {} : { assigneeId: user.id }),
     ...(status && status in TaskStatus ? { status: status as TaskStatus } : {}),
   };
 
@@ -28,7 +30,7 @@ export const GET = withApiErrors(async (request: Request) => {
     }),
     prisma.task.groupBy({
       by: ["status"],
-      where: scope === "mine" ? { assigneeId: user.id } : {},
+      where: canViewAll ? {} : { assigneeId: user.id },
       _count: true,
     }),
   ]);

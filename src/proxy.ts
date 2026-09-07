@@ -4,7 +4,7 @@ import { SESSION_COOKIE } from "@/lib/auth";
 
 // Routes that don't require a logged-in session.
 const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password"];
-const PUBLIC_API_PREFIXES = ["/api/auth/"];
+const PUBLIC_API_PREFIXES = ["/api/auth/", "/api/internal/"];
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;

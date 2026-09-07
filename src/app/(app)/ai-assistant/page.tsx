@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 import { AiAssistantPanel } from "./AiAssistantPanel";
 
 export default async function AiAssistantPage({
@@ -7,9 +8,24 @@ export default async function AiAssistantPage({
   searchParams: Promise<{ meetingId?: string }>;
 }) {
   const { meetingId } = await searchParams;
+  const user = await getCurrentUser();
+
+  const userPerson = user ? await prisma.person.findUnique({ where: { userId: user.id } }) : null;
 
   const meetings = await prisma.meeting.findMany({
-    where: { status: { not: "CANCELLED" } },
+    where: {
+      AND: [
+        { status: { not: "CANCELLED" } },
+        user
+          ? {
+              OR: [
+                { organizerId: user.id },
+                ...(userPerson ? [{ participants: { some: { personId: userPerson.id } } }] : []),
+              ],
+            }
+          : {},
+      ],
+    },
     orderBy: { startTime: "desc" },
     take: 30,
     select: { id: true, title: true, startTime: true, status: true },

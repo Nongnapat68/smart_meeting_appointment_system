@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateMeetingSchema } from "@/lib/validations";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { notifyMeetingParticipants } from "@/lib/meeting-notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -42,7 +43,7 @@ export const PUT = withApiErrors(async (request: Request, { params }: Params) =>
     throw new ApiError(400, "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม");
   }
 
-  const { participantPersonIds, groupIds, startTime, endTime, ...rest } = body;
+  const { participantPersonIds, groupIds, startTime, endTime, projectId, onlineMeetingResourceId, ...rest } = body;
 
   const meeting = await prisma.meeting.update({
     where: { id },
@@ -50,6 +51,10 @@ export const PUT = withApiErrors(async (request: Request, { params }: Params) =>
       ...rest,
       ...(startTime ? { startTime: new Date(startTime) } : {}),
       ...(endTime ? { endTime: new Date(endTime) } : {}),
+      ...(projectId !== undefined ? { project: projectId ? { connect: { id: projectId } } : { disconnect: true } } : {}),
+      ...(onlineMeetingResourceId !== undefined
+        ? { onlineMeetingResource: onlineMeetingResourceId ? { connect: { id: onlineMeetingResourceId } } : { disconnect: true } }
+        : {}),
       ...(groupIds ? { groups: { set: groupIds.map((gid) => ({ id: gid })) } } : {}),
       ...(participantPersonIds
         ? {
@@ -61,6 +66,14 @@ export const PUT = withApiErrors(async (request: Request, { params }: Params) =>
         : {}),
     },
     include: { participants: { include: { person: true } } },
+  });
+
+  await notifyMeetingParticipants({
+    meetingId: meeting.id,
+    type: "MEETING_UPDATED",
+    title: "มีการแก้ไขการประชุม",
+    emailPrefix: "การประชุมถูกแก้ไข",
+    excludeUserId: user.id,
   });
 
   return NextResponse.json({ meeting });

@@ -2,20 +2,27 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { meetingSchema } from "@/lib/validations";
 import { parseBody, parsePagination, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { notifyMeetingParticipants } from "@/lib/meeting-notify";
 import { MeetingStatus, MeetingType, type Prisma } from "@prisma/client";
 
 export const GET = withApiErrors(async (request: Request) => {
-  await requireUser();
+  const user = await requireUser();
   const { searchParams } = new URL(request.url);
   const { page, pageSize, skip, take } = parsePagination(searchParams);
   const q = searchParams.get("q")?.trim();
   const status = searchParams.get("status");
   const type = searchParams.get("type");
 
+  const userPerson = await prisma.person.findUnique({ where: { userId: user.id } });
+
   const where: Prisma.MeetingWhereInput = {
     ...(q ? { title: { contains: q } } : {}),
     ...(status && status in MeetingStatus ? { status: status as MeetingStatus } : {}),
     ...(type && type in MeetingType ? { type: type as MeetingType } : {}),
+    OR: [
+      { organizerId: user.id },
+      ...(userPerson ? [{ participants: { some: { personId: userPerson.id } } }] : []),
+    ],
   };
 
   const [items, total] = await Promise.all([
@@ -136,24 +143,15 @@ export const POST = withApiErrors(async (request: Request) => {
     include: { participants: { include: { person: true } } },
   });
 
-  // Notify internal users who were invited.
-  const invitedPersons = await prisma.person.findMany({
-    where: { id: { in: resolvedParticipants.map((rp) => rp.personId) }, userId: { not: null } },
-    select: { userId: true },
+  // Notify every internal user who was invited (in-app) and email the whole
+  // participant list — see notifyMeetingParticipants.
+  await notifyMeetingParticipants({
+    meetingId: meeting.id,
+    type: "MEETING_INVITE",
+    title: "คำเชิญเข้าร่วมประชุมใหม่",
+    emailPrefix: "คำเชิญเข้าร่วมประชุมใหม่",
+    excludeUserId: user.id,
   });
-  if (invitedPersons.length) {
-    await prisma.notification.createMany({
-      data: invitedPersons
-        .filter((p) => p.userId && p.userId !== user.id)
-        .map((p) => ({
-          userId: p.userId as string,
-          type: "MEETING_INVITE",
-          title: "คำเชิญเข้าร่วมประชุมใหม่",
-          body: meeting.title,
-          relatedId: meeting.id,
-        })),
-    });
-  }
 
   return NextResponse.json({ meeting }, { status: 201 });
 });

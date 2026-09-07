@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { dayNumber, dayShortLabel, formatTimeRange, relativeTime } from "@/lib/format";
 import { meetingStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
+import type { Prisma } from "@prisma/client";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -11,15 +12,30 @@ export default async function DashboardPage() {
   const now = new Date();
   const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
+  const userPerson = await prisma.person.findUnique({ where: { userId: user.id } });
+
+  const userMeetingFilter: Prisma.MeetingWhereInput = {
+    OR: [
+      { organizerId: user.id },
+      ...(userPerson ? [{ participants: { some: { personId: userPerson.id } } }] : []),
+    ],
+  };
+
   const [totalMeetings, pendingTasks, unreadNotifications, weeklyMeetings, person] =
     await Promise.all([
-      prisma.meeting.count(),
+      prisma.meeting.count({ where: userMeetingFilter }),
       prisma.task.count({
         where: { assigneeId: user.id, status: { in: ["NOT_STARTED", "IN_PROGRESS"] } },
       }),
       prisma.notification.count({ where: { userId: user.id, isRead: false } }),
       prisma.meeting.findMany({
-        where: { startTime: { gte: now, lte: weekAhead }, status: { not: "CANCELLED" } },
+        where: {
+          AND: [
+            userMeetingFilter,
+            { startTime: { gte: now, lte: weekAhead } },
+            { status: { not: "CANCELLED" } },
+          ],
+        },
         orderBy: { startTime: "asc" },
         take: 5,
       }),
@@ -28,14 +44,24 @@ export default async function DashboardPage() {
 
   const meetingsLastWeek = await prisma.meeting.count({
     where: {
-      createdAt: {
-        gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000),
-        lt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-      },
+      AND: [
+        userMeetingFilter,
+        {
+          createdAt: {
+            gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000),
+            lt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          },
+        },
+      ],
     },
   });
   const meetingsThisWeek = await prisma.meeting.count({
-    where: { createdAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
+    where: {
+      AND: [
+        userMeetingFilter,
+        { createdAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
+      ],
+    },
   });
   const trendPct =
     meetingsLastWeek > 0
@@ -45,14 +71,19 @@ export default async function DashboardPage() {
         : 0;
 
   const [recentMeetings, recentSummaries, recentCompletedTasks] = await Promise.all([
-    prisma.meeting.findMany({ orderBy: { createdAt: "desc" }, take: 3 }),
+    prisma.meeting.findMany({
+      where: userMeetingFilter,
+      orderBy: { createdAt: "desc" },
+      take: 3,
+    }),
     prisma.aISummary.findMany({
+      where: { meeting: userMeetingFilter },
       orderBy: { generatedAt: "desc" },
       take: 3,
       include: { meeting: { select: { title: true } } },
     }),
     prisma.task.findMany({
-      where: { status: "COMPLETED", completedAt: { not: null } },
+      where: { status: "COMPLETED", completedAt: { not: null }, assigneeId: user.id },
       orderBy: { completedAt: "desc" },
       take: 3,
       include: { assignee: { select: { name: true } } },
