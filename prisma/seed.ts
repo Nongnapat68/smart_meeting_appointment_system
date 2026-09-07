@@ -42,8 +42,8 @@ async function main() {
         email: "somchai@smartmeeting.dev",
         passwordHash,
         name: "สมชาย ใจดี",
-        title: "รองศาสตราจารย์ ดร. (หัวหน้าภาควิชา)",
-        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์ คณะวิศวกรรมศาสตร์",
+        title: "รองศาสตราจารย์ ดร. (หัวหน้าสาขาวิชาวิศวกรรมซอฟต์แวร์)",
+        department: "สาขาวิชาวิศวกรรมซอฟต์แวร์ คณะเทคโนโลยีสารสนเทศและการสื่อสาร",
         phone: "081-234-5678",
         role: "ADMIN",
       },
@@ -54,7 +54,7 @@ async function main() {
         passwordHash,
         name: "ศิริพร ใจดี",
         title: "ผู้ช่วยศาสตราจารย์ ดร. (รองคณบดีฝ่ายวิจัย)",
-        department: "คณะวิศวกรรมศาสตร์",
+        department: "คณะเทคโนโลยีสารสนเทศและการสื่อสาร",
         phone: "081-234-5679",
       },
     }),
@@ -63,8 +63,8 @@ async function main() {
         email: "wichai@smartmeeting.dev",
         passwordHash,
         name: "วิชัย พงษ์สวัสดิ์",
-        title: "อาจารย์ประจำภาควิชา",
-        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์",
+        title: "อาจารย์ประจำสาขาวิชา",
+        department: "สาขาวิชาวิศวกรรมซอฟต์แวร์",
         phone: "081-234-5680",
       },
     }),
@@ -138,7 +138,7 @@ async function main() {
         name: "สมทรง แซ่ตั้ง",
         email: "somsong.s@example.com",
         title: "อดีตผู้ช่วยวิจัย",
-        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์",
+        department: "สาขาวิชาวิศวกรรมซอฟต์แวร์",
         type: "INTERNAL",
         status: "INACTIVE",
       },
@@ -152,7 +152,7 @@ async function main() {
         name: "ปิยะ วงศ์สุข",
         email: "piya.w@example.com",
         title: "นักศึกษาปริญญาโท",
-        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์",
+        department: "สาขาวิชาวิศวกรรมซอฟต์แวร์",
         type: "EXTERNAL",
         status: "ACTIVE",
       },
@@ -162,7 +162,7 @@ async function main() {
         name: "อรุณี ทองแท้",
         email: "arunee.t@example.com",
         title: "นักศึกษาปริญญาเอก",
-        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์",
+        department: "สาขาวิชาวิศวกรรมซอฟต์แวร์",
         type: "EXTERNAL",
         status: "ACTIVE",
       },
@@ -205,7 +205,7 @@ async function main() {
   await prisma.contactGroup.create({
     data: {
       name: "คณะกรรมการบริหารหลักสูตร",
-      description: "คณะกรรมการสำหรับการตัดสินใจด้านหลักสูตรและวิชาการของภาควิชา",
+      description: "คณะกรรมการสำหรับการตัดสินใจด้านหลักสูตรและวิชาการของสาขาวิชา",
       icon: "gavel",
       createdById: somchai.id,
       members: { create: [{ personId: pSomchai.id, role: "LEADER" }, { personId: pVichit.id, role: "MEMBER" }] },
@@ -213,8 +213,8 @@ async function main() {
   });
   await prisma.contactGroup.create({
     data: {
-      name: "กลุ่มอาจารย์ภาควิชาวิศวกรรมคอมพิวเตอร์",
-      description: "รวมอาจารย์ประจำภาควิชาสำหรับนัดประชุมภาควิชา",
+      name: "กลุ่มอาจารย์สาขาวิชาวิศวกรรมซอฟต์แวร์",
+      description: "รวมอาจารย์ประจำสาขาวิชาสำหรับนัดประชุมสาขาวิชา",
       icon: "school",
       createdById: somchai.id,
       members: {
@@ -243,7 +243,7 @@ async function main() {
   await prisma.contactGroup.create({
     data: {
       name: "กลุ่มผู้บริหารคณะ",
-      description: "รวมผู้บริหารระดับคณะ/ภาควิชาสำหรับการประชุมเชิงนโยบายและบริหารจัดการ",
+      description: "รวมผู้บริหารระดับคณะ/สาขาวิชาสำหรับการประชุมเชิงนโยบายและบริหารจัดการ",
       icon: "supervisor_account",
       createdById: siriporn.id,
       members: {
@@ -282,8 +282,8 @@ async function main() {
   });
   await prisma.project.create({
     data: {
-      name: "ปรับปรุงเว็บไซต์ภาควิชาวิศวกรรมคอมพิวเตอร์",
-      description: "ปรับปรุงหน้าเว็บไซต์หลักของภาควิชาให้ทันสมัย รองรับการใช้งานบนมือถือมากขึ้น",
+      name: "ปรับปรุงเว็บไซต์สาขาวิชาวิศวกรรมซอฟต์แวร์",
+      description: "ปรับปรุงหน้าเว็บไซต์หลักของสาขาวิชาให้ทันสมัย รองรับการใช้งานบนมือถือมากขึ้น",
       status: "PENDING",
       managerId: wichai.id,
       members: { create: [{ personId: pWichai.id }] },
@@ -292,7 +292,7 @@ async function main() {
   await prisma.project.create({
     data: {
       name: "ตรวจสอบความปลอดภัยระบบสารสนเทศ ปี 2567",
-      description: "ตรวจสอบความปลอดภัยของระบบโครงสร้างพื้นฐานทั้งหมดของภาควิชา (ติดปัญหาเอกสาร)",
+      description: "ตรวจสอบความปลอดภัยของระบบโครงสร้างพื้นฐานทั้งหมดของสาขาวิชา (ติดปัญหาเอกสาร)",
       status: "DELAYED",
       managerId: kittichai.id,
       members: { create: [{ personId: pKittichai.id }] },
@@ -327,7 +327,7 @@ async function main() {
       status: "COMPLETED",
       startTime: days(-30),
       endTime: hours(days(-30), 1.5),
-      location: "ห้องประชุมภาควิชา ชั้น 4",
+      location: "ห้องประชุมสาขาวิชา ชั้น 4",
       organizerId: somchai.id,
       organizerPersonId: pSomchai.id,
       projectId: researchProject.id,
@@ -449,8 +449,8 @@ async function main() {
 
   await prisma.meeting.create({
     data: {
-      title: "วางแผน Sprint การออกแบบเว็บไซต์ภาควิชา",
-      description: "วางแผน sprint การออกแบบสำหรับปรับปรุงเว็บไซต์ภาควิชาวิศวกรรมคอมพิวเตอร์",
+      title: "วางแผน Sprint การออกแบบเว็บไซต์สาขาวิชา",
+      description: "วางแผน sprint การออกแบบสำหรับปรับปรุงเว็บไซต์สาขาวิชาวิศวกรรมซอฟต์แวร์",
       type: "SINGLE",
       status: "POSTPONED",
       startTime: days(6),
