@@ -3,10 +3,9 @@
 -- ของ requirements/requirements.md.md
 -- =============================================================================
 -- รันจริงแล้วกับ dev database ที่ seed ไว้ (prisma/dev.db, สร้างโดย `npm run db:seed`
--- แล้วมีการใช้งานจริงผ่านแอปทับเพิ่มบางส่วน — เช่น meeting "test" และการยกเลิก
--- "Client Onboarding: Partner Corp" ที่เกิดจากการทดสอบผ่าน UI จริง ไม่ใช่ seed ตรงๆ)
--- โดยใช้ Node's built-in `node:sqlite` (DatabaseSync, read-only mode) — วันที่รันจริง
--- คือ 2026-09-06 ดูผลลัพธ์ที่ยืนยันแล้วทั้ง 15 ข้อในหมวด "VERIFIED OUTPUT" ท้ายไฟล์
+-- ล้วนๆ — ไม่มีการทับข้อมูลด้วยมือเพิ่มเติม) โดยใช้ Node's built-in `node:sqlite`
+-- (DatabaseSync, read-only mode) — ดูผลลัพธ์ที่ยืนยันแล้วทั้ง 15 ข้อในหมวด
+-- "VERIFIED OUTPUT" ท้ายไฟล์
 --
 -- หมายเหตุ dialect: dev database เป็น SQLite และ Prisma เก็บคอลัมน์ DateTime เป็น
 -- INTEGER unix-epoch มิลลิวินาที (ไม่ใช่ TEXT/ISO) จึงต้องแปลงด้วย
@@ -31,7 +30,7 @@ SELECT
 FROM ContactGroupMember cgm
 JOIN Person p ON p.id = cgm.personId
 JOIN ContactGroup cg ON cg.id = cgm.groupId
-WHERE cg.name = 'ทีมการตลาด Q3'          -- <<< เปลี่ยนชื่อกลุ่มตรงนี้เพื่อดูกลุ่มอื่น
+WHERE cg.name = 'ทีมวิจัย AI Lab'          -- <<< เปลี่ยนชื่อกลุ่มตรงนี้เพื่อดูกลุ่มอื่น
 ORDER BY cgm.role DESC, p.name;
 
 
@@ -63,7 +62,7 @@ FROM MeetingParticipant mp
 JOIN Person p ON p.id = mp.personId
 JOIN Meeting m ON m.id = mp.meetingId
 LEFT JOIN ContactGroup cg ON cg.id = mp.sourceGroupId
-WHERE m.title = 'Q3 Marketing Strategy Alignment & Budget Review'   -- <<< เปลี่ยนชื่อ meeting ตรงนี้
+WHERE m.title = 'ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ'   -- <<< เปลี่ยนชื่อ meeting ตรงนี้
 ORDER BY mp.role DESC, p.name;
 
 
@@ -91,7 +90,7 @@ SELECT
     datetime(m.startTime / 1000, 'unixepoch') AS startTime
 FROM Meeting m
 JOIN Project pr ON pr.id = m.projectId
-WHERE pr.name = 'Enterprise Resource Planning (ERP) Migration'   -- <<< เปลี่ยนชื่อ project ตรงนี้
+WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'   -- <<< เปลี่ยนชื่อ project ตรงนี้
 ORDER BY m.startTime;
 
 
@@ -218,7 +217,7 @@ FROM MeetingNote n
 JOIN Meeting m ON m.id = n.meetingId
 JOIN Project pr ON pr.id = m.projectId
 LEFT JOIN User u ON u.id = n.authorId
-WHERE pr.name = 'Enterprise Resource Planning (ERP) Migration'   -- <<< เปลี่ยนชื่อ project ตรงนี้
+WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'   -- <<< เปลี่ยนชื่อ project ตรงนี้
 ORDER BY n.createdAt;
 
 
@@ -232,7 +231,7 @@ SELECT 'NOTE' AS source_type, n.content AS detail, datetime(n.createdAt / 1000, 
 FROM MeetingNote n
 JOIN Meeting m ON m.id = n.meetingId
 JOIN Project pr ON pr.id = m.projectId
-WHERE pr.name = 'Enterprise Resource Planning (ERP) Migration'   -- <<< เปลี่ยนชื่อ project ตรงนี้
+WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'   -- <<< เปลี่ยนชื่อ project ตรงนี้
 
 UNION ALL
 
@@ -240,14 +239,14 @@ SELECT 'DECISION', d.content, datetime(d.decidedAt / 1000, 'unixepoch')
 FROM Decision d
 JOIN Meeting m ON m.id = d.meetingId
 JOIN Project pr ON pr.id = m.projectId
-WHERE pr.name = 'Enterprise Resource Planning (ERP) Migration'
+WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'
 
 UNION ALL
 
 SELECT 'PENDING_TASK', t.title, datetime(t.dueDate / 1000, 'unixepoch')
 FROM Task t
 JOIN Project pr ON pr.id = t.projectId
-WHERE pr.name = 'Enterprise Resource Planning (ERP) Migration'
+WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'
   AND t.status != 'COMPLETED'
 
 UNION ALL
@@ -256,7 +255,7 @@ SELECT 'RESOURCE', r.title || ' — ' || r.url, datetime(r.createdAt / 1000, 'un
 FROM RelatedResource r
 JOIN Meeting m ON m.id = r.meetingId
 JOIN Project pr ON pr.id = m.projectId
-WHERE pr.name = 'Enterprise Resource Planning (ERP) Migration'
+WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'
 
 ORDER BY source_type, at;
 
@@ -284,69 +283,78 @@ ORDER BY m.title, mp.source, p.name;
 
 
 -- =============================================================================
--- ✅ VERIFIED OUTPUT — รันจริงกับ prisma/dev.db ผ่าน node:sqlite (DatabaseSync,
--- read-only) เมื่อ 2026-09-06 06:36 UTC (ตรงกับ "now" ที่ query ข้อ 4/6/7 ใช้เทียบ)
+-- ✅ VERIFIED OUTPUT — รันจริงกับ prisma/dev.db (สร้างสดใหม่จาก `npm run db:seed`
+-- ล้วนๆ หลังปรับ seed data ให้เป็นบริบทมหาวิทยาลัย) ผ่าน node:sqlite (DatabaseSync,
+-- read-only) เมื่อ 2026-09-07 13:37 UTC (ตรงกับ "now" ที่ query ข้อ 4/6/7 ใช้เทียบ)
 -- คัดลอกผลจริงมาไว้ตรงนี้เพื่อยืนยันว่าทุก query รันได้จริงและได้ผลลัพธ์สมเหตุสมผล
 -- ไม่ใช่ query ที่เขียนแล้วไม่เคยรัน — reproduce ได้เองด้วย:
 --   node -e "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync('./prisma/dev.db',{readOnly:true}); console.log(db.prepare(`<query ข้อที่ต้องการ>`).all())"
 -- =============================================================================
 --
--- ข้อ 1 (สมาชิกกลุ่ม 'ทีมการตลาด Q3'): 3 แถว
+-- ข้อ 1 (สมาชิกกลุ่ม 'ทีมวิจัย AI Lab'): 3 แถว
 --   ศิริพร ใจดี (LEADER), นรินทร์ ชัยเจริญ (MEMBER), สมหญิง รักการงาน (MEMBER)
 --
--- ข้อ 2 (กลุ่มของ 'สมชาย ใจดี'): 2 แถว
---   คณะกรรมการ (LEADER), ทีมโครงการ A (LEADER)
+-- ข้อ 2 (กลุ่มของ 'สมชาย ใจดี'): 3 แถว
+--   กลุ่มอาจารย์ภาควิชาวิศวกรรมคอมพิวเตอร์ (LEADER), คณะกรรมการบริหารหลักสูตร (LEADER),
+--   ทีมโครงงานนักศึกษา A (LEADER)
 --
--- ข้อ 3 (ผู้เข้าร่วม 'Q3 Marketing Strategy Alignment & Budget Review'): 4 แถว
---   ศิริพร ใจดี (ORGANIZER/DIRECT), นรินทร์ ชัยเจริญ (ATTENDEE/GROUP←ทีมการตลาด Q3),
---   สมหญิง รักการงาน (ATTENDEE/GROUP←ทีมการตลาด Q3), วิชิต พงษ์สวัสดิ์ (ATTENDEE/EXTERNAL)
+-- ข้อ 3 (ผู้เข้าร่วม 'ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ'): 4 แถว
+--   ศิริพร ใจดี (ORGANIZER/DIRECT), นรินทร์ ชัยเจริญ (ATTENDEE/GROUP←ทีมวิจัย AI Lab),
+--   สมหญิง รักการงาน (ATTENDEE/GROUP←ทีมวิจัย AI Lab), วิชิต พงษ์สวัสดิ์ (ATTENDEE/EXTERNAL)
 --
 -- ข้อ 4 (meeting ที่กำลังจะเกิดขึ้น): 5 แถว — เรียงเวลา:
---   ประชุมทีมพัฒนาไตรมาส 3 (2026-09-07, ACTIVE), Q3 Marketing Strategy... (2026-09-08, ACTIVE),
---   test (2026-09-11, PENDING), UI/UX Design Sprint Planning (2026-09-12, POSTPONED),
---   Partner Corp — ทบทวนสัญญาประจำไตรมาส (2026-09-15, PENDING)
---   [ยืนยันว่า filter status != CANCELLED ทำงานถูกต้อง: "Client Onboarding: Partner Corp" ซึ่งถูก
---    ยกเลิกไปแล้วระหว่างทดสอบผ่าน UI จริง ไม่ปรากฏในผลลัพธ์แม้เวลาจะยังไม่ถึง]
+--   ประชุมทีมพัฒนาระบบ AI Lab ประจำสัปดาห์ (2026-09-08, ACTIVE),
+--   ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ (2026-09-09, ACTIVE),
+--   ประชุมหารือความร่วมมือวิจัยกับสถาบันพันธมิตร (2026-09-11, PENDING),
+--   วางแผน Sprint การออกแบบเว็บไซต์ภาควิชา (2026-09-13, POSTPONED),
+--   ประชุมทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) ประจำไตรมาส (2026-09-16, PENDING)
+--   [ยืนยันว่า filter status != CANCELLED ทำงานถูกต้อง: "Emergency Server Patch Review" ซึ่งถูก
+--    ยกเลิกไว้ตั้งแต่ seed ไม่ปรากฏในผลลัพธ์]
 --
--- ข้อ 5 (meeting ของ project ERP Migration): 1 แถว — "Project Kickoff" (COMPLETED, 2026-08-07)
+-- ข้อ 5 (meeting ของ project 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'): 1 แถว
+--   — "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)" (COMPLETED, 2026-08-08)
 --
 -- ข้อ 6 (meeting history ที่ผ่านมาแล้ว เรียงล่าสุดก่อน): 2 แถว
---   Emergency Server Patch Review (2026-09-04, CANCELLED), Project Kickoff (2026-08-07, COMPLETED)
+--   Emergency Server Patch Review (2026-09-05, CANCELLED), ประชุมเริ่มต้นโครงการวิจัย (Kickoff) (2026-08-08, COMPLETED)
 --
 -- ข้อ 7 (ก) reminder ที่ถึงเวลาส่งจริง ณ ตอนรัน: 0 แถว — ถูกต้องตามข้อมูลจริง เพราะ
---   reminder ตัวอย่างทั้งหมดถูกตั้งไว้ในอนาคต (เร็วสุดคือ 2026-09-07) ยังไม่ถึงกำหนด ณ วันที่รัน
---   (ข) จำลองเป็นวันที่ 2026-09-10: ได้ 3 แถว — พิสูจน์ว่า WHERE clause ทำงานถูกต้องจริง
---   (Q3 Marketing Strategy x2 reminder, test x1 reminder)
+--   reminder ตัวอย่างทั้งหมดถูกตั้งไว้ในอนาคต (เร็วสุดคือ 2026-09-08) ยังไม่ถึงกำหนด ณ วันที่รัน
+--   (ข) จำลองเป็นวันที่ 2026-09-20: ได้ 2 แถว — พิสูจน์ว่า WHERE clause ทำงานถูกต้องจริง
+--   (ทั้งคู่คือ reminder ของ "ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ" — BR-11:
+--   1 meeting มีได้หลาย reminder)
 --
 -- ข้อ 8 (reminder ที่ส่งไม่สำเร็จ): 1 แถว
 --   Emergency Server Patch Review — "ไม่สามารถเชื่อมต่อผู้ให้บริการอีเมลได้ (SMTP timeout)", retryCount=2
 --
 -- ข้อ 9 (action items ที่ยังไม่เสร็จ ทั้งระบบ): 6 แถว (เรียงตาม dueDate)
---   สรุปงบประมาณ Q4, อนุมัติ Artwork สำหรับ Facebook Ads, สรุปรายชื่อ KOLs สำหรับแคมเปญ,
---   เตรียมเอกสาร Pitching ลูกค้าใหม่, ทบทวนสัญญาจ้างซัพพลายเออร์, สัมภาษณ์ผู้สมัครตำแหน่ง Senior Dev
+--   สรุปงบประมาณไตรมาส 4, ตรวจสอบและยืนยันชุดข้อมูลทดสอบชุดที่ 2,
+--   สรุปรายชื่อผู้เชี่ยวชาญสำหรับเชิญ Peer Review, เตรียมเอกสารประกอบการขอทุนวิจัยเพิ่มเติม,
+--   ทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) กับสถาบันพันธมิตร, สัมภาษณ์ผู้สมัครทุนผู้ช่วยวิจัย (Research Assistant)
 --
 -- ข้อ 10 (action items ของ 'ศิริพร ใจดี'): 2 แถว
---   อนุมัติ Artwork สำหรับ Facebook Ads (NOT_STARTED), สรุปรายชื่อ KOLs สำหรับแคมเปญ (NOT_STARTED)
+--   ตรวจสอบและยืนยันชุดข้อมูลทดสอบชุดที่ 2 (NOT_STARTED), สรุปรายชื่อผู้เชี่ยวชาญสำหรับเชิญ Peer Review (NOT_STARTED)
 --
--- ข้อ 11 (decisions จาก meeting ที่ COMPLETED แล้ว): 2 แถว (ทั้งคู่จาก "Project Kickoff")
---   "อนุมัติงบประมาณเฟส 1 ของโครงการ ERP Migration ที่ 2.5 ล้านบาท",
---   "เลือกใช้ผู้ให้บริการ Cloud รายเดิม (AWS) แทนการเปลี่ยนผู้ให้บริการ" — ทั้งคู่โดย สมชาย ใจดี
+-- ข้อ 11 (decisions จาก meeting ที่ COMPLETED แล้ว): 2 แถว (ทั้งคู่จาก "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)")
+--   "อนุมัติงบประมาณระยะที่ 1 ของโครงการวิจัยที่ 250,000 บาท",
+--   "เลือกใช้แพลตฟอร์ม Cloud เดิม (AWS) สำหรับจัดเก็บข้อมูลวิจัย แทนการเปลี่ยนผู้ให้บริการ" — ทั้งคู่โดย สมชาย ใจดี
 --
 -- ข้อ 12 (online link ที่ใช้กับหลาย meeting): 1 แถว
---   "Google Meet — ทีมขาย/พาร์ทเนอร์" ใช้กับ 2 meetings (Client Onboarding + ทบทวนสัญญาประจำไตรมาส)
---   ["Zoom Room B" ใช้แค่ 1 meeting ในข้อมูลปัจจุบัน จึงไม่เข้าเงื่อนไข HAVING > 1 — ถูกต้อง]
+--   "Google Meet — ความร่วมมือกับสถาบันพันธมิตร" ใช้กับ 2 meetings
+--   (ประชุมหารือความร่วมมือวิจัย + ประชุมทบทวน MOU ประจำไตรมาส)
+--   ["Zoom Room B — ทีมวิจัย AI Lab" ใช้แค่ 1 meeting ในข้อมูลปัจจุบัน จึงไม่เข้าเงื่อนไข HAVING > 1 — ถูกต้อง]
 --
--- ข้อ 13 (meeting notes ของ project ERP Migration): 2 แถว (ทั้งคู่จาก "Project Kickoff", โดย สมชาย ใจดี)
---   "ทีมเห็นตรงกันว่าจะเริ่ม Phase 1...", "วิชัยรับผิดชอบเตรียมแผน Data Migration..."
+-- ข้อ 13 (meeting notes ของ project 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'): 2 แถว
+--   (ทั้งคู่จาก "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)", โดย สมชาย ใจดี)
+--   "ทีมเห็นตรงกันว่าจะเริ่มเก็บข้อมูลชุดแรก...", "วิชัยรับผิดชอบเตรียมแผนการเก็บและเตรียมข้อมูล..."
 --
--- ข้อ 14 (ข้อมูลสำหรับ pre-meeting summary ของ project ERP Migration): 7 แถว
---   DECISION x2, NOTE x2, PENDING_TASK x2 (สรุปงบประมาณ Q4, ทบทวนสัญญาจ้างซัพพลายเออร์),
---   RESOURCE x1 (แผนโครงการ ERP Migration Master Plan)
+-- ข้อ 14 (ข้อมูลสำหรับ pre-meeting summary ของ project 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'): 7 แถว
+--   DECISION x2, NOTE x2, PENDING_TASK x2 (สรุปงบประมาณไตรมาส 4, ทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) กับสถาบันพันธมิตร),
+--   RESOURCE x1 (แผนงานวิจัย Research Master Plan)
 --
 -- ข้อ 15 (ผู้เข้าร่วมที่มาจาก Group ปนกับ Direct ในมีตติ้งเดียวกัน): 7 แถว จาก 2 meetings
---   "Project Kickoff": สมชาย ใจดี (DIRECT), กิตติชัย นามดี + วิชัย พงษ์สวัสดิ์ (GROUP←ทีมโครงการ A)
---   "Q3 Marketing Strategy Alignment & Budget Review": ศิริพร ใจดี (DIRECT), วิชิต พงษ์สวัสดิ์ (EXTERNAL,
+--   "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)": สมชาย ใจดี (DIRECT), กิตติชัย นามดี + วิชัย พงษ์สวัสดิ์ (GROUP←ทีมโครงงานนักศึกษา A)
+--   "ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ": ศิริพร ใจดี (DIRECT), วิชิต พงษ์สวัสดิ์ (EXTERNAL,
 --   ไม่เข้าเงื่อนไข filter หลักแต่ติดมาเพราะ join คนละเงื่อนไข IN — ปรากฏเพราะ meeting นี้เข้าเงื่อนไข
 --   IN แล้วจึงแสดงผู้เข้าร่วมทุกคนของ meeting นั้น รวมคนที่มาจาก EXTERNAL ด้วย ตามที่ query เขียนไว้),
---   นรินทร์ ชัยเจริญ + สมหญิง รักการงาน (GROUP←ทีมการตลาด Q3)
+--   นรินทร์ ชัยเจริญ + สมหญิง รักการงาน (GROUP←ทีมวิจัย AI Lab)
 -- =============================================================================

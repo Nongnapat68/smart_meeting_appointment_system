@@ -53,7 +53,7 @@ export default function PeoplePage() {
         <div>
           <h2 className="font-headline-lg text-headline-lg text-on-background">ผู้คน (Contacts)</h2>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-            จัดการรายชื่อผู้ติดต่อทั้งภายในและภายนอกองค์กร
+            จัดการรายชื่อผู้ติดต่อทั้งภายในและภายนอกสถาบัน
           </p>
         </div>
         <button

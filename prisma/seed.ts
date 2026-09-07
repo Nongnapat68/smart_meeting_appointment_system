@@ -42,8 +42,8 @@ async function main() {
         email: "somchai@smartmeeting.dev",
         passwordHash,
         name: "สมชาย ใจดี",
-        title: "Senior Product Manager",
-        department: "Product & Engineering",
+        title: "รองศาสตราจารย์ ดร. (หัวหน้าภาควิชา)",
+        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์ คณะวิศวกรรมศาสตร์",
         phone: "081-234-5678",
         role: "ADMIN",
       },
@@ -53,8 +53,8 @@ async function main() {
         email: "siriporn@smartmeeting.dev",
         passwordHash,
         name: "ศิริพร ใจดี",
-        title: "ผู้อำนวยการฝ่ายการตลาด",
-        department: "การตลาดและสื่อสารองค์กร",
+        title: "ผู้ช่วยศาสตราจารย์ ดร. (รองคณบดีฝ่ายวิจัย)",
+        department: "คณะวิศวกรรมศาสตร์",
         phone: "081-234-5679",
       },
     }),
@@ -63,8 +63,8 @@ async function main() {
         email: "wichai@smartmeeting.dev",
         passwordHash,
         name: "วิชัย พงษ์สวัสดิ์",
-        title: "Lead Designer",
-        department: "Design",
+        title: "อาจารย์ประจำภาควิชา",
+        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์",
         phone: "081-234-5680",
       },
     }),
@@ -73,8 +73,8 @@ async function main() {
         email: "narin@smartmeeting.dev",
         passwordHash,
         name: "นรินทร์ ชัยเจริญ",
-        title: "Sr. Graphic Designer",
-        department: "Design",
+        title: "ผู้ช่วยวิจัย (Research Assistant)",
+        department: "ห้องปฏิบัติการวิจัย AI Lab",
         phone: "081-234-5681",
       },
     }),
@@ -83,8 +83,8 @@ async function main() {
         email: "kittichai@smartmeeting.dev",
         passwordHash,
         name: "กิตติชัย นามดี",
-        title: "IT Support",
-        department: "ไอที",
+        title: "เจ้าหน้าที่สนับสนุนระบบสารสนเทศ",
+        department: "สำนักคอมพิวเตอร์",
         phone: "081-234-5682",
       },
     }),
@@ -117,9 +117,9 @@ async function main() {
     prisma.person.create({
       data: {
         name: "วิชิต พงษ์สวัสดิ์",
-        email: "wichit@partnercorp.com",
-        title: "Account Director",
-        department: "Partner Corp",
+        email: "wichit@partner-univ.ac.th",
+        title: "ผู้ทรงคุณวุฒิภายนอก (อาจารย์ประจำสถาบันพันธมิตร)",
+        department: "มหาวิทยาลัยพันธมิตร",
         type: "EXTERNAL",
         status: "ACTIVE",
       },
@@ -128,7 +128,7 @@ async function main() {
       data: {
         name: "สมหญิง รักการงาน",
         email: "somying@example.com",
-        title: "Marketing Director",
+        title: "นักวิจัยรับเชิญ (Visiting Researcher)",
         type: "EXTERNAL",
         status: "ACTIVE",
       },
@@ -136,21 +136,47 @@ async function main() {
     prisma.person.create({
       data: {
         name: "สมทรง แซ่ตั้ง",
-        email: "somsong.s@company.com",
-        title: "Sales Executive",
-        department: "การตลาด",
+        email: "somsong.s@example.com",
+        title: "อดีตผู้ช่วยวิจัย",
+        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์",
         type: "INTERNAL",
         status: "INACTIVE",
       },
     }),
   ]);
 
+  // --- Students (FR-02: "กลุ่มนักศึกษา" needs actual student contacts) ---
+  const [pPiya, pArunee] = await Promise.all([
+    prisma.person.create({
+      data: {
+        name: "ปิยะ วงศ์สุข",
+        email: "piya.w@example.com",
+        title: "นักศึกษาปริญญาโท",
+        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์",
+        type: "EXTERNAL",
+        status: "ACTIVE",
+      },
+    }),
+    prisma.person.create({
+      data: {
+        name: "อรุณี ทองแท้",
+        email: "arunee.t@example.com",
+        title: "นักศึกษาปริญญาเอก",
+        department: "ภาควิชาวิศวกรรมคอมพิวเตอร์",
+        type: "EXTERNAL",
+        status: "ACTIVE",
+      },
+    }),
+  ]);
+
   // --- Contact groups ---
-  const marketingGroup = await prisma.contactGroup.create({
+  // Covers every example group FR-02 lists: ทีมโครงการ, คณะกรรมการ, กลุ่มอาจารย์,
+  // กลุ่มนักศึกษา, ทีมวิจัย.
+  const researchGroup = await prisma.contactGroup.create({
     data: {
-      name: "ทีมการตลาด Q3",
-      description: "กลุ่มสำหรับประสานงานและวางแผนแคมเปญการตลาดสำหรับไตรมาสที่ 3",
-      icon: "campaign",
+      name: "ทีมวิจัย AI Lab",
+      description: "กลุ่มสำหรับประสานงานและวางแผนงานวิจัยของ AI Lab",
+      icon: "science",
       createdById: somchai.id,
       members: {
         create: [
@@ -163,8 +189,8 @@ async function main() {
   });
   const projectTeamGroup = await prisma.contactGroup.create({
     data: {
-      name: "ทีมโครงการ A",
-      description: "ทีมงานหลักของโครงการ Enterprise Resource Planning Migration",
+      name: "ทีมโครงงานนักศึกษา A",
+      description: "ทีมงานหลักของโครงงานวิจัย ระบบผู้ช่วย AI สำหรับการเตรียมประชุม",
       icon: "work",
       createdById: somchai.id,
       members: {
@@ -178,20 +204,49 @@ async function main() {
   });
   await prisma.contactGroup.create({
     data: {
-      name: "คณะกรรมการ",
-      description: "คณะกรรมการบริหารสำหรับการตัดสินใจระดับองค์กร",
+      name: "คณะกรรมการบริหารหลักสูตร",
+      description: "คณะกรรมการสำหรับการตัดสินใจด้านหลักสูตรและวิชาการของภาควิชา",
       icon: "gavel",
       createdById: somchai.id,
       members: { create: [{ personId: pSomchai.id, role: "LEADER" }, { personId: pVichit.id, role: "MEMBER" }] },
     },
   });
+  await prisma.contactGroup.create({
+    data: {
+      name: "กลุ่มอาจารย์ภาควิชาวิศวกรรมคอมพิวเตอร์",
+      description: "รวมอาจารย์ประจำภาควิชาสำหรับนัดประชุมภาควิชา",
+      icon: "school",
+      createdById: somchai.id,
+      members: {
+        create: [
+          { personId: pSomchai.id, role: "LEADER" },
+          { personId: pSiriporn.id, role: "MEMBER" },
+          { personId: pWichai.id, role: "MEMBER" },
+        ],
+      },
+    },
+  });
+  await prisma.contactGroup.create({
+    data: {
+      name: "กลุ่มนักศึกษาระดับบัณฑิตศึกษา",
+      description: "นักศึกษาปริญญาโท-เอกที่อยู่ภายใต้การดูแลของทีมวิจัย",
+      icon: "groups",
+      createdById: siriporn.id,
+      members: {
+        create: [
+          { personId: pPiya.id, role: "LEADER" },
+          { personId: pArunee.id, role: "MEMBER" },
+        ],
+      },
+    },
+  });
 
   // --- Projects ---
-  const erpProject = await prisma.project.create({
+  const researchProject = await prisma.project.create({
     data: {
-      name: "Enterprise Resource Planning (ERP) Migration",
+      name: "งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม",
       description:
-        "การย้ายระบบ ERP เดิมไปสู่ระบบ Cloud รูปแบบใหม่ เพื่อรองรับการขยายตัวของธุรกิจในปีหน้า จำเป็นต้องประสานงานกับทุกแผนก",
+        "การพัฒนาและทดสอบระบบ AI ที่ช่วยเตรียมข้อมูลก่อนการประชุมสำหรับงานวิจัยที่มีบริบทต่อเนื่อง เพื่อรองรับการต่อยอดผลงานในปีถัดไป จำเป็นต้องประสานงานกับทุกฝ่ายที่เกี่ยวข้อง",
       status: "ACTIVE",
       startDate: new Date("2024-07-01"),
       endDate: new Date("2024-12-31"),
@@ -199,11 +254,11 @@ async function main() {
       members: { create: [{ personId: pSomchai.id }, { personId: pWichai.id }, { personId: pKittichai.id }] },
     },
   });
-  const marketingProject = await prisma.project.create({
+  const aiLabProject = await prisma.project.create({
     data: {
-      name: "Q3 Marketing Campaign: Product Launch",
+      name: "โครงการทุนวิจัย AI Lab ปี 2569",
       description:
-        "แคมเปญการตลาดสำหรับไตรมาสที่ 3 เพื่อเปิดตัวผลิตภัณฑ์ใหม่ มุ่งเน้นการสร้างการรับรู้แบรนด์ในกลุ่มเป้าหมาย Gen Z และการกระตุ้นยอดขายผ่านช่องทางออนไลน์",
+        "โครงการวิจัยที่ได้รับทุนสนับสนุนประจำปี 2569 มุ่งเน้นการพัฒนาและทดสอบต้นแบบระบบ พร้อมเผยแพร่ผลงานสู่วารสารวิชาการภายในปีงบประมาณ",
       status: "ACTIVE",
       startDate: new Date("2024-07-01"),
       endDate: new Date("2024-09-30"),
@@ -213,8 +268,8 @@ async function main() {
   });
   await prisma.project.create({
     data: {
-      name: "Corporate Website Redesign",
-      description: "ปรับปรุงหน้าเว็บไซต์หลักของบริษัทให้ทันสมัย รองรับการใช้งานบนมือถือมากขึ้น",
+      name: "ปรับปรุงเว็บไซต์ภาควิชาวิศวกรรมคอมพิวเตอร์",
+      description: "ปรับปรุงหน้าเว็บไซต์หลักของภาควิชาให้ทันสมัย รองรับการใช้งานบนมือถือมากขึ้น",
       status: "PENDING",
       managerId: wichai.id,
       members: { create: [{ personId: pWichai.id }] },
@@ -222,8 +277,8 @@ async function main() {
   });
   await prisma.project.create({
     data: {
-      name: "Security Audit 2024",
-      description: "ตรวจสอบความปลอดภัยของระบบโครงสร้างพื้นฐานทั้งหมด (ติดปัญหาเอกสาร)",
+      name: "ตรวจสอบความปลอดภัยระบบสารสนเทศ ปี 2567",
+      description: "ตรวจสอบความปลอดภัยของระบบโครงสร้างพื้นฐานทั้งหมดของภาควิชา (ติดปัญหาเอกสาร)",
       status: "DELAYED",
       managerId: kittichai.id,
       members: { create: [{ personId: pKittichai.id }] },
@@ -235,33 +290,37 @@ async function main() {
   const hours = (base: Date, h: number) => new Date(base.getTime() + h * 60 * 60 * 1000);
 
   // --- Reusable online meeting links (FR-07/BR-09/BR-10) ---
-  // Two meetings below point at `zoomRoomB` to demonstrate reuse: editing its
-  // name/url in one place would update both, and neither meeting stores its
+  // Two meetings below point at `googleMeetPartner` to demonstrate reuse: editing
+  // its name/url in one place would update both, and neither meeting stores its
   // own copy of the URL.
   const zoomRoomB = await prisma.onlineMeetingResource.create({
-    data: { name: "Zoom Room B — ทีมการตลาด", url: "https://zoom.us/j/1234567890", createdById: siriporn.id },
+    data: { name: "Zoom Room B — ทีมวิจัย AI Lab", url: "https://zoom.us/j/1234567890", createdById: siriporn.id },
   });
-  const googleMeetSales = await prisma.onlineMeetingResource.create({
-    data: { name: "Google Meet — ทีมขาย/พาร์ทเนอร์", url: "https://meet.google.com/abc-defg-hij", createdById: siriporn.id },
+  const googleMeetPartner = await prisma.onlineMeetingResource.create({
+    data: {
+      name: "Google Meet — ความร่วมมือกับสถาบันพันธมิตร",
+      url: "https://meet.google.com/abc-defg-hij",
+      createdById: siriporn.id,
+    },
   });
 
   // --- Meetings ---
   const pastMeeting = await prisma.meeting.create({
     data: {
-      title: "Project Kickoff",
-      description: "ประชุมวางแผนเริ่มต้นโครงการและกำหนดเป้าหมาย",
+      title: "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)",
+      description: "ประชุมวางแผนเริ่มต้นงานวิจัยและกำหนดเป้าหมาย",
       type: "PROJECT",
       status: "COMPLETED",
       startTime: days(-30),
       endTime: hours(days(-30), 1.5),
-      location: "ห้องประชุมใหญ่ ชั้น 4",
+      location: "ห้องประชุมภาควิชา ชั้น 4",
       organizerId: somchai.id,
       organizerPersonId: pSomchai.id,
-      projectId: erpProject.id,
+      projectId: researchProject.id,
       participants: {
         create: [
           { personId: pSomchai.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED", source: "DIRECT" },
-          // These two came in because "ทีมโครงการ A" was added wholesale —
+          // These two came in because "ทีมโครงงานนักศึกษา A" was added wholesale —
           // demonstrates BR-04's source tracking (GROUP + which group).
           { personId: pWichai.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED", source: "GROUP", sourceGroupId: projectTeamGroup.id },
           { personId: pKittichai.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED", source: "GROUP", sourceGroupId: projectTeamGroup.id },
@@ -272,9 +331,9 @@ async function main() {
 
   const activeMeeting = await prisma.meeting.create({
     data: {
-      title: "Q3 Marketing Strategy Alignment & Budget Review",
+      title: "ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ",
       description:
-        "1. ทบทวนงบประมาณแคมเปญหลัก (Summer Sale & Back to School)\n2. ตรวจสอบยอดผู้ใช้งานใหม่เทียบกับเป้าหมาย\n3. หารือกลยุทธ์สำหรับ Q4",
+        "1. ทบทวนงบประมาณทุนวิจัยระยะที่ 1\n2. ตรวจสอบความคืบหน้าการเก็บข้อมูลเทียบกับแผน\n3. หารือแผนการตีพิมพ์ผลงานสำหรับไตรมาสหน้า",
       type: "PROJECT",
       status: "ACTIVE",
       startTime: days(2),
@@ -282,12 +341,12 @@ async function main() {
       onlineMeetingResourceId: zoomRoomB.id,
       organizerId: siriporn.id,
       organizerPersonId: pSiriporn.id,
-      projectId: marketingProject.id,
+      projectId: aiLabProject.id,
       participants: {
         create: [
           { personId: pSiriporn.id, role: "ORGANIZER", rsvpStatus: "ACCEPTED", source: "DIRECT" },
-          { personId: pSomying.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED", source: "GROUP", sourceGroupId: marketingGroup.id },
-          { personId: pNarin.id, role: "ATTENDEE", rsvpStatus: "PENDING", source: "GROUP", sourceGroupId: marketingGroup.id },
+          { personId: pSomying.id, role: "ATTENDEE", rsvpStatus: "ACCEPTED", source: "GROUP", sourceGroupId: researchGroup.id },
+          { personId: pNarin.id, role: "ATTENDEE", rsvpStatus: "PENDING", source: "GROUP", sourceGroupId: researchGroup.id },
           // Illustrates the EXTERNAL source: added by typing their address into
           // "อีเมลภายนอก" rather than picked from the directory or a group.
           { personId: pVichit.id, role: "ATTENDEE", rsvpStatus: "PENDING", source: "EXTERNAL" },
@@ -298,7 +357,7 @@ async function main() {
 
   await prisma.meeting.create({
     data: {
-      title: "ประชุมทีมพัฒนาไตรมาส 3",
+      title: "ประชุมทีมพัฒนาระบบ AI Lab ประจำสัปดาห์",
       description: "ติดตามความคืบหน้า sprint ปัจจุบันและวางแผน sprint ถัดไป",
       type: "SINGLE",
       status: "ACTIVE",
@@ -319,13 +378,13 @@ async function main() {
 
   await prisma.meeting.create({
     data: {
-      title: "Client Onboarding: Partner Corp",
-      description: "แนะนำระบบและกระบวนการทำงานให้กับลูกค้าใหม่",
+      title: "ประชุมหารือความร่วมมือวิจัยกับสถาบันพันธมิตร",
+      description: "แนะนำระบบและกระบวนการทำงานให้กับสถาบันพันธมิตรใหม่",
       type: "SINGLE",
       status: "PENDING",
       startTime: days(4),
       endTime: hours(days(4), 1),
-      onlineMeetingResourceId: googleMeetSales.id,
+      onlineMeetingResourceId: googleMeetPartner.id,
       organizerId: siriporn.id,
       organizerPersonId: pSiriporn.id,
       participants: {
@@ -337,17 +396,17 @@ async function main() {
     },
   });
 
-  // Second meeting reusing `googleMeetSales` — same link, independent record,
+  // Second meeting reusing `googleMeetPartner` — same link, independent record,
   // proving reuse doesn't require copy-pasting the URL again (BR-09).
   await prisma.meeting.create({
     data: {
-      title: "Partner Corp — ทบทวนสัญญาประจำไตรมาส",
-      description: "ทบทวนเงื่อนไขสัญญาและ SLA กับ Partner Corp ก่อนต่อสัญญา",
+      title: "ประชุมทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) ประจำไตรมาส",
+      description: "ทบทวนเงื่อนไข MOU และข้อตกลงการวิจัยร่วมกับสถาบันพันธมิตรก่อนต่ออายุ",
       type: "SINGLE",
       status: "PENDING",
       startTime: days(9),
       endTime: hours(days(9), 1),
-      onlineMeetingResourceId: googleMeetSales.id,
+      onlineMeetingResourceId: googleMeetPartner.id,
       organizerId: siriporn.id,
       organizerPersonId: pSiriporn.id,
       participants: {
@@ -376,8 +435,8 @@ async function main() {
 
   await prisma.meeting.create({
     data: {
-      title: "UI/UX Design Sprint Planning",
-      description: "วางแผน sprint การออกแบบสำหรับ Corporate Website Redesign",
+      title: "วางแผน Sprint การออกแบบเว็บไซต์ภาควิชา",
+      description: "วางแผน sprint การออกแบบสำหรับปรับปรุงเว็บไซต์ภาควิชาวิศวกรรมคอมพิวเตอร์",
       type: "SINGLE",
       status: "POSTPONED",
       startTime: days(6),
@@ -402,12 +461,12 @@ async function main() {
     data: [
       {
         meetingId: pastMeeting.id,
-        content: "ทีมเห็นตรงกันว่าจะเริ่ม Phase 1 ของการย้ายระบบ ERP ในเดือนหน้า โดยเริ่มจากแผนก Finance ก่อน",
+        content: "ทีมเห็นตรงกันว่าจะเริ่มเก็บข้อมูลชุดแรกของงานวิจัยในเดือนหน้า โดยเริ่มจากกลุ่มตัวอย่างนักศึกษาปีที่ 4 ก่อน",
         authorId: somchai.id,
       },
       {
         meetingId: pastMeeting.id,
-        content: "วิชัยรับผิดชอบเตรียมแผน Data Migration เบื้องต้น ส่งภายในสัปดาห์หน้า",
+        content: "วิชัยรับผิดชอบเตรียมแผนการเก็บและเตรียมข้อมูล (Data Preparation Plan) เบื้องต้น ส่งภายในสัปดาห์หน้า",
         authorId: somchai.id,
       },
     ],
@@ -417,12 +476,12 @@ async function main() {
     data: [
       {
         meetingId: pastMeeting.id,
-        content: "อนุมัติงบประมาณเฟส 1 ของโครงการ ERP Migration ที่ 2.5 ล้านบาท",
+        content: "อนุมัติงบประมาณระยะที่ 1 ของโครงการวิจัยที่ 250,000 บาท",
         decidedById: somchai.id,
       },
       {
         meetingId: pastMeeting.id,
-        content: "เลือกใช้ผู้ให้บริการ Cloud รายเดิม (AWS) แทนการเปลี่ยนผู้ให้บริการ",
+        content: "เลือกใช้แพลตฟอร์ม Cloud เดิม (AWS) สำหรับจัดเก็บข้อมูลวิจัย แทนการเปลี่ยนผู้ให้บริการ",
         decidedById: somchai.id,
       },
     ],
@@ -432,22 +491,22 @@ async function main() {
     data: [
       {
         meetingId: pastMeeting.id,
-        title: "แผนโครงการ ERP Migration (Master Plan)",
-        url: "https://drive.example.com/erp-master-plan",
+        title: "แผนงานวิจัย (Research Master Plan)",
+        url: "https://drive.example.com/research-master-plan",
         type: "DOCUMENT",
         addedById: somchai.id,
       },
       {
         meetingId: activeMeeting.id,
-        title: "Brand Guideline ผลิตภัณฑ์ใหม่ Q3",
-        url: "https://drive.example.com/brand-guideline-q3",
+        title: "แนวทางการเขียนรายงานวิจัยประจำไตรมาส",
+        url: "https://drive.example.com/research-report-guideline-q3",
         type: "DOCUMENT",
         addedById: siriporn.id,
       },
       {
         meetingId: activeMeeting.id,
-        title: "Dashboard ยอดขาย Real-time",
-        url: "https://dashboard.example.com/sales",
+        title: "Dashboard ความคืบหน้าการเก็บข้อมูลวิจัย Real-time",
+        url: "https://dashboard.example.com/research-progress",
         type: "LINK",
         addedById: siriporn.id,
       },
@@ -460,33 +519,33 @@ async function main() {
       meetingId: activeMeeting.id,
       model: "claude-opus-5",
       content:
-        "สรุปประเด็นต่อเนื่องสำหรับ Q3 Marketing Campaign:\n\n" +
+        "สรุปประเด็นต่อเนื่องสำหรับงานวิจัย AI Lab:\n\n" +
         "1. สถานะงานค้าง (Pending Tasks):\n" +
-        "- ทีม Design ต้องส่งมอบ Artwork สำหรับ Facebook Ads ภายในวันพรุ่งนี้\n" +
-        "- การสรุปรายชื่อ KOLs สำหรับแคมเปญยังอยู่ระหว่างดำเนินการ\n\n" +
+        "- ทีมเก็บข้อมูลต้องส่งมอบชุดข้อมูลทดสอบชุดที่ 2 ภายในวันพรุ่งนี้\n" +
+        "- การสรุปรายชื่อผู้เชี่ยวชาญที่จะเชิญร่วม Peer Review ยังอยู่ระหว่างดำเนินการ\n\n" +
         "2. ประเด็นที่ควรพิจารณา (Related Issues):\n" +
-        "- งบประมาณสำหรับ Marketing Campaign ในไตรมาสหน้ายังไม่ได้รับการอนุมัติ\n" +
-        "- ควรติดตามความคืบหน้ากับทีม Production เรื่องวิดีโอโฆษณาที่อาจล่าช้า",
-      sources: JSON.stringify([{ label: "อนุมัติ Artwork สำหรับ Facebook Ads", refType: "task", refId: "seed" }]),
+        "- งบประมาณสำหรับงานวิจัยในไตรมาสหน้ายังไม่ได้รับการอนุมัติ\n" +
+        "- ควรติดตามความคืบหน้ากับทีมพัฒนาเรื่องต้นแบบระบบที่อาจล่าช้า",
+      sources: JSON.stringify([{ label: "ตรวจสอบและยืนยันชุดข้อมูลทดสอบชุดที่ 2", refType: "task", refId: "seed" }]),
     },
   });
 
   // --- Tasks ---
   await prisma.task.create({
     data: {
-      title: "เตรียมเอกสาร Pitching ลูกค้าใหม่",
-      description: "รวบรวมข้อมูลสถิติจากไตรมาสที่ผ่านมาและจัดทำเป็น Presentation 15 หน้า เน้นย้ำเรื่อง ROI ที่คาดหวัง",
+      title: "เตรียมเอกสารประกอบการขอทุนวิจัยเพิ่มเติม",
+      description: "รวบรวมข้อมูลผลการทดลองจากไตรมาสที่ผ่านมาและจัดทำเป็น Presentation 15 หน้า เน้นย้ำผลลัพธ์เบื้องต้นที่ได้",
       status: "IN_PROGRESS",
       priority: "HIGH",
       dueDate: days(4),
       assigneeId: somchai.id,
       assigneePersonId: pSomchai.id,
       createdById: siriporn.id,
-      projectId: marketingProject.id,
+      projectId: aiLabProject.id,
       meetingId: activeMeeting.id,
       comments: {
         create: [
-          { authorId: siriporn.id, content: "ผมได้อัปโหลดข้อมูลดิบเบื้องต้นจากฝั่งยอดขายไว้ใน Shared Drive โฟลเดอร์ Q3_RawData แล้วนะครับ" },
+          { authorId: siriporn.id, content: "ผมได้อัปโหลดข้อมูลดิบเบื้องต้นจากฝั่งเก็บข้อมูลไว้ใน Shared Drive โฟลเดอร์ Q3_RawData แล้วนะครับ" },
           { authorId: somchai.id, content: "รับทราบครับ กำลังดำเนินการรวบรวมและจะส่งดราฟแรกให้ตรวจสอบภายในพรุ่งนี้เช้าครับ" },
         ],
       },
@@ -495,48 +554,48 @@ async function main() {
 
   await prisma.task.create({
     data: {
-      title: "อนุมัติ Artwork สำหรับ Facebook Ads",
-      description: "ตรวจสอบและอนุมัติ Artwork ชุดใหม่ก่อนเริ่มยิงโฆษณา",
+      title: "ตรวจสอบและยืนยันชุดข้อมูลทดสอบชุดที่ 2",
+      description: "ตรวจสอบและยืนยันความถูกต้องของชุดข้อมูลก่อนเริ่มการทดลองรอบถัดไป",
       status: "NOT_STARTED",
       priority: "HIGH",
       dueDate: days(-2), // overdue
       assigneeId: siriporn.id,
       assigneePersonId: pSiriporn.id,
       createdById: siriporn.id,
-      projectId: marketingProject.id,
+      projectId: aiLabProject.id,
     },
   });
 
   await prisma.task.create({
     data: {
-      title: "สรุปรายชื่อ KOLs สำหรับแคมเปญ",
+      title: "สรุปรายชื่อผู้เชี่ยวชาญสำหรับเชิญ Peer Review",
       status: "NOT_STARTED",
       priority: "MEDIUM",
       dueDate: days(-1), // overdue
       assigneeId: siriporn.id,
       assigneePersonId: pSiriporn.id,
       createdById: siriporn.id,
-      projectId: marketingProject.id,
+      projectId: aiLabProject.id,
     },
   });
 
   await prisma.task.create({
     data: {
-      title: "ทบทวนสัญญาจ้างซัพพลายเออร์",
-      description: "ตรวจสอบเงื่อนไข SLA ใหม่ที่ฝ่ายกฎหมายเพิ่งส่งมา เพื่อเตรียมสำหรับการต่อสัญญาปีหน้า",
+      title: "ทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) กับสถาบันพันธมิตร",
+      description: "ตรวจสอบเงื่อนไขข้อตกลงฉบับใหม่ที่งานนิติการมหาวิทยาลัยเพิ่งส่งมา เพื่อเตรียมสำหรับการต่ออายุปีหน้า",
       status: "NOT_STARTED",
       priority: "MEDIUM",
       dueDate: days(6),
       assigneeId: wichai.id,
       assigneePersonId: pWichai.id,
       createdById: somchai.id,
-      projectId: erpProject.id,
+      projectId: researchProject.id,
     },
   });
 
   await prisma.task.create({
     data: {
-      title: "สัมภาษณ์ผู้สมัครตำแหน่ง Senior Dev",
+      title: "สัมภาษณ์ผู้สมัครทุนผู้ช่วยวิจัย (Research Assistant)",
       status: "IN_PROGRESS",
       priority: "MEDIUM",
       dueDate: days(8),
@@ -548,7 +607,7 @@ async function main() {
 
   await prisma.task.create({
     data: {
-      title: "สรุปงบประมาณ Q4",
+      title: "สรุปงบประมาณไตรมาส 4",
       description: "จาก: ประชุมวางแผนประจำไตรมาส",
       status: "IN_PROGRESS",
       priority: "HIGH",
@@ -556,13 +615,13 @@ async function main() {
       assigneeId: somchai.id,
       assigneePersonId: pSomchai.id,
       createdById: somchai.id,
-      projectId: erpProject.id,
+      projectId: researchProject.id,
     },
   });
 
   await prisma.task.create({
     data: {
-      title: "ส่งมอบ API Docs ให้ทีม QA",
+      title: "ส่งมอบเอกสาร API ให้ทีมทดสอบระบบ",
       status: "COMPLETED",
       priority: "MEDIUM",
       dueDate: days(-10),
@@ -570,7 +629,7 @@ async function main() {
       assigneeId: wichai.id,
       assigneePersonId: pWichai.id,
       createdById: somchai.id,
-      projectId: erpProject.id,
+      projectId: researchProject.id,
       meetingId: pastMeeting.id,
     },
   });
@@ -634,7 +693,7 @@ async function main() {
         userId: somchai.id,
         type: "TASK_ASSIGNED",
         title: "คุณได้รับมอบหมายงานใหม่",
-        body: "เตรียมเอกสาร Pitching ลูกค้าใหม่",
+        body: "เตรียมเอกสารประกอบการขอทุนวิจัยเพิ่มเติม",
         isRead: true,
       },
     ],
