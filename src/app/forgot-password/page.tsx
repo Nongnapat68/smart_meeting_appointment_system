@@ -110,7 +110,7 @@ export default function ForgotPasswordPage() {
               <span className="material-symbols-outlined text-on-primary text-[28px]">calendar_month</span>
             </div>
             <h1 className="font-headline-lg text-headline-lg text-primary mb-2">Smart Meeting</h1>
-            <p className="font-body-md text-body-md text-on-surface-variant text-center mt-2">Enterprise Suite</p>
+            <p className="font-body-md text-body-md text-on-surface-variant text-center mt-2">Meeting & Appointment System</p>
           </div>
           <div className="text-center mb-8">
             <h2 className="font-headline-md text-headline-md text-on-surface mb-3">ลืมรหัสผ่าน?</h2>

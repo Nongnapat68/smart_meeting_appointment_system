@@ -3,8 +3,8 @@ import "./globals.css";
 import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
-  title: "Smart Meeting - Enterprise Suite",
-  description: "ระบบบริหารจัดการนัดหมายและการประชุมสำหรับองค์กร",
+  title: "Smart Meeting System",
+  description: "ระบบบริหารจัดการนัดหมายและการประชุมสำหรับสถาบันการศึกษา",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

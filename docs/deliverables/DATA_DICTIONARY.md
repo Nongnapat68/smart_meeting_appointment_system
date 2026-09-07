@@ -31,7 +31,7 @@ Join table: [_MeetingGroups](#_meetinggroups-implicit-m-n-join-table)
 
 ## User
 
-ผู้ใช้งานที่ login เข้าระบบได้ (สมาชิกภายในองค์กร) — ทุกคนมี `Person` คู่กันแบบ 1-1 (optional) เพื่อให้ถูกเชิญประชุมได้เหมือนผู้ติดต่อทั่วไป
+ผู้ใช้งานที่ login เข้าระบบได้ (บุคลากรของสถาบัน เช่น อาจารย์/เจ้าหน้าที่) — ทุกคนมี `Person` คู่กันแบบ 1-1 (optional) เพื่อให้ถูกเชิญประชุมได้เหมือนผู้ติดต่อทั่วไป
 
 | คอลัมน์ | Type | Nullable | Default | Constraint | คำอธิบาย |
 |---|---|---|---|---|---|
@@ -71,7 +71,7 @@ OTP สำหรับ flow "ลืมรหัสผ่าน" — 1 ผู้�
 
 ## Person
 
-**ผู้ติดต่อ** — คนละ entity กับ `User`: อาจเป็นพนักงานภายใน (ผูกกับ `User` ผ่าน `userId`) หรือบุคคลภายนอกที่ไม่มีบัญชี login ก็ได้ (FR-01)
+**ผู้ติดต่อ** — คนละ entity กับ `User`: อาจเป็นบุคลากรภายใน (ผูกกับ `User` ผ่าน `userId`) หรือบุคคลภายนอกที่ไม่มีบัญชี login ก็ได้ (FR-01)
 
 | คอลัมน์ | Type | Nullable | Default | Constraint | คำอธิบาย |
 |---|---|---|---|---|---|
@@ -170,7 +170,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | คอลัมน์ | Type | Nullable | Default | Constraint | คำอธิบาย |
 |---|---|---|---|---|---|
 | `id` | String (cuid) | ❌ | `cuid()` | PK | |
-| `name` | String | ❌ | — | indexed | ชื่อที่จำง่าย เช่น "Zoom Room B — ทีมการตลาด" |
+| `name` | String | ❌ | — | indexed | ชื่อที่จำง่าย เช่น "Zoom Room B — ทีมวิจัย AI Lab" |
 | `url` | String | ❌ | — | | URL ห้องประชุม (เช่น Teams/Zoom/Google Meet ที่สร้างไว้นอกระบบ) |
 | `createdById` | String | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้สร้างลิงก์นี้ — มีสิทธิ์แก้ไข/ลบ |
 | `createdAt` | DateTime | ❌ | `now()` | | |

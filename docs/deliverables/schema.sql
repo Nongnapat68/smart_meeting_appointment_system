@@ -24,7 +24,7 @@ PRAGMA foreign_keys = ON;
 -- 1. AUTH / USERS
 -- =============================================================================
 
--- ผู้ใช้งานที่ login เข้าระบบได้ (สมาชิกภายในองค์กร)
+-- ผู้ใช้งานที่ login เข้าระบบได้ (บุคลากรของสถาบัน เช่น อาจารย์/เจ้าหน้าที่)
 CREATE TABLE "User" (
     "id"                 TEXT     NOT NULL PRIMARY KEY,
     "email"              TEXT     NOT NULL,                       -- ใช้ login, ต้องไม่ซ้ำ
@@ -59,7 +59,7 @@ CREATE INDEX "PasswordResetOtp_userId_idx" ON "PasswordResetOtp"("userId");
 -- 2. PEOPLE / CONTACTS (FR-01)
 -- =============================================================================
 
--- ผู้ติดต่อที่อาจถูกเชิญเข้าร่วมประชุม — คนละ entity กับ User: อาจเป็นพนักงานภายใน
+-- ผู้ติดต่อที่อาจถูกเชิญเข้าร่วมประชุม — คนละ entity กับ User: อาจเป็นบุคลากรภายใน
 -- (ผูกกับ User ผ่าน userId) หรือบุคคลภายนอกที่ไม่มีบัญชี login ก็ได้
 CREATE TABLE "Person" (
     "id"         TEXT     NOT NULL PRIMARY KEY,

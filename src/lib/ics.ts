@@ -59,7 +59,7 @@ export function generateIcs(input: IcsMeetingInput): string {
   const lines: (string | null)[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Smart Meeting Enterprise Suite//TH",
+    "PRODID:-//Smart Meeting & Appointment System//TH",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
