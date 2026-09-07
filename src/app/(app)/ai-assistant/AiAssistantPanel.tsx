@@ -6,14 +6,20 @@ import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Feedback";
 import { formatDateTime } from "@/lib/format";
-import type { AISummary, MeetingStatus } from "@prisma/client";
+import type { AISummary, MeetingStatus, MeetingType } from "@prisma/client";
 
 interface MeetingOption {
   id: string;
   title: string;
   startTime: Date;
   status: MeetingStatus;
+  type: MeetingType;
 }
+
+// FR-18: One-shot meeting ไม่มีบริบทสะสมจากการประชุมอื่นให้ AI อ้างอิง — ปิดปุ่มเรียก AI
+// ไว้ทั้ง UI นี้ (ฝั่ง API ก็ guard ซ้ำไว้ที่ POST /api/meetings/[id]/ai-summary เผื่อเลี่ยง UI)
+const AI_DISABLED_REASON =
+  "การประชุมเดี่ยว (One-shot) ไม่จำเป็นต้องใช้ AI เพราะไม่มีบริบทสะสมจากการประชุมก่อนหน้า";
 
 interface AiSource {
   label: string;
@@ -60,7 +66,7 @@ export function AiAssistantPanel({
   }
 
   async function generate() {
-    if (!selectedId) return;
+    if (!selectedId || aiDisabled) return;
     setGenerating(true);
     setError(null);
     try {
@@ -89,6 +95,8 @@ export function AiAssistantPanel({
   }
 
   const sources: AiSource[] = summary?.sources ? JSON.parse(summary.sources) : [];
+  const selectedMeeting = meetings.find((m) => m.id === selectedId);
+  const aiDisabled = selectedMeeting?.type === "SINGLE";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -109,7 +117,19 @@ export function AiAssistantPanel({
               }`}
             >
               <p className="font-body-md text-body-md font-medium text-on-surface truncate">{m.title}</p>
-              <p className="font-label-md text-label-md text-on-surface-variant mt-1">{formatDateTime(m.startTime)}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="font-label-md text-label-md text-on-surface-variant">{formatDateTime(m.startTime)}</p>
+                {/* FR-18: flag one-shot meetings in the list itself so it's clear
+                    up front why the AI button will be disabled once selected. */}
+                {m.type === "SINGLE" && (
+                  <span
+                    title={AI_DISABLED_REASON}
+                    className="px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant text-[10px] font-label-md shrink-0"
+                  >
+                    ครั้งเดียว
+                  </span>
+                )}
+              </div>
             </button>
           ))}
         </div>
@@ -134,16 +154,34 @@ export function AiAssistantPanel({
               </div>
               <button
                 onClick={generate}
-                disabled={generating}
-                title="สร้าง/รีเฟรชสรุปใหม่"
-                className="text-on-surface-variant hover:text-primary transition-colors p-1 disabled:opacity-50"
+                disabled={generating || aiDisabled}
+                title={aiDisabled ? AI_DISABLED_REASON : "สร้าง/รีเฟรชสรุปใหม่"}
+                className="text-on-surface-variant hover:text-primary transition-colors p-1 disabled:opacity-50 disabled:hover:text-on-surface-variant"
               >
                 {generating ? <Spinner /> : <span className="material-symbols-outlined text-sm">refresh</span>}
               </button>
             </div>
 
             <div className="flex-1 p-card-padding">
-              {loading ? (
+              {aiDisabled && !summary ? (
+                // FR-18: One-shot meeting — no accumulated context for AI to draw on,
+                // so the create action is disabled instead of hidden (still tells the
+                // organizer why, same tooltip reason as the buttons above).
+                <div className="text-center py-12">
+                  <span className="material-symbols-outlined text-on-surface-variant text-[32px] mb-3 block">block</span>
+                  <p className="font-body-md text-body-md text-on-surface-variant mb-4 max-w-sm mx-auto">
+                    {AI_DISABLED_REASON}
+                  </p>
+                  <button
+                    disabled
+                    title={AI_DISABLED_REASON}
+                    className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md text-label-md inline-flex items-center gap-2 opacity-50 cursor-not-allowed"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+                    สร้างสรุปด้วย AI
+                  </button>
+                </div>
+              ) : loading ? (
                 <div className="flex justify-center py-12">
                   <Spinner className="w-8 h-8" />
                 </div>

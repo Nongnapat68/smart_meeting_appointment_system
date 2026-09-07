@@ -33,6 +33,15 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
     "เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่สร้างสรุป AI ของการประชุมนี้ได้"
   );
 
+  // FR-18: One-shot meeting ไม่มีบริบทสะสมจากการประชุมอื่นให้ AI อ้างอิง จึงไม่จำเป็นต้อง
+  // (และไม่ควร) เรียกใช้ AI — เฉพาะ meeting ที่เชื่อมกับ project เท่านั้นที่สร้างสรุปได้
+  if (meeting.type === "SINGLE") {
+    throw new ApiError(
+      400,
+      "การประชุมเดี่ยว (One-shot) ไม่รองรับการสรุปด้วย AI เนื่องจากไม่มีบริบทสะสมจากการประชุมอื่น — ใช้ AI ได้เฉพาะการประชุมที่เชื่อมโยงกับโปรเจกต์"
+    );
+  }
+
   const [relatedTasksRaw, pastMeetingsRaw] = await Promise.all([
     meeting.projectId
       ? prisma.task.findMany({

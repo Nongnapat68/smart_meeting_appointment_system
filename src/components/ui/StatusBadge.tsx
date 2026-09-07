@@ -94,3 +94,18 @@ export function personStatusBadge(status: string) {
     ? { label: "ใช้งาน", variant: "success" as const }
     : { label: "ไม่ใช้งาน", variant: "neutral" as const };
 }
+
+// FR-03/BR-04: labels how each MeetingParticipant ended up on the invite —
+// straight from `source`/`sourceGroupId`, not re-derived or guessed.
+export function participantSourceBadge(source: string, groupName?: string | null) {
+  switch (source) {
+    case "DIRECT":
+      return { label: "เลือกโดยตรง", variant: "primary" as const };
+    case "GROUP":
+      return { label: groupName ? `จากกลุ่ม: ${groupName}` : "จากกลุ่ม", variant: "neutral" as const };
+    case "EXTERNAL":
+      return { label: "อีเมลภายนอก", variant: "warning" as const };
+    default:
+      return { label: source, variant: "neutral" as const };
+  }
+}

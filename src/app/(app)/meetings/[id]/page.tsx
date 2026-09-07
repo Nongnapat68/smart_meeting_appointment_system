@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Avatar } from "@/components/ui/Avatar";
 import { formatDateTime } from "@/lib/format";
-import { meetingStatusBadge, StatusBadge, taskStatusBadge } from "@/components/ui/StatusBadge";
+import { meetingStatusBadge, participantSourceBadge, StatusBadge, taskStatusBadge } from "@/components/ui/StatusBadge";
 import { MeetingActions } from "./MeetingActions";
 import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./MeetingContext";
 
@@ -15,7 +15,8 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
     include: {
       organizer: { select: { id: true, name: true, avatarUrl: true } },
       project: { select: { id: true, name: true } },
-      participants: { include: { person: true } },
+      participants: { include: { person: true, sourceGroup: { select: { id: true, name: true } } } },
+      groups: true,
       tasks: true,
       aiSummary: true,
       onlineMeetingResource: true,
@@ -125,13 +126,29 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                 <span className="material-symbols-outlined text-primary icon-fill">auto_awesome</span>
                 AI สรุปข้อมูลก่อนการประชุม
               </h3>
-              <Link href={`/ai-assistant?meetingId=${meeting.id}`} className="text-primary font-label-md text-label-md hover:underline">
-                {meeting.aiSummary ? "ดู / แก้ไข" : "สร้างสรุป"}
-              </Link>
+              {/* FR-18: one-shot meeting ไม่มีบริบทสะสมให้ AI อ้างอิง — ถ้ายังไม่เคยมีสรุป
+                  (เคสปกติ เพราะฝั่ง API ปิดการสร้างไว้แล้ว) ปิดปุ่มพร้อม tooltip แทนการซ่อนไปเลย
+                  ยังปล่อยให้กด "ดู / แก้ไข" ได้ถ้ามีสรุปเก่าอยู่แล้ว (เช่น สร้างไว้ก่อนเปลี่ยนประเภท) */}
+              {meeting.type === "SINGLE" && !meeting.aiSummary ? (
+                <span
+                  title="การประชุมเดี่ยว (One-shot) ไม่จำเป็นต้องใช้ AI เพราะไม่มีบริบทสะสมจากการประชุมก่อนหน้า"
+                  className="text-on-surface-variant/60 font-label-md text-label-md cursor-not-allowed"
+                >
+                  สร้างสรุป
+                </span>
+              ) : (
+                <Link href={`/ai-assistant?meetingId=${meeting.id}`} className="text-primary font-label-md text-label-md hover:underline">
+                  {meeting.aiSummary ? "ดู / แก้ไข" : "สร้างสรุป"}
+                </Link>
+              )}
             </div>
             {meeting.aiSummary ? (
               <p className="font-body-md text-body-md text-on-surface-variant whitespace-pre-line line-clamp-6">
                 {meeting.aiSummary.content}
+              </p>
+            ) : meeting.type === "SINGLE" ? (
+              <p className="font-body-md text-body-md text-on-surface-variant">
+                การประชุมเดี่ยว (One-shot) ไม่รองรับ AI สรุปข้อมูล เนื่องจากไม่มีบริบทสะสมจากการประชุมอื่น
               </p>
             ) : (
               <p className="font-body-md text-body-md text-on-surface-variant">
@@ -167,20 +184,40 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
         <div className="space-y-6">
           <div className="bg-surface-container-lowest rounded-xl p-card-padding border border-outline-variant/30">
             <h3 className="font-headline-md text-headline-md text-on-surface mb-4">ผู้เข้าร่วม ({meeting.participants.length})</h3>
+            {meeting.groups.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {meeting.groups.map((g) => (
+                  <Link
+                    key={g.id}
+                    href={`/groups/${g.id}`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-xs hover:opacity-90 transition-opacity"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">group</span>
+                    เชิญทั้งกลุ่ม: {g.name}
+                  </Link>
+                ))}
+              </div>
+            )}
             <div className="space-y-3">
-              {meeting.participants.map((p) => (
-                <Link key={p.id} href={`/people/${p.personId}`} className="flex items-center gap-3 hover:bg-surface-container-low rounded-lg p-1 -m-1 transition-colors">
-                  <Avatar name={p.person.name} src={p.person.avatarUrl} size={32} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-body-md text-body-md text-on-surface truncate">{p.person.name}</p>
-                    <p className="font-label-md text-label-md text-on-surface-variant truncate">
-                      {p.role === "ORGANIZER" ? "ผู้จัด" : "ผู้เข้าร่วม"}
-                      {" • "}
-                      {p.rsvpStatus === "ACCEPTED" ? "ตอบรับแล้ว" : p.rsvpStatus === "DECLINED" ? "ปฏิเสธ" : "รอตอบรับ"}
-                    </p>
-                  </div>
-                </Link>
-              ))}
+              {meeting.participants.map((p) => {
+                const sourceBadge = participantSourceBadge(p.source, p.sourceGroup?.name);
+                return (
+                  <Link key={p.id} href={`/people/${p.personId}`} className="flex items-center gap-3 hover:bg-surface-container-low rounded-lg p-1 -m-1 transition-colors">
+                    <Avatar name={p.person.name} src={p.person.avatarUrl} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-body-md text-body-md text-on-surface truncate">{p.person.name}</p>
+                      <p className="font-label-md text-label-md text-on-surface-variant truncate">
+                        {p.role === "ORGANIZER" ? "ผู้จัด" : "ผู้เข้าร่วม"}
+                        {" • "}
+                        {p.rsvpStatus === "ACCEPTED" ? "ตอบรับแล้ว" : p.rsvpStatus === "DECLINED" ? "ปฏิเสธ" : "รอตอบรับ"}
+                      </p>
+                    </div>
+                    {/* FR-03/BR-04: where this participant actually came from — DIRECT pick,
+                        the group they were invited through, or an EXTERNAL email. */}
+                    <StatusBadge {...sourceBadge} className="shrink-0" />
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </div>
