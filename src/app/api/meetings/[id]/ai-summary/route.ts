@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateMeetingSummary } from "@/lib/ai";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { assertMeetingAllowsAi, gatherMeetingAiContext } from "@/lib/meeting-ai-context";
 import { z } from "zod";
 
 type Params = { params: Promise<{ id: string }> };
@@ -35,52 +36,9 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
 
   // FR-18: One-shot meeting ไม่มีบริบทสะสมจากการประชุมอื่นให้ AI อ้างอิง จึงไม่จำเป็นต้อง
   // (และไม่ควร) เรียกใช้ AI — เฉพาะ meeting ที่เชื่อมกับ project เท่านั้นที่สร้างสรุปได้
-  if (meeting.type === "SINGLE") {
-    throw new ApiError(
-      400,
-      "การประชุมเดี่ยว (One-shot) ไม่รองรับการสรุปด้วย AI เนื่องจากไม่มีบริบทสะสมจากการประชุมอื่น — ใช้ AI ได้เฉพาะการประชุมที่เชื่อมโยงกับโปรเจกต์"
-    );
-  }
+  assertMeetingAllowsAi(meeting);
 
-  const [relatedTasksRaw, pastMeetingsRaw] = await Promise.all([
-    meeting.projectId
-      ? prisma.task.findMany({
-          where: { projectId: meeting.projectId },
-          orderBy: { dueDate: "asc" },
-          take: 8,
-        })
-      : prisma.task.findMany({ where: { meetingId: meeting.id }, take: 8 }),
-    meeting.projectId
-      ? prisma.meeting.findMany({
-          where: { projectId: meeting.projectId, id: { not: meeting.id }, startTime: { lt: meeting.startTime } },
-          orderBy: { startTime: "desc" },
-          take: 5,
-        })
-      : Promise.resolve([]),
-  ]);
-
-  // FR-15: pull decisions logged against those same past meetings — this is
-  // what actually makes "context from previous meetings" concrete now that
-  // Decision is a real entity instead of buried inside free-text description.
-  const pastMeetingIds = pastMeetingsRaw.map((m) => m.id);
-  const [pastDecisionsRaw, pastNotesRaw] = await Promise.all([
-    pastMeetingIds.length
-      ? prisma.decision.findMany({
-          where: { meetingId: { in: pastMeetingIds } },
-          include: { meeting: { select: { title: true } } },
-          orderBy: { decidedAt: "desc" },
-          take: 10,
-        })
-      : Promise.resolve([]),
-    pastMeetingIds.length
-      ? prisma.meetingNote.findMany({
-          where: { meetingId: { in: pastMeetingIds } },
-          include: { meeting: { select: { title: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        })
-      : Promise.resolve([]),
-  ]);
+  const ctx = await gatherMeetingAiContext(meeting);
 
   let content: string;
   try {
@@ -93,11 +51,12 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
       organizerName: meeting.organizer?.name ?? null,
       participantNames: meeting.participants.map((p) => p.person.name),
       projectName: meeting.project?.name ?? null,
-      relatedTasks: relatedTasksRaw.map((t) => ({ title: t.title, status: t.status, dueDate: t.dueDate })),
-      pastMeetings: pastMeetingsRaw.map((m) => ({ title: m.title, startTime: m.startTime })),
-      pastDecisions: pastDecisionsRaw.map((d) => ({ content: d.content, meetingTitle: d.meeting.title })),
-      pastNotes: pastNotesRaw.map((n) => ({ content: n.content, meetingTitle: n.meeting.title })),
+      relatedTasks: ctx.relatedTasks.map((t) => ({ title: t.title, status: t.status, dueDate: t.dueDate })),
+      pastMeetings: ctx.pastMeetings.map((m) => ({ title: m.title, startTime: m.startTime })),
+      pastDecisions: ctx.pastDecisions.map((d) => ({ content: d.content, meetingTitle: d.meetingTitle })),
+      pastNotes: ctx.pastNotes.map((n) => ({ content: n.content, meetingTitle: n.meetingTitle })),
       resources: meeting.resources.map((r) => ({ title: r.title, url: r.url })),
+      pastResources: ctx.pastResources.map((r) => ({ title: r.title, url: r.url, meetingTitle: r.meetingTitle })),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "ไม่สามารถสร้างสรุปด้วย AI ได้";
@@ -105,11 +64,12 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
   }
 
   const sources = [
-    ...relatedTasksRaw.map((t) => ({ label: t.title, refType: "task", refId: t.id })),
-    ...pastMeetingsRaw.map((m) => ({ label: m.title, refType: "meeting", refId: m.id })),
-    ...pastDecisionsRaw.map((d) => ({ label: d.content, refType: "decision", refId: d.id })),
-    ...pastNotesRaw.map((n) => ({ label: n.content, refType: "note", refId: n.id })),
+    ...ctx.relatedTasks.map((t) => ({ label: t.title, refType: "task", refId: t.id })),
+    ...ctx.pastMeetings.map((m) => ({ label: m.title, refType: "meeting", refId: m.id })),
+    ...ctx.pastDecisions.map((d) => ({ label: d.content, refType: "decision", refId: d.id })),
+    ...ctx.pastNotes.map((n) => ({ label: n.content, refType: "note", refId: n.id })),
     ...meeting.resources.map((r) => ({ label: r.title, refType: "resource", refId: r.id })),
+    ...ctx.pastResources.map((r) => ({ label: r.title, refType: "resource", refId: r.id })),
   ];
 
   const summary = await prisma.aISummary.upsert({

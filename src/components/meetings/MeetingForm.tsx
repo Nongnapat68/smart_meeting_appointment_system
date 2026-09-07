@@ -125,6 +125,8 @@ export function MeetingForm({
     }
   };
   useEffect(() => {
+    // Fetch-on-mount pattern deemed safe by design (see eslint.config.mjs).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadReminders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.meeting.id]);
@@ -154,6 +156,9 @@ export function MeetingForm({
 
   useEffect(() => {
     if (!personQuery) {
+      // Clearing stale results synchronously when the query empties out —
+      // deemed safe by design (see eslint.config.mjs).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPersonResults([]);
       return;
     }

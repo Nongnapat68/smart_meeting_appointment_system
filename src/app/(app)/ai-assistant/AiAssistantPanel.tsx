@@ -46,8 +46,25 @@ export function AiAssistantPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // FR-16: Pending Issues Analysis — a separate result from FR-15's summary,
+  // not persisted, recomputed on demand each time it's asked for.
+  const [pendingIssues, setPendingIssues] = useState<string | null>(null);
+  const [pendingIssuesSources, setPendingIssuesSources] = useState<AiSource[]>([]);
+  const [pendingIssuesLoading, setPendingIssuesLoading] = useState(false);
+  const [pendingIssuesError, setPendingIssuesError] = useState<string | null>(null);
+
+  // FR-17: New Agenda Context — user-typed topic for the next meeting,
+  // merged with the same pending-issues context FR-16 draws on.
+  const [agendaTopic, setAgendaTopic] = useState("");
+  const [agendaResult, setAgendaResult] = useState<string | null>(null);
+  const [agendaSources, setAgendaSources] = useState<AiSource[]>([]);
+  const [agendaLoading, setAgendaLoading] = useState(false);
+  const [agendaError, setAgendaError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!selectedId) return;
+    // Fetch-on-mount pattern deemed safe by design (see eslint.config.mjs).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
     api
@@ -58,6 +75,16 @@ export function AiAssistantPanel({
       })
       .catch((err) => setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ"))
       .finally(() => setLoading(false));
+
+    // FR-16/17 results aren't persisted per meeting, so switching meetings
+    // clears them instead of showing stale results from a different one.
+    setPendingIssues(null);
+    setPendingIssuesSources([]);
+    setPendingIssuesError(null);
+    setAgendaTopic("");
+    setAgendaResult(null);
+    setAgendaSources([]);
+    setAgendaError(null);
   }, [selectedId]);
 
   function selectMeeting(id: string) {
@@ -91,6 +118,41 @@ export function AiAssistantPanel({
       showToast(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ", "error");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function analyzePendingIssues() {
+    if (!selectedId || aiDisabled) return;
+    setPendingIssuesLoading(true);
+    setPendingIssuesError(null);
+    try {
+      const res = await api.post<{ analysis: string; sources: AiSource[] }>(
+        `/api/meetings/${selectedId}/pending-issues`
+      );
+      setPendingIssues(res.analysis);
+      setPendingIssuesSources(res.sources);
+    } catch (err) {
+      setPendingIssuesError(err instanceof Error ? err.message : "ไม่สามารถวิเคราะห์ประเด็นค้างได้");
+    } finally {
+      setPendingIssuesLoading(false);
+    }
+  }
+
+  async function suggestAgenda() {
+    if (!selectedId || aiDisabled || !agendaTopic.trim()) return;
+    setAgendaLoading(true);
+    setAgendaError(null);
+    try {
+      const res = await api.post<{ agenda: string; sources: AiSource[] }>(
+        `/api/meetings/${selectedId}/agenda-suggestion`,
+        { topic: agendaTopic.trim() }
+      );
+      setAgendaResult(res.agenda);
+      setAgendaSources(res.sources);
+    } catch (err) {
+      setAgendaError(err instanceof Error ? err.message : "ไม่สามารถแนะนำ agenda ได้");
+    } finally {
+      setAgendaLoading(false);
     }
   }
 
@@ -135,12 +197,14 @@ export function AiAssistantPanel({
         </div>
       </div>
 
-      <div className="lg:col-span-2">
+      <div className="lg:col-span-2 space-y-6">
         {!selectedId ? (
           <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-12 text-center text-on-surface-variant">
             เลือกการประชุมทางด้านซ้ายเพื่อเริ่มต้น
           </div>
         ) : (
+          <>
+          {/* FR-15: pre-meeting summary */}
           <div className="rounded-xl overflow-hidden flex flex-col border border-outline-variant bg-surface-container-lowest/95">
             <div className="bg-primary-container/5 px-card-padding py-4 border-b border-outline-variant flex items-start justify-between">
               <div className="flex gap-3">
@@ -206,24 +270,7 @@ export function AiAssistantPanel({
                       {saving ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
                     </button>
                   </div>
-                  {sources.length > 0 && (
-                    <div className="mt-4">
-                      <p className="font-label-md text-label-md text-on-surface-variant mb-2">แหล่งที่มาอ้างอิง:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {sources.map((s, i) => (
-                          <span
-                            key={i}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-xs text-on-surface"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">
-                              {s.refType === "task" ? "task_alt" : "event"}
-                            </span>
-                            {s.label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <AiSourceList sources={sources} />
                 </>
               ) : (
                 <div className="text-center py-12">
@@ -247,7 +294,145 @@ export function AiAssistantPanel({
               <span className="font-label-md text-label-md">สร้างโดย AI — โปรดตรวจสอบความถูกต้องก่อนใช้งาน</span>
             </div>
           </div>
+
+          {/* FR-16: Pending Issues Analysis — separate capability/result from
+              FR-15's summary above: flags overdue tasks and past
+              decisions/notes that look unresolved, instead of a general
+              briefing. */}
+          <div className="rounded-xl overflow-hidden flex flex-col border border-outline-variant bg-surface-container-lowest/95">
+            <div className="bg-primary-container/5 px-card-padding py-4 border-b border-outline-variant flex items-start justify-between">
+              <div className="flex gap-3">
+                <span className="material-symbols-outlined icon-fill text-primary mt-1">fact_check</span>
+                <div>
+                  <h3 className="font-headline-md text-headline-md text-primary">วิเคราะห์ประเด็นค้าง</h3>
+                  <p className="font-label-md text-label-md text-on-surface-variant mt-1">
+                    งานที่เลยกำหนด และมติ/บันทึกก่อนหน้าที่ยังไม่มีอะไรตามมา
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={analyzePendingIssues}
+                disabled={pendingIssuesLoading || aiDisabled}
+                title={aiDisabled ? AI_DISABLED_REASON : "วิเคราะห์ประเด็นค้าง"}
+                className="text-on-surface-variant hover:text-primary transition-colors p-1 disabled:opacity-50 disabled:hover:text-on-surface-variant"
+              >
+                {pendingIssuesLoading ? <Spinner /> : <span className="material-symbols-outlined text-sm">refresh</span>}
+              </button>
+            </div>
+            <div className="p-card-padding">
+              {aiDisabled ? (
+                <p className="font-body-md text-body-md text-on-surface-variant text-center py-6" title={AI_DISABLED_REASON}>
+                  {AI_DISABLED_REASON}
+                </p>
+              ) : pendingIssuesError ? (
+                <p className="text-error font-body-md text-body-md">{pendingIssuesError}</p>
+              ) : pendingIssues ? (
+                <>
+                  <p className="font-body-md text-body-md text-on-surface whitespace-pre-line leading-relaxed">
+                    {pendingIssues}
+                  </p>
+                  <AiSourceList sources={pendingIssuesSources} />
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="font-body-md text-body-md text-on-surface-variant mb-4">
+                    ยังไม่ได้วิเคราะห์ประเด็นค้างสำหรับการประชุมนี้
+                  </p>
+                  <button
+                    onClick={analyzePendingIssues}
+                    disabled={pendingIssuesLoading}
+                    className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors inline-flex items-center gap-2 disabled:opacity-60"
+                  >
+                    {pendingIssuesLoading ? <Spinner /> : <span className="material-symbols-outlined text-[18px]">fact_check</span>}
+                    {pendingIssuesLoading ? "กำลังวิเคราะห์..." : "วิเคราะห์ประเด็นค้าง"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* FR-17: New Agenda Context — user types the next meeting's topic,
+              merged with the same pending-issues context FR-16 draws on. */}
+          <div className="rounded-xl overflow-hidden flex flex-col border border-outline-variant bg-surface-container-lowest/95">
+            <div className="bg-primary-container/5 px-card-padding py-4 border-b border-outline-variant">
+              <div className="flex gap-3">
+                <span className="material-symbols-outlined icon-fill text-primary mt-1">playlist_add_check</span>
+                <div>
+                  <h3 className="font-headline-md text-headline-md text-primary">แนะนำ Agenda การประชุมครั้งถัดไป</h3>
+                  <p className="font-label-md text-label-md text-on-surface-variant mt-1">
+                    ผสานหัวข้อที่คุณระบุเข้ากับประเด็นค้างจากโปรเจกต์เดียวกัน
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="p-card-padding">
+              {aiDisabled ? (
+                <p className="font-body-md text-body-md text-on-surface-variant text-center py-6" title={AI_DISABLED_REASON}>
+                  {AI_DISABLED_REASON}
+                </p>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      value={agendaTopic}
+                      onChange={(e) => setAgendaTopic(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          suggestAgenda();
+                        }
+                      }}
+                      placeholder="หัวข้อหลักที่จะประชุมครั้งถัดไป..."
+                      className="flex-1 px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-body-md"
+                    />
+                    <button
+                      onClick={suggestAgenda}
+                      disabled={agendaLoading || !agendaTopic.trim()}
+                      title="แนะนำ agenda"
+                      className="px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-colors disabled:opacity-50 inline-flex items-center gap-2 shrink-0"
+                    >
+                      {agendaLoading ? <Spinner /> : <span className="material-symbols-outlined text-[18px]">auto_awesome</span>}
+                      {agendaLoading ? "กำลังแนะนำ..." : "แนะนำ agenda"}
+                    </button>
+                  </div>
+                  {agendaError ? (
+                    <p className="text-error font-body-md text-body-md mt-4">{agendaError}</p>
+                  ) : agendaResult ? (
+                    <div className="mt-4">
+                      <p className="font-body-md text-body-md text-on-surface whitespace-pre-line leading-relaxed">
+                        {agendaResult}
+                      </p>
+                      <AiSourceList sources={agendaSources} />
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+          </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function AiSourceList({ sources }: { sources: AiSource[] }) {
+  if (sources.length === 0) return null;
+  return (
+    <div className="mt-4">
+      <p className="font-label-md text-label-md text-on-surface-variant mb-2">แหล่งที่มาอ้างอิง:</p>
+      <div className="flex flex-wrap gap-2">
+        {sources.map((s, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-container border border-outline-variant text-xs text-on-surface"
+          >
+            <span className="material-symbols-outlined text-[14px]">
+              {s.refType === "task" ? "task_alt" : s.refType === "decision" ? "gavel" : s.refType === "note" ? "sticky_note_2" : "event"}
+            </span>
+            {s.label}
+          </span>
+        ))}
       </div>
     </div>
   );
