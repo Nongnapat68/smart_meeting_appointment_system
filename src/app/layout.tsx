@@ -4,7 +4,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
   title: "Smart Meeting System",
-  description: "ระบบบริหารจัดการนัดหมายและการประชุมสำหรับสถาบันการศึกษา",
+  description: "ระบบบริหารจัดการนัดหมายและการประชุมสำหรับคณะเทคโนโลยีสารสนเทศและการสื่อสาร",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
