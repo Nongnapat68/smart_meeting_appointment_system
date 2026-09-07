@@ -240,6 +240,20 @@ async function main() {
       },
     },
   });
+  await prisma.contactGroup.create({
+    data: {
+      name: "กลุ่มผู้บริหารคณะ",
+      description: "รวมผู้บริหารระดับคณะ/ภาควิชาสำหรับการประชุมเชิงนโยบายและบริหารจัดการ",
+      icon: "supervisor_account",
+      createdById: siriporn.id,
+      members: {
+        create: [
+          { personId: pSiriporn.id, role: "LEADER" },
+          { personId: pSomchai.id, role: "MEMBER" },
+        ],
+      },
+    },
+  });
 
   // --- Projects ---
   const researchProject = await prisma.project.create({
