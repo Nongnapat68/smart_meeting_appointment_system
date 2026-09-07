@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { updateMeetingSchema } from "@/lib/validations";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { resolveParticipants } from "@/lib/meeting-participants";
+import { notifyParticipantsByEmail } from "@/lib/meeting-notify";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -80,8 +81,22 @@ export const PUT = withApiErrors(async (request: Request, { params }: Params) =>
           }
         : {}),
     },
-    include: { participants: { include: { person: true } }, groups: true },
+    include: {
+      participants: { include: { person: true } },
+      groups: true,
+      organizerPerson: { select: { name: true, email: true } },
+      onlineMeetingResource: { select: { url: true } },
+    },
   });
+
+  // FR-09: re-notify every current participant (internal + external) with an
+  // updated .ics whenever the meeting is edited — best-effort, so a delivery
+  // hiccup doesn't fail the edit itself.
+  try {
+    await notifyParticipantsByEmail(meeting, "อัปเดตนัดหมาย");
+  } catch (err) {
+    console.error("notifyParticipantsByEmail failed for meeting", meeting.id, err);
+  }
 
   return NextResponse.json({ meeting });
 });

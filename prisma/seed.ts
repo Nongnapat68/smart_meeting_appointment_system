@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
@@ -111,7 +110,10 @@ async function main() {
   const [pSomchai, pSiriporn, pWichai, pNarin, pKittichai] = internalPeople;
 
   // --- External contacts ---
-  const [pVichit, pSomying, pSomsong] = await Promise.all([
+  // Third external contact (สมทรง แซ่ตั้ง) is created here too but never
+  // referenced afterward by name — left out of the destructure rather than
+  // bound to an unused variable; Promise.all still awaits and creates it.
+  const [pVichit, pSomying] = await Promise.all([
     prisma.person.create({
       data: {
         name: "วิชิต พงษ์สวัสดิ์",

@@ -37,6 +37,17 @@ export function MeetingActions({ meeting }: { meeting: Meeting }) {
   return (
     <>
       <div className="flex items-center gap-3 self-stretch lg:self-auto border-t lg:border-t-0 border-outline-variant/30 pt-4 lg:pt-0 w-full lg:w-auto justify-end flex-wrap">
+        {/* FR-08: downloads a real .ics built server-side from this meeting's
+            current data — available regardless of status, so a cancelled
+            meeting's invite can still be removed from a calendar app. */}
+        <a
+          href={`/api/meetings/${meeting.id}/ics`}
+          title="ดาวน์โหลดไฟล์ปฏิทิน (.ics)"
+          className="px-4 py-2 rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:bg-surface-container-low transition-colors font-body-md font-medium shadow-sm flex items-center gap-2"
+        >
+          <span className="material-symbols-outlined text-[18px]">download</span>
+          <span className="hidden sm:inline">.ics</span>
+        </a>
         {!isCancelled && (
           <>
             <Link

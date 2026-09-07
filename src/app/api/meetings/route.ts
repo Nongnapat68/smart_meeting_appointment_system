@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { meetingSchema } from "@/lib/validations";
 import { parseBody, parsePagination, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { resolveParticipants } from "@/lib/meeting-participants";
+import { notifyParticipantsByEmail } from "@/lib/meeting-notify";
 import { MeetingStatus, MeetingType, type Prisma } from "@prisma/client";
 
 export const GET = withApiErrors(async (request: Request) => {
@@ -84,7 +85,11 @@ export const POST = withApiErrors(async (request: Request) => {
         })),
       },
     },
-    include: { participants: { include: { person: true } } },
+    include: {
+      participants: { include: { person: true } },
+      organizerPerson: { select: { name: true, email: true } },
+      onlineMeetingResource: { select: { url: true } },
+    },
   });
 
   // Notify internal users who were invited.
@@ -104,6 +109,15 @@ export const POST = withApiErrors(async (request: Request) => {
           relatedId: meeting.id,
         })),
     });
+  }
+
+  // FR-09: email every participant (internal + external alike) with the
+  // meeting's .ics attached — best-effort, so a delivery hiccup doesn't fail
+  // meeting creation itself.
+  try {
+    await notifyParticipantsByEmail(meeting, "คำเชิญเข้าร่วมประชุมใหม่");
+  } catch (err) {
+    console.error("notifyParticipantsByEmail failed for meeting", meeting.id, err);
   }
 
   return NextResponse.json({ meeting }, { status: 201 });

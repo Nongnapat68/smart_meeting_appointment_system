@@ -50,7 +50,12 @@ export default function MeetingsPage() {
     return () => clearTimeout(t);
   }, [load]);
 
-  useEffect(() => setPage(1), [q, status, type]);
+  useEffect(() => {
+    // Resets pagination whenever a filter changes — deemed safe by design
+    // (see eslint.config.mjs), same as the fetch-on-mount effects above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(1);
+  }, [q, status, type]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
