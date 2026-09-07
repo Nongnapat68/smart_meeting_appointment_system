@@ -7,7 +7,7 @@ export default async function EditMeetingPage({ params }: { params: Promise<{ id
 
   const meeting = await prisma.meeting.findUnique({
     where: { id },
-    include: { participants: { include: { person: true } } },
+    include: { participants: { include: { person: true } }, groups: true },
   });
   if (!meeting) notFound();
 

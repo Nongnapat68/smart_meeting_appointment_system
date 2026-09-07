@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { meetingSchema } from "@/lib/validations";
 import { parseBody, parsePagination, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { resolveParticipants } from "@/lib/meeting-participants";
 import { MeetingStatus, MeetingType, type Prisma } from "@prisma/client";
 
 export const GET = withApiErrors(async (request: Request) => {
@@ -36,60 +37,6 @@ export const GET = withApiErrors(async (request: Request) => {
   return NextResponse.json({ items, total, page, pageSize });
 });
 
-interface ResolvedParticipant {
-  personId: string;
-  source: "DIRECT" | "GROUP" | "EXTERNAL";
-  sourceGroupId: string | null;
-}
-
-/**
- * Resolves the three participant sources (direct picks, group members, raw
- * external emails) into a deduped list — while still remembering *how* each
- * person got onto the invite (BR-04), unlike the old version which only kept
- * a flat `Set<personId>` and threw that information away.
- *
- * Precedence when the same person appears via more than one source: DIRECT
- * wins over GROUP/EXTERNAL, since an explicit pick is the most specific
- * signal of intent; first-matching group wins if they're in more than one
- * selected group (a participant has exactly one sourceGroupId in this schema).
- */
-async function resolveParticipants(
-  personIds: string[],
-  groupIds: string[],
-  externalEmails: string[]
-): Promise<ResolvedParticipant[]> {
-  const resolved = new Map<string, ResolvedParticipant>();
-
-  personIds.forEach((personId) => {
-    resolved.set(personId, { personId, source: "DIRECT", sourceGroupId: null });
-  });
-
-  if (groupIds.length) {
-    const memberships = await prisma.contactGroupMember.findMany({
-      where: { groupId: { in: groupIds } },
-      select: { personId: true, groupId: true },
-    });
-    memberships.forEach((m) => {
-      if (!resolved.has(m.personId)) {
-        resolved.set(m.personId, { personId: m.personId, source: "GROUP", sourceGroupId: m.groupId });
-      }
-    });
-  }
-
-  for (const email of externalEmails) {
-    const person = await prisma.person.upsert({
-      where: { email },
-      update: {},
-      create: { name: email.split("@")[0], email, type: "EXTERNAL" },
-    });
-    if (!resolved.has(person.id)) {
-      resolved.set(person.id, { personId: person.id, source: "EXTERNAL", sourceGroupId: null });
-    }
-  }
-
-  return Array.from(resolved.values());
-}
-
 export const POST = withApiErrors(async (request: Request) => {
   const user = await requireUser();
   const body = parseBody(meetingSchema, await request.json());
@@ -119,9 +66,14 @@ export const POST = withApiErrors(async (request: Request) => {
       participants: {
         create: resolvedParticipants.map((rp) => ({
           personId: rp.personId,
+          // The organizer keeps their ORGANIZER role/DIRECT source even if they
+          // also happen to be a member of a selected group — and sourceGroupId
+          // is cleared alongside it, so a forced-DIRECT row never carries a
+          // stale group reference (source/sourceGroupId must stay consistent;
+          // same override PUT /api/meetings/[id] already applies).
           role: rp.personId === organizerPerson?.id ? "ORGANIZER" : "ATTENDEE",
           source: rp.personId === organizerPerson?.id ? "DIRECT" : rp.source,
-          sourceGroupId: rp.sourceGroupId,
+          sourceGroupId: rp.personId === organizerPerson?.id ? null : rp.sourceGroupId,
         })),
       },
       // FR-10/BR-11: one reminder per requested offset instead of a single

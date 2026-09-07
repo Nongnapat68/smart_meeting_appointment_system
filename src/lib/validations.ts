@@ -139,6 +139,7 @@ export const updateMeetingSchema = z.object({
   onlineMeetingResourceId: z.string().trim().optional().nullable(),
   participantPersonIds: z.array(z.string()).optional(),
   groupIds: z.array(z.string()).optional(),
+  externalEmails: z.array(email()).optional(),
 });
 
 export const rescheduleMeetingSchema = z.object({
