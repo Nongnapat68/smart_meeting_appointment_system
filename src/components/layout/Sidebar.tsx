@@ -36,7 +36,7 @@ export function Sidebar() {
           <h1 className="font-headline-md text-headline-md font-bold text-primary leading-tight">
             Smart Meeting
           </h1>
-          <p className="font-label-md text-label-md text-on-surface-variant">Enterprise Suite</p>
+          <p className="font-label-md text-label-md text-on-surface-variant">Meeting & Appointment System</p>
         </div>
       </Link>
 
