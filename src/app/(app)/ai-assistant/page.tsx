@@ -12,7 +12,7 @@ export default async function AiAssistantPage({
     where: { status: { not: "CANCELLED" } },
     orderBy: { startTime: "desc" },
     take: 30,
-    select: { id: true, title: true, startTime: true, status: true },
+    select: { id: true, title: true, startTime: true, status: true, type: true },
   });
 
   return (

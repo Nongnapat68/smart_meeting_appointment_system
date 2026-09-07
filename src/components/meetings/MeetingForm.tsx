@@ -28,7 +28,16 @@ function offsetLabel(minutes: number): string {
 }
 
 export interface MeetingFormInitial {
-  meeting: Meeting & { participants: (MeetingParticipant & { person: Person })[] };
+  meeting: Meeting & {
+    participants: (MeetingParticipant & { person: Person })[];
+    groups: ContactGroup[];
+  };
+}
+
+interface SelectedGroup {
+  id: string;
+  name: string;
+  members: Person[];
 }
 
 export function MeetingForm({
@@ -75,9 +84,15 @@ export function MeetingForm({
   const [existingReminders, setExistingReminders] = useState<Reminder[]>([]);
   const [addingReminder, setAddingReminder] = useState(false);
 
+  // BR-04: only participants that were picked directly (or joined as a raw
+  // external email, which becomes a real Person the same way) live in this
+  // list — anyone invited via a whole group lives in `selectedGroups` below
+  // instead, so their MeetingParticipant.source stays GROUP on save instead
+  // of being silently flattened back into DIRECT.
   const [selectedPeople, setSelectedPeople] = useState<Person[]>(
-    initial?.meeting.participants.map((p) => p.person) ?? []
+    initial?.meeting.participants.filter((p) => p.source !== "GROUP").map((p) => p.person) ?? []
   );
+  const [selectedGroups, setSelectedGroups] = useState<SelectedGroup[]>([]);
   const [groups, setGroups] = useState<(ContactGroup & { _count: { members: number } })[]>([]);
   const [personQuery, setPersonQuery] = useState("");
   const [personResults, setPersonResults] = useState<Person[]>([]);
@@ -123,18 +138,19 @@ export function MeetingForm({
         .catch(() => {});
     }
     if (prefillGroupId) {
-      api
-        .get<{ group: { members: { person: Person }[] } }>(`/api/groups/${prefillGroupId}`)
-        .then((r) => {
-          const members = r.group.members.map((m) => m.person);
-          setSelectedPeople((prev) => {
-            const ids = new Set(prev.map((p) => p.id));
-            return [...prev, ...members.filter((m) => !ids.has(m.id))];
-          });
-        })
-        .catch(() => {});
+      addGroupById(prefillGroupId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillPersonId, prefillGroupId]);
+
+  // Edit mode: reconstruct the group chips from the meeting's existing
+  // _MeetingGroups links (whichever whole groups were invited) so re-saving
+  // without touching them keeps sending their ids — otherwise the first save
+  // after this fix would silently drop every previously-invited group.
+  useEffect(() => {
+    initial?.meeting.groups.forEach((g) => addGroupById(g.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!personQuery) {
@@ -163,19 +179,36 @@ export function MeetingForm({
     setSelectedPeople((prev) => prev.filter((p) => p.id !== id));
   }
 
-  async function addGroup(groupId: string) {
-    if (!groupId) return;
+  // BR-04: keeps the group itself selected (sent as `groupIds` on submit so
+  // _MeetingGroups + MeetingParticipant.source=GROUP are written correctly)
+  // instead of the old behavior which fetched the members once and threw the
+  // groupId away, leaving every member indistinguishable from a direct pick.
+  async function addGroupById(groupId: string) {
+    if (!groupId || selectedGroups.some((g) => g.id === groupId)) return;
     try {
-      const res = await api.get<{ group: { members: { person: Person }[] } }>(`/api/groups/${groupId}`);
+      const res = await api.get<{ group: { name: string; members: { person: Person }[] } }>(
+        `/api/groups/${groupId}`
+      );
       const members = res.group.members.map((m) => m.person);
-      setSelectedPeople((prev) => {
-        const ids = new Set(prev.map((p) => p.id));
-        return [...prev, ...members.filter((m) => !ids.has(m.id))];
-      });
+      setSelectedGroups((prev) =>
+        prev.some((g) => g.id === groupId) ? prev : [...prev, { id: groupId, name: res.group.name, members }]
+      );
     } catch {
-      showToast("โหลดสมาชิกกลุ่มไม่สำเร็จ", "error");
+      showToast("โหลดข้อมูลกลุ่มไม่สำเร็จ", "error");
     }
   }
+
+  function removeGroup(groupId: string) {
+    setSelectedGroups((prev) => prev.filter((g) => g.id !== groupId));
+  }
+
+  // Total distinct people being invited — direct picks plus everyone in each
+  // selected group, deduped (a person can be in more than one selected group,
+  // or picked directly as well as belong to one).
+  const totalParticipantCount = new Set([
+    ...selectedPeople.map((p) => p.id),
+    ...selectedGroups.flatMap((g) => g.members.map((m) => m.id)),
+  ]).size;
 
   const [externalEmails, setExternalEmails] = useState<string[]>([]);
   function addExternalEmail() {
@@ -260,7 +293,7 @@ export function MeetingForm({
         projectId: projectId || null,
         onlineMeetingResourceId: onlineMeetingResourceId || null,
         participantPersonIds: selectedPeople.map((p) => p.id),
-        groupIds: [] as string[],
+        groupIds: selectedGroups.map((g) => g.id),
         externalEmails,
         // Only meaningful on create — reminders on an existing meeting are
         // managed live via /api/reminders (see the "การแจ้งเตือน" section).
@@ -606,7 +639,7 @@ export function MeetingForm({
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-outline-variant">
               <h3 className="font-headline-md text-headline-md text-on-surface">ผู้เข้าร่วม</h3>
               <span className="bg-primary-container text-on-primary-container font-label-md text-label-md px-2 py-1 rounded-full">
-                {selectedPeople.length} คน
+                {totalParticipantCount} คน
               </span>
             </div>
 
@@ -644,7 +677,7 @@ export function MeetingForm({
               <label className="block font-label-md text-label-md text-on-surface-variant mb-2">เพิ่มทั้งกลุ่ม</label>
               <select
                 onChange={(e) => {
-                  addGroup(e.target.value);
+                  addGroupById(e.target.value);
                   e.target.value = "";
                 }}
                 defaultValue=""
@@ -653,12 +686,43 @@ export function MeetingForm({
                 <option value="" disabled>
                   -- เลือกกลุ่มเพื่อเพิ่มสมาชิกทั้งหมด --
                 </option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} ({g._count.members})
-                  </option>
-                ))}
+                {groups
+                  .filter((g) => !selectedGroups.some((sg) => sg.id === g.id))
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g._count.members})
+                    </option>
+                  ))}
               </select>
+              {selectedGroups.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {selectedGroups.map((g) => (
+                    <div key={g.id} className="p-2.5 rounded-lg bg-primary-container/20 border border-primary/20">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-label-md text-label-md font-semibold text-on-surface flex items-center gap-1.5 min-w-0">
+                          <span className="material-symbols-outlined text-[16px] shrink-0">group</span>
+                          <span className="truncate">
+                            {g.name} ({g.members.length} คน)
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeGroup(g.id)}
+                          className="text-on-surface-variant hover:text-error shrink-0"
+                          aria-label={`นำกลุ่ม ${g.name} ออก`}
+                        >
+                          <span className="material-symbols-outlined text-[16px]">close</span>
+                        </button>
+                      </div>
+                      {g.members.length > 0 && (
+                        <p className="text-xs text-on-surface-variant truncate mt-1">
+                          {g.members.map((m) => m.name).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="mb-4">
