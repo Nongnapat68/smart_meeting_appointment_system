@@ -48,6 +48,8 @@ export default function TaskDetailPage() {
   }, [params.id]);
 
   useEffect(() => {
+    // Fetch-on-mount pattern deemed safe by design (see eslint.config.mjs).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
