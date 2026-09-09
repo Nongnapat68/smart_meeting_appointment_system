@@ -52,3 +52,9 @@ next-env.d.ts
 
 # Claude Code local/personal settings (not shared with the team)
 /.claude/settings.local.json
+
+# Claude Code installed skills (per-machine tool state, not app code —
+# regenerated locally by the skill installer, not shared with the team)
+/.claude/skills/
+/.agents/
+/skills-lock.json
