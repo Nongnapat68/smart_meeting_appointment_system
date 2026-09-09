@@ -1,14 +1,15 @@
 // Smart Meeting Appointment System — Prisma schema
-// Dev DB: SQLite (file-based, zero setup). Swap `provider`/`url` for Postgres in production —
-// the schema below avoids SQLite-only quirks so the switch is a config change, not a rewrite.
+// DB: PostgreSQL (Supabase). DATABASE_URL is the pooled (pgbouncer, port 6543) connection
+// used at runtime; DIRECT_URL is the direct (port 5432) connection used for migrations.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------
