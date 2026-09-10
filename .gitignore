@@ -58,3 +58,8 @@ next-env.d.ts
 /.claude/skills/
 /.agents/
 /skills-lock.json
+
+# Throwaway one-off scripts used while running the Supabase Auth migration
+# (id mapping, cleanup) — not part of the app, safe to delete once the
+# migration is verified complete.
+/scripts/.tmp-migration/
