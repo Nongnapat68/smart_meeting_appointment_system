@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { jwtVerify } from "jose";
-import { SESSION_COOKIE } from "@/lib/auth";
+import { createServerClient } from "@supabase/ssr";
 
 // Routes that don't require a logged-in session.
 const PUBLIC_PATHS = ["/login", "/forgot-password"];
@@ -12,27 +11,43 @@ function isPublicPath(pathname: string) {
   return false;
 }
 
-async function hasValidSession(request: NextRequest): Promise<boolean> {
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!token) return false;
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) return false;
-  try {
-    await jwtVerify(token, new TextEncoder().encode(secret));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (isPublicPath(pathname)) {
-    return NextResponse.next();
-  }
+  // Built up alongside the Supabase client below: setAll() re-creates this
+  // with the refreshed auth cookies attached, so it must exist before the
+  // client does and be returned (not a fresh NextResponse.next()) at the end.
+  let response = NextResponse.next({ request });
 
-  const authenticated = await hasValidSession(request);
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+
+  // getClaims() (not getSession()) is what actually revalidates the token,
+  // refreshing it if it's expiring — the refreshed cookies are written back
+  // via setAll above. Always call this, even on public paths, so a session
+  // doesn't go stale just because someone lingers on /login.
+  const { data } = await supabase.auth.getClaims();
+  const authenticated = !!data?.claims;
+
+  if (isPublicPath(pathname)) {
+    return response;
+  }
 
   if (!authenticated) {
     if (pathname.startsWith("/api/")) {
@@ -43,7 +58,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {

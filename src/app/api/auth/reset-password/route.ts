@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, verifyOtpForEmail } from "@/lib/auth";
+import { verifyOtpForEmail } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { resetPasswordSchema } from "@/lib/validations";
 import { ApiError, parseBody, withApiErrors } from "@/lib/api-helpers";
 
@@ -12,15 +13,20 @@ export const POST = withApiErrors(async (request: Request) => {
     throw new ApiError(400, "รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว");
   }
 
-  const passwordHash = await hashPassword(body.password);
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(result.userId, {
+    password: body.password,
+  });
+  if (error) {
+    throw new ApiError(400, "ไม่สามารถตั้งรหัสผ่านใหม่ได้ กรุณาลองใหม่อีกครั้ง");
+  }
 
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: result.userId }, data: { passwordHash } }),
-    prisma.passwordResetOtp.update({
-      where: { id: result.otpRecordId },
-      data: { usedAt: new Date() },
-    }),
-  ]);
+  // Only mark the OTP used once the password change actually took — one
+  // that failed to apply must stay usable for the user to retry.
+  await prisma.passwordResetOtp.update({
+    where: { id: result.otpRecordId },
+    data: { usedAt: new Date() },
+  });
 
   return NextResponse.json({ ok: true });
 });
