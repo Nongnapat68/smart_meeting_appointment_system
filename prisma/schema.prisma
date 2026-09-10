@@ -22,9 +22,11 @@ enum UserRole {
 }
 
 model User {
-  id                    String   @id @default(cuid())
+  // Same uuid as the corresponding auth.users row (Supabase Auth) — see
+  // User_id_fkey (ON DELETE CASCADE). No @default: the id is always supplied
+  // explicitly from the id Supabase Auth generated for that user.
+  id                    String   @id @db.Uuid
   email                 String   @unique
-  passwordHash          String
   name                  String
   avatarUrl             String?
   phone                 String?
@@ -56,7 +58,7 @@ model User {
 
 model PasswordResetOtp {
   id        String   @id @default(cuid())
-  userId    String
+  userId    String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   otpHash   String
   expiresAt DateTime
@@ -93,7 +95,7 @@ model Person {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  userId       String?      @unique
+  userId       String?      @unique @db.Uuid
   user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   groupMemberships   ContactGroupMember[]
@@ -118,7 +120,7 @@ model ContactGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  createdById String?
+  createdById String?  @db.Uuid
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   members     ContactGroupMember[]
@@ -168,7 +170,7 @@ model Project {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  managerId   String?
+  managerId   String?       @db.Uuid
   manager     User?         @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
 
   members     ProjectMember[]
@@ -217,7 +219,7 @@ model Meeting {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  organizerId String?
+  organizerId String?       @db.Uuid
   organizer   User?         @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: SetNull)
   organizerPersonId String?
   organizerPerson   Person? @relation("MeetingOrganizerPerson", fields: [organizerPersonId], references: [id], onDelete: SetNull)
@@ -301,7 +303,7 @@ model MeetingNote {
   meetingId String
   meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   content   String
-  authorId  String?
+  authorId  String?  @db.Uuid
   author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -314,7 +316,7 @@ model Decision {
   meetingId   String
   meeting     Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   content     String
-  decidedById String?
+  decidedById String?  @db.Uuid
   decidedBy   User?    @relation(fields: [decidedById], references: [id], onDelete: SetNull)
   decidedAt   DateTime @default(now())
   createdAt   DateTime @default(now())
@@ -338,7 +340,7 @@ model RelatedResource {
   title     String
   url       String
   type      ResourceType @default(LINK)
-  addedById String?
+  addedById String?      @db.Uuid
   addedBy   User?        @relation(fields: [addedById], references: [id], onDelete: SetNull)
   createdAt DateTime     @default(now())
 
@@ -358,7 +360,7 @@ model OnlineMeetingResource {
   id          String    @id @default(cuid())
   name        String
   url         String
-  createdById String?
+  createdById String?   @db.Uuid
   createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -395,12 +397,12 @@ model Task {
   updatedAt    DateTime     @updatedAt
   completedAt  DateTime?
 
-  assigneeId       String?
+  assigneeId       String?  @db.Uuid
   assignee         User?    @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   assigneePersonId String?
   assigneePerson   Person?  @relation("TaskAssigneePerson", fields: [assigneePersonId], references: [id], onDelete: SetNull)
 
-  createdById  String?
+  createdById  String?  @db.Uuid
   createdBy    User?    @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   projectId    String?
@@ -420,7 +422,7 @@ model TaskComment {
   id        String   @id @default(cuid())
   taskId    String
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  authorId  String?
+  authorId  String?  @db.Uuid
   author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
   content   String
   createdAt DateTime @default(now())
@@ -482,7 +484,7 @@ enum NotificationType {
 
 model Notification {
   id          String            @id @default(cuid())
-  userId      String
+  userId      String            @db.Uuid
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        NotificationType
   title       String
