@@ -1,16 +1,52 @@
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const prisma = new PrismaClient();
+const supabaseAdmin = createAdminClient();
 
 const DEMO_PASSWORD = "Passw0rd!";
 
-async function hash(pw: string) {
-  return bcrypt.hash(pw, 10);
+const SEED_USER_EMAILS = [
+  "somchai@smartmeeting.dev",
+  "siriporn@smartmeeting.dev",
+  "wichai@smartmeeting.dev",
+  "narin@smartmeeting.dev",
+  "kittichai@smartmeeting.dev",
+];
+
+/** Creates a Supabase Auth user for `email` and returns its uuid, to use as
+ * the matching public.User.id (profile-table pattern). */
+async function createSeedAuthUser(email: string): Promise<string> {
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password: DEMO_PASSWORD,
+    email_confirm: true,
+  });
+  if (error || !data.user) {
+    throw new Error(`Failed to create Supabase Auth user ${email}: ${error?.message}`);
+  }
+  return data.user.id;
 }
 
 async function main() {
   console.log("🌱 Seeding database...");
+
+  // Remove any pre-existing Supabase Auth users for the 5 seed accounts
+  // first. This must happen before creating them below (Supabase Auth
+  // emails are unique) and is what makes re-running this script safe —
+  // deleting an auth.users row cascades to its public.User row via
+  // User_id_fkey (ON DELETE CASCADE), same as the rest of the clean-slate
+  // block below handles everything else.
+  const existingSeedAuthUsers = await prisma.$queryRawUnsafe<{ id: string; email: string }[]>(
+    `SELECT id, email FROM auth.users WHERE email = ANY($1::text[])`,
+    SEED_USER_EMAILS
+  );
+  for (const u of existingSeedAuthUsers) {
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(u.id);
+    if (error) {
+      throw new Error(`Failed to delete existing Supabase Auth user ${u.email}: ${error.message}`);
+    }
+  }
 
   // Clean slate — order matters because of FK constraints.
   await prisma.notification.deleteMany();
@@ -33,14 +69,16 @@ async function main() {
   await prisma.person.deleteMany();
   await prisma.user.deleteMany();
 
-  const passwordHash = await hash(DEMO_PASSWORD);
-
   // --- Users (+ linked Person records so they can be invited like anyone else) ---
+  const [somchaiId, siriponId, wichaiId, narinId, kittichaiId] = await Promise.all(
+    SEED_USER_EMAILS.map(createSeedAuthUser)
+  );
+
   const [somchai, siriporn, wichai, narin, kittichai] = await Promise.all([
     prisma.user.create({
       data: {
+        id: somchaiId,
         email: "somchai@smartmeeting.dev",
-        passwordHash,
         name: "สมชาย ใจดี",
         title: "รองศาสตราจารย์ ดร. (หัวหน้าสาขาวิชาวิศวกรรมซอฟต์แวร์)",
         department: "สาขาวิชาวิศวกรรมซอฟต์แวร์ คณะเทคโนโลยีสารสนเทศและการสื่อสาร",
@@ -50,8 +88,8 @@ async function main() {
     }),
     prisma.user.create({
       data: {
+        id: siriponId,
         email: "siriporn@smartmeeting.dev",
-        passwordHash,
         name: "ศิริพร ใจดี",
         title: "ผู้ช่วยศาสตราจารย์ ดร. (รองคณบดีฝ่ายวิจัย)",
         department: "คณะเทคโนโลยีสารสนเทศและการสื่อสาร",
@@ -60,8 +98,8 @@ async function main() {
     }),
     prisma.user.create({
       data: {
+        id: wichaiId,
         email: "wichai@smartmeeting.dev",
-        passwordHash,
         name: "วิชัย พงษ์สวัสดิ์",
         title: "อาจารย์ประจำสาขาวิชา",
         department: "สาขาวิชาวิศวกรรมซอฟต์แวร์",
@@ -70,8 +108,8 @@ async function main() {
     }),
     prisma.user.create({
       data: {
+        id: narinId,
         email: "narin@smartmeeting.dev",
-        passwordHash,
         name: "นรินทร์ ชัยเจริญ",
         title: "ผู้ช่วยวิจัย (Research Assistant)",
         department: "ห้องปฏิบัติการวิจัย AI Lab",
@@ -80,8 +118,8 @@ async function main() {
     }),
     prisma.user.create({
       data: {
+        id: kittichaiId,
         email: "kittichai@smartmeeting.dev",
-        passwordHash,
         name: "กิตติชัย นามดี",
         title: "เจ้าหน้าที่สนับสนุนระบบสารสนเทศ",
         department: "สำนักคอมพิวเตอร์",

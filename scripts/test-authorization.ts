@@ -12,11 +12,12 @@
  */
 import { spawn, execSync, type ChildProcess } from "child_process";
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const PORT = 3199;
 const BASE = `http://localhost:${PORT}`;
 const prisma = new PrismaClient();
+const supabaseAdmin = createAdminClient();
 
 let failures = 0;
 let passed = 0;
@@ -31,10 +32,17 @@ function check(label: string, condition: boolean, detail?: string) {
   }
 }
 
-function extractCookie(res: Response): string {
-  const setCookie = res.headers.get("set-cookie");
-  if (!setCookie) throw new Error("No Set-Cookie header on login response");
-  return setCookie.split(";")[0];
+// Supabase's cookie-based session can split across *multiple* Set-Cookie
+// headers (e.g. a chunked "sb-<ref>-auth-token.0" / ".1" pair, or separate
+// access/refresh cookies) — a single Response.headers.get("set-cookie") only
+// ever returns one combined string and silently drops the rest (a Fetch API
+// limitation), so this uses getSetCookie() to capture every one of them.
+function extractCookies(res: Response): string {
+  const setCookies = res.headers.getSetCookie?.() ?? [];
+  if (setCookies.length === 0) {
+    throw new Error("No Set-Cookie header(s) on login response");
+  }
+  return setCookies.map((c) => c.split(";")[0]).join("; ");
 }
 
 async function login(email: string, password: string): Promise<string> {
@@ -44,7 +52,7 @@ async function login(email: string, password: string): Promise<string> {
     body: JSON.stringify({ email, password }),
   });
   if (res.status !== 200) throw new Error(`Login failed for ${email}: ${res.status}`);
-  return extractCookie(res);
+  return extractCookies(res);
 }
 
 async function waitForServer(timeoutMs = 30000) {
@@ -90,14 +98,29 @@ function stopServer(child: ChildProcess) {
 
 const PASSWORD = "TestPassw0rd!";
 
+/** Creates a real Supabase Auth user (same as step A of the auth migration)
+ * and returns its uuid, for use as the matching public.User.id. */
+async function createAuthUser(email: string): Promise<string> {
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password: PASSWORD,
+    email_confirm: true,
+  });
+  if (error || !data.user) {
+    throw new Error(`Failed to create Supabase Auth user ${email}: ${error?.message}`);
+  }
+  return data.user.id;
+}
+
 async function setupFixtures() {
-  const passwordHash = await bcrypt.hash(PASSWORD, 10);
+  const userAId = await createAuthUser("test-authz-a@example.com");
+  const userBId = await createAuthUser("test-authz-b@example.com");
 
   const userA = await prisma.user.create({
-    data: { email: "test-authz-a@example.com", passwordHash, name: "Test User A" },
+    data: { id: userAId, email: "test-authz-a@example.com", name: "Test User A" },
   });
   const userB = await prisma.user.create({
-    data: { email: "test-authz-b@example.com", passwordHash, name: "Test User B" },
+    data: { id: userBId, email: "test-authz-b@example.com", name: "Test User B" },
   });
   const personA = await prisma.person.create({
     data: { userId: userA.id, name: userA.name, email: userA.email, type: "INTERNAL" },
@@ -146,7 +169,13 @@ async function cleanupFixtures(f: Awaited<ReturnType<typeof setupFixtures>>) {
   await prisma.contactGroup.deleteMany({ where: { id: f.group.id } });
   await prisma.project.deleteMany({ where: { id: f.project.id } });
   await prisma.person.deleteMany({ where: { id: f.personA.id } });
-  await prisma.user.deleteMany({ where: { id: { in: [f.userA.id, f.userB.id] } } });
+  // Deleting from Supabase Auth cascades to public.User via User_id_fkey
+  // (ON DELETE CASCADE) — no separate prisma.user.deleteMany() needed, and
+  // this is also what actually removes the test accounts from auth.users
+  // (skipping it would leak throwaway test users the same way the
+  // connection-test@example.com one leaked before the migration).
+  await supabaseAdmin.auth.admin.deleteUser(f.userA.id);
+  await supabaseAdmin.auth.admin.deleteUser(f.userB.id);
 }
 
 async function main() {

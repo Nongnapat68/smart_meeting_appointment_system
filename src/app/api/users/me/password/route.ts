@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { hashPassword, verifyPassword } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { changePasswordSchema } from "@/lib/validations";
 import { ApiError, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 
@@ -8,11 +7,19 @@ export const POST = withApiErrors(async (request: Request) => {
   const user = await requireUser();
   const body = parseBody(changePasswordSchema, await request.json());
 
-  const valid = await verifyPassword(body.currentPassword, user.passwordHash);
-  if (!valid) throw new ApiError(400, "รหัสผ่านปัจจุบันไม่ถูกต้อง");
+  const supabase = await createClient();
 
-  const passwordHash = await hashPassword(body.newPassword);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  // Verify the current password the same way login does: a real sign-in
+  // attempt. Also re-establishes a fresh session for `user`, which the
+  // updateUser() call below then needs to be authenticated as them.
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: body.currentPassword,
+  });
+  if (signInError) throw new ApiError(400, "รหัสผ่านปัจจุบันไม่ถูกต้อง");
+
+  const { error: updateError } = await supabase.auth.updateUser({ password: body.newPassword });
+  if (updateError) throw new ApiError(400, updateError.message);
 
   return NextResponse.json({ ok: true });
 });
