@@ -1,24 +1,25 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createSessionToken, setSessionCookie, verifyPassword } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { loginSchema } from "@/lib/validations";
 import { ApiError, jsonError, parseBody, withApiErrors } from "@/lib/api-helpers";
 
 export const POST = withApiErrors(async (request: Request) => {
   const body = parseBody(loginSchema, await request.json());
 
-  const user = await prisma.user.findUnique({ where: { email: body.email } });
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: body.email,
+    password: body.password,
+  });
+  if (error || !data.user) {
+    throw new ApiError(401, "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: data.user.id } });
   if (!user) {
     throw new ApiError(401, "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
   }
-
-  const valid = await verifyPassword(body.password, user.passwordHash);
-  if (!valid) {
-    throw new ApiError(401, "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-  }
-
-  const { token, maxAge } = await createSessionToken(user.id, user.email, body.remember);
-  await setSessionCookie(token, maxAge);
 
   return NextResponse.json({
     user: {
