@@ -15,6 +15,12 @@ import { ApiError, isAdmin, requireUser, withApiErrors } from "@/lib/api-helpers
  * where: { id, status: "PENDING" } })`, which only succeeds while it's still
  * PENDING at the moment of the write — so even two overlapping calls can
  * each send at most one email per reminder, not just two sequential calls.
+ *
+ * The due set itself comes from the process_due_reminders() SQL function
+ * (prisma/migrations/20260911140000_process_due_reminders_function) rather
+ * than a direct Prisma query — same "status = PENDING AND scheduledAt <=
+ * now()" filter, just expressed once in SQL. Sending email stays here in
+ * TypeScript since Postgres can't do that itself.
  */
 export const POST = withApiErrors(async () => {
   const user = await requireUser();
@@ -22,11 +28,13 @@ export const POST = withApiErrors(async () => {
     throw new ApiError(403, "เฉพาะผู้ดูแลระบบเท่านั้นที่ประมวลผลการแจ้งเตือนที่ถึงเวลาได้");
   }
 
-  const now = new Date();
-  const dueReminders = await prisma.reminder.findMany({
-    where: { status: "PENDING", scheduledAt: { lte: now } },
-    include: { meeting: { include: { participants: { include: { person: true } } } } },
-  });
+  const dueIds = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM process_due_reminders();`;
+  const dueReminders = dueIds.length
+    ? await prisma.reminder.findMany({
+        where: { id: { in: dueIds.map((r) => r.id) } },
+        include: { meeting: { include: { participants: { include: { person: true } } } } },
+      })
+    : [];
 
   const results: { id: string; meetingTitle: string; status: "SENT" | "FAILED" | "SKIPPED" }[] = [];
 
