@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import type { Meeting } from "@prisma/client";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { ErrorBanner } from "@/components/ui/Feedback";
 import { toDatetimeLocalValue } from "@/lib/format";
+import type { MeetingWithStringDates } from "./types";
 
-export function MeetingActions({ meeting }: { meeting: Meeting }) {
+export function MeetingActions({ meeting }: { meeting: MeetingWithStringDates }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [showReschedule, setShowReschedule] = useState(false);
@@ -118,7 +118,7 @@ function RescheduleModal({
   onClose,
   onDone,
 }: {
-  meeting: Meeting;
+  meeting: MeetingWithStringDates;
   open: boolean;
   onClose: () => void;
   onDone: () => void;
