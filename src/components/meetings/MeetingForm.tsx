@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner } from "@/components/ui/Feedback";
@@ -287,32 +288,81 @@ export function MeetingForm({
     setError(null);
     setLoading(true);
     try {
-      const payload = {
-        title,
-        description,
-        type,
-        status,
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date(endTime).toISOString(),
-        location,
-        projectId: projectId || null,
-        onlineMeetingResourceId: onlineMeetingResourceId || null,
-        participantPersonIds: selectedPeople.map((p) => p.id),
-        groupIds: selectedGroups.map((g) => g.id),
-        externalEmails,
-        // Only meaningful on create — reminders on an existing meeting are
-        // managed live via /api/reminders (see the "การแจ้งเตือน" section).
-        ...(isEdit ? {} : { reminderOffsetMinutes: reminderOffsets }),
-      };
+      const startIso = new Date(startTime).toISOString();
+      const endIso = new Date(endTime).toISOString();
+      const participantPersonIds = selectedPeople.map((p) => p.id);
+      const groupIds = selectedGroups.map((g) => g.id);
 
       if (isEdit && initial) {
+        const payload = {
+          title,
+          description,
+          type,
+          status,
+          startTime: startIso,
+          endTime: endIso,
+          location,
+          projectId: projectId || null,
+          onlineMeetingResourceId: onlineMeetingResourceId || null,
+          participantPersonIds,
+          groupIds,
+          externalEmails,
+        };
         await api.put(`/api/meetings/${initial.meeting.id}`, payload);
         showToast("บันทึกการเปลี่ยนแปลงสำเร็จ", "success");
         router.push(`/meetings/${initial.meeting.id}`);
       } else {
-        const res = await api.post<{ meeting: Meeting }>("/api/meetings", payload);
+        // Hybrid migration round 1 (Meeting resource): create goes straight
+        // through create_meeting_with_participants() instead of
+        // POST /api/meetings (removed) — see
+        // prisma/migrations/20260911170000_create_meeting_with_participants_function
+        // and docs/DESIGN_DECISIONS.md §5.5. p_organizer_id must be this
+        // browser's own signed-in user — the function itself re-checks that
+        // server-side (auth.uid()) before writing anything, so getUser()
+        // here is just what the RPC call needs, not the security boundary.
+        const supabase = createClient();
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+        const { data: meeting, error: rpcError } = await supabase.rpc("create_meeting_with_participants", {
+          p_organizer_id: authData.user.id,
+          p_title: title,
+          p_start_time: startIso,
+          p_end_time: endIso,
+          p_description: description || null,
+          p_type: type,
+          p_status: status,
+          p_location: location || null,
+          p_project_id: projectId || null,
+          p_online_meeting_resource_id: onlineMeetingResourceId || null,
+          p_participant_person_ids: participantPersonIds,
+          p_group_ids: groupIds,
+          p_external_emails: externalEmails,
+          p_reminder_offset_minutes: reminderOffsets,
+        });
+        // supabase-js errors don't throw — translate to the same
+        // thrown-Error shape apiFetch() used to produce, so the catch
+        // block below (and its `error` toast) keeps working unchanged.
+        if (rpcError) throw new Error(rpcError.message);
+
         showToast("สร้างการนัดหมายสำเร็จ", "success");
-        router.push(`/meetings/${res.meeting.id}`);
+
+        // FR-09: separate, best-effort email step (POST /api/meetings/[id]/notify,
+        // step C of this migration) — a delivery hiccup here must not undo
+        // or block the meeting the RPC above already committed, so its
+        // failure only shows a secondary toast instead of reaching the
+        // outer catch (which would wrongly imply the whole save failed).
+        try {
+          await api.post(`/api/meetings/${meeting.id}/notify`);
+        } catch (notifyErr) {
+          console.error("notify failed for meeting", meeting.id, notifyErr);
+          showToast(
+            notifyErr instanceof Error ? notifyErr.message : "ส่งอีเมลแจ้งเตือนผู้เข้าร่วมไม่สำเร็จ",
+            "error"
+          );
+        }
+
+        router.push(`/meetings/${meeting.id}`);
       }
       router.refresh();
     } catch (err) {
