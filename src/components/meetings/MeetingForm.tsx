@@ -135,10 +135,19 @@ export function MeetingForm({
   // Prefill from query params (e.g. "นัดประชุม" from a person or group detail page).
   useEffect(() => {
     if (prefillPersonId) {
-      api
-        .get<{ person: Person }>(`/api/people/${prefillPersonId}`)
-        .then((r) => setSelectedPeople((prev) => (prev.some((p) => p.id === r.person.id) ? prev : [...prev, r.person])))
-        .catch(() => {});
+      (async () => {
+        try {
+          const { data: p } = await createClient()
+            .from("Person")
+            .select("*")
+            .eq("id", prefillPersonId)
+            .maybeSingle<Person>();
+          if (!p) return;
+          setSelectedPeople((prev) => (prev.some((sp) => sp.id === p.id) ? prev : [...prev, p]));
+        } catch {
+          // best-effort prefill — ignore
+        }
+      })();
     }
     if (prefillGroupId) {
       addGroupById(prefillGroupId);
@@ -165,8 +174,17 @@ export function MeetingForm({
     }
     const t = setTimeout(async () => {
       try {
-        const res = await api.get<{ items: Person[] }>(`/api/people?q=${encodeURIComponent(personQuery)}&pageSize=8`);
-        setPersonResults(res.items.filter((p) => !selectedPeople.some((sp) => sp.id === p.id)));
+        // Same 3-field OR search GET /api/people used to do (name/email/
+        // department "contains") — see people/page.tsx's load() for the
+        // same pattern.
+        const pattern = `%${personQuery}%`;
+        const { data: items, error } = await createClient()
+          .from("Person")
+          .select("*")
+          .or(`name.ilike."${pattern}",email.ilike."${pattern}",department.ilike."${pattern}"`)
+          .limit(8);
+        if (error) throw error;
+        setPersonResults((items ?? []).filter((p: Person) => !selectedPeople.some((sp) => sp.id === p.id)));
       } catch {
         // ignore
       }

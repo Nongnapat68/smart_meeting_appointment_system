@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
@@ -256,8 +257,17 @@ function AddMemberModal({
     if (!open) return;
     const t = setTimeout(async () => {
       try {
-        const res = await api.get<{ items: Person[] }>(`/api/people?q=${encodeURIComponent(q)}&pageSize=20`);
-        setResults(res.items.filter((p) => !existingPersonIds.includes(p.id)));
+        // Same 3-field OR search GET /api/people used to do — see
+        // people/page.tsx's load() / MeetingForm.tsx's personQuery effect
+        // for the same pattern.
+        const pattern = `%${q}%`;
+        const { data: items, error } = await createClient()
+          .from("Person")
+          .select("*")
+          .or(`name.ilike."${pattern}",email.ilike."${pattern}",department.ilike."${pattern}"`)
+          .limit(20);
+        if (error) throw error;
+        setResults((items ?? []).filter((p: Person) => !existingPersonIds.includes(p.id)));
       } catch {
         // ignore search errors, keep previous results
       }
