@@ -1,7 +1,16 @@
 # ER Diagram — Smart Meeting & Appointment Management System
 
-> สร้างจาก `prisma/schema.prisma` (สถานะปัจจุบันจริง หลัง migration
-> `20260906020941_add_notes_decisions_resources_online_link_participant_source`)
+> ตรวจสอบแล้วกับฐานข้อมูล Supabase Postgres จริง (live) — โครงสร้างเดิมของไฟล์นี้
+> (diagram + ตารางสรุป relationship) ยังถูกต้อง ไม่ต้องรื้อใหม่ แก้เฉพาะจุดที่ไม่ตรงกับ
+> database จริงอีกต่อไป คือ (1) `User.passwordHash` ถูกลบไปแล้วตั้งแต่ย้ายไปใช้
+> Supabase Auth — เอาออกจาก diagram, (2) `User.id` เป็น `UUID` ผูกกับ `auth.users.id`
+> ข้าม schema (ไม่ใช่ `string`/cuid เหมือน entity อื่น) — เพิ่ม entity `auth.users` และเส้น
+> ความสัมพันธ์เข้ามาให้เห็นชัด, (3) ทุกคอลัมน์ที่ชี้ไปหา `User.id` (organizerId, assigneeId,
+> createdById, managerId, authorId, decidedById, addedById, userId) เปลี่ยน type จาก
+> `string` เป็น `uuid` ให้ตรงกับ database จริง — ดู `DATA_DICTIONARY.md`/`schema.sql` สำหรับ
+> รายละเอียดคอลัมน์เต็ม และ View/Function/Trigger ที่เพิ่มเข้ามาบนตารางเหล่านี้ (ไม่ใช่ entity
+> ใหม่ จึงไม่ปรากฏใน diagram — เป็น query/behavior เพิ่มเติมบนความสัมพันธ์ที่มีอยู่แล้ว)
+>
 > ครบทั้ง 19 model + 1 implicit join table (`_MeetingGroups`) — 20 ตารางจริงในฐานข้อมูล
 >
 > เกณฑ์อ่านสัญลักษณ์ (crow's foot, ตามที่ Mermaid ใช้): สัญลักษณ์ที่อยู่ติดกับ entity ฝั่งใด
@@ -15,10 +24,13 @@
 
 ```mermaid
 erDiagram
+    "auth.users" {
+        uuid id PK "Supabase Auth-managed — separate schema, not owned by this app"
+    }
+
     User {
-        string id PK
-        string email UK "ใช้ login"
-        string passwordHash "bcrypt hash"
+        uuid id PK "เดียวกับ auth.users.id — FK ข้าม schema, ON DELETE CASCADE"
+        string email UK "แสดงผล — login จริงตรวจสอบผ่าน Supabase Auth ไม่ใช่คอลัมน์นี้"
         string name
         string avatarUrl "nullable"
         string phone "nullable"
@@ -33,7 +45,7 @@ erDiagram
 
     PasswordResetOtp {
         string id PK
-        string userId FK
+        uuid userId FK
         string otpHash
         datetime expiresAt
         datetime usedAt "nullable"
@@ -52,7 +64,7 @@ erDiagram
         string status "enum PersonStatus: ACTIVE|INACTIVE, default ACTIVE"
         datetime createdAt
         datetime updatedAt
-        string userId FK "nullable, UK — ผูกกับ User ถ้าเป็น INTERNAL"
+        uuid userId FK "nullable, UK — ผูกกับ User ถ้าเป็น INTERNAL"
     }
 
     ContactGroup {
@@ -62,7 +74,7 @@ erDiagram
         string icon "default 'group', ชื่อ material symbol"
         datetime createdAt
         datetime updatedAt
-        string createdById FK "nullable"
+        uuid createdById FK "nullable"
     }
 
     ContactGroupMember {
@@ -82,7 +94,7 @@ erDiagram
         datetime endDate "nullable"
         datetime createdAt
         datetime updatedAt
-        string managerId FK "nullable"
+        uuid managerId FK "nullable"
     }
 
     ProjectMember {
@@ -96,7 +108,7 @@ erDiagram
         string id PK
         string name
         string url
-        string createdById FK "nullable"
+        uuid createdById FK "nullable"
         datetime createdAt
         datetime updatedAt
     }
@@ -112,7 +124,7 @@ erDiagram
         string location "nullable, ห้องจริง หรือ raw link"
         datetime createdAt
         datetime updatedAt
-        string organizerId FK "nullable, ผู้จัด (User)"
+        uuid organizerId FK "nullable, ผู้จัด (User)"
         string organizerPersonId FK "nullable, ผู้จัด (Person)"
         string projectId FK "nullable — BR-06: meeting ไม่จำเป็นต้องอยู่ project"
         string onlineMeetingResourceId FK "nullable — BR-09 ใช้ลิงก์ซ้ำได้"
@@ -132,7 +144,7 @@ erDiagram
         string id PK
         string meetingId FK
         string content
-        string authorId FK "nullable"
+        uuid authorId FK "nullable"
         datetime createdAt
         datetime updatedAt
     }
@@ -141,7 +153,7 @@ erDiagram
         string id PK
         string meetingId FK
         string content
-        string decidedById FK "nullable"
+        uuid decidedById FK "nullable"
         datetime decidedAt
         datetime createdAt
     }
@@ -152,7 +164,7 @@ erDiagram
         string title
         string url
         string type "enum ResourceType: LINK|DOCUMENT|FILE, default LINK"
-        string addedById FK "nullable"
+        uuid addedById FK "nullable"
         datetime createdAt
     }
 
@@ -166,9 +178,9 @@ erDiagram
         datetime createdAt
         datetime updatedAt
         datetime completedAt "nullable"
-        string assigneeId FK "nullable (User)"
+        uuid assigneeId FK "nullable (User)"
         string assigneePersonId FK "nullable (Person)"
-        string createdById FK "nullable"
+        uuid createdById FK "nullable"
         string projectId FK "nullable"
         string meetingId FK "nullable — action item จากประชุมไหน"
     }
@@ -176,7 +188,7 @@ erDiagram
     TaskComment {
         string id PK
         string taskId FK
-        string authorId FK "nullable"
+        uuid authorId FK "nullable"
         string content
         datetime createdAt
     }
@@ -204,7 +216,7 @@ erDiagram
 
     Notification {
         string id PK
-        string userId FK
+        uuid userId FK
         string type "enum NotificationType: MEETING_INVITE|MEETING_UPDATED|MEETING_CANCELLED|TASK_ASSIGNED|AI_SUMMARY_READY|REMINDER"
         string title
         string body "nullable"
@@ -222,6 +234,9 @@ erDiagram
         boolean isEdited "default false"
         datetime generatedAt
     }
+
+    %% ---- Cross-schema: this app's User row IS a Supabase Auth account ----
+    "auth.users" ||--|| User : "id เดียวกัน (FK ข้าม schema, ON DELETE CASCADE)"
 
     %% ---- Auth / profile link (1-1) ----
     User |o--o| Person : "profile เดียวกัน (0/1)"
@@ -282,6 +297,7 @@ erDiagram
 
 | # | Parent (ฝั่ง 1) | Child (ฝั่ง many) | FK อยู่ที่ | Nullable? | ประเภทความสัมพันธ์ | หมายเหตุ |
 |---|---|---|---|---|---|---|
+| 0 | `auth.users` (Supabase Auth, คนละ schema) | User | `User.id` | ❌ | **1-1** (คนละ schema — id เดียวกัน) | Cross-schema FK, `ON DELETE CASCADE` — ลบบัญชี Supabase Auth แล้ว `User` row (และทุกอย่างที่ cascade ต่อจากมัน) หายตามไปด้วย |
 | 1 | User | Person | `Person.userId` | ✅ (unique) | **1-1** (optional ทั้งสองฝั่ง) | User เป็น INTERNAL person ก็ได้ ไม่ผูกก็ได้ (external contact ไม่มี User) |
 | 2 | User | PasswordResetOtp | `PasswordResetOtp.userId` | ❌ | **1-N** | ผู้ใช้ขอ OTP ได้หลายครั้ง |
 | 3 | User | Meeting (organizer) | `Meeting.organizerId` | ✅ | **1-N** | ลบ user แล้ว meeting ไม่หาย (SetNull) |
@@ -317,4 +333,4 @@ erDiagram
 | 33 | Task | TaskComment | `TaskComment.taskId` | ❌ | **1-N** | |
 | 34 | Task | TaskAttachment | `TaskAttachment.taskId` | ❌ | **1-N** | |
 
-**สรุปรูปแบบที่เจอ**: 1-1 จริง 2 เส้น (User↔Person, Meeting↔AISummary — ทั้งคู่ทำผ่าน unique FK ไม่ใช่ตาราง join แยก), N-N จริง 1 เส้น (ContactGroup↔Meeting ผ่าน implicit join table), N-N ที่ materialize เป็น entity มีคอลัมน์เสริมอีก 2 คู่ (Person↔ContactGroup ผ่าน ContactGroupMember, Person↔Project ผ่าน ProjectMember), ที่เหลือทั้งหมด 1-N ธรรมดา (ส่วนใหญ่ FK nullable เพราะ business rule อนุญาตให้ไม่ผูกก็ได้ เช่น meeting ไม่ต้องมี project, ไม่ต้องมี online link)
+**สรุปรูปแบบที่เจอ**: 1-1 จริง 3 เส้น (`auth.users`↔User ข้าม schema, User↔Person, Meeting↔AISummary — ทั้งหมดทำผ่าน unique/matching FK ไม่ใช่ตาราง join แยก), N-N จริง 1 เส้น (ContactGroup↔Meeting ผ่าน implicit join table), N-N ที่ materialize เป็น entity มีคอลัมน์เสริมอีก 2 คู่ (Person↔ContactGroup ผ่าน ContactGroupMember, Person↔Project ผ่าน ProjectMember), ที่เหลือทั้งหมด 1-N ธรรมดา (ส่วนใหญ่ FK nullable เพราะ business rule อนุญาตให้ไม่ผูกก็ได้ เช่น meeting ไม่ต้องมี project, ไม่ต้องมี online link)
