@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { ErrorBanner } from "@/components/ui/Feedback";
@@ -23,7 +23,24 @@ export function MeetingActions({ meeting }: { meeting: MeetingWithStringDates })
   async function handleCancel() {
     setCancelling(true);
     try {
-      await api.post(`/api/meetings/${meeting.id}/cancel`);
+      // Hybrid migration round 1 (Meeting resource), step D: cancel never
+      // sent email/notification even before this (see the old POST
+      // /api/meetings/[id]/cancel, kept in place but no longer called from
+      // here — test:authz still exercises it directly), so it's a pure
+      // single-table write — straight through supabase-js, no notify call
+      // needed. The old route's assertOwner(organizer-or-admin) 403 is now
+      // the "update_organizer_or_admin" RLS policy on Meeting; unlike a REST
+      // 403, a blocked UPDATE just matches 0 rows silently, so .select()
+      // + checking for a null result is what surfaces that as an error here.
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("Meeting")
+        .update({ status: "CANCELLED" })
+        .eq("id", meeting.id)
+        .select()
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) throw new Error("เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่ยกเลิกการประชุมนี้ได้");
       showToast("ยกเลิกการประชุมแล้ว", "success");
       router.refresh();
     } catch (err) {
@@ -133,10 +150,34 @@ function RescheduleModal({
     setError(null);
     setLoading(true);
     try {
-      await api.post(`/api/meetings/${meeting.id}/reschedule`, {
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date(endTime).toISOString(),
-      });
+      // Same reasoning as handleCancel above — reschedule never sent
+      // email/notification either, so it's two plain-table writes
+      // straight through supabase-js instead of POST /api/meetings/[id]/reschedule.
+      const startIso = new Date(startTime).toISOString();
+      const endIso = new Date(endTime).toISOString();
+      if (new Date(endIso) <= new Date(startIso)) {
+        throw new Error("เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม");
+      }
+
+      const supabase = createClient();
+      const { data, error: updateError } = await supabase
+        .from("Meeting")
+        .update({ startTime: startIso, endTime: endIso, status: "POSTPONED" })
+        .eq("id", meeting.id)
+        .select()
+        .maybeSingle();
+      if (updateError) throw new Error(updateError.message);
+      if (!data) throw new Error("เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่เลื่อนเวลาการประชุมนี้ได้");
+
+      // Keep the still-PENDING reminder(s) in sync with the new time —
+      // same 30-minutes-before rule the old route used.
+      const { error: reminderError } = await supabase
+        .from("Reminder")
+        .update({ scheduledAt: new Date(new Date(startIso).getTime() - 30 * 60 * 1000).toISOString() })
+        .eq("meetingId", meeting.id)
+        .eq("status", "PENDING");
+      if (reminderError) throw new Error(reminderError.message);
+
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "เลื่อนเวลาไม่สำเร็จ");
