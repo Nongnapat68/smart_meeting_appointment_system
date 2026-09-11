@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { meetingStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
@@ -30,14 +30,25 @@ export default function MeetingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (q) params.set("q", q);
-      if (status) params.set("status", status);
-      if (type) params.set("type", type);
-      params.set("page", String(page));
-      params.set("pageSize", String(PAGE_SIZE));
-      const res = await api.get<{ items: MeetingRow[]; total: number }>(`/api/meetings?${params.toString()}`);
-      setData(res);
+      const supabase = createClient();
+      let query = supabase
+        .from("Meeting")
+        .select(
+          "*, organizer:User(name,avatarUrl), project:Project(name), participants:MeetingParticipant(*, person:Person(*))",
+          { count: "exact" }
+        )
+        .order("startTime", { ascending: false })
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+      if (q) query = query.ilike("title", `%${q}%`);
+      if (status) query = query.eq("status", status);
+      if (type) query = query.eq("type", type);
+
+      const { data: items, count, error: dbError } = await query;
+      // supabase-js errors don't throw — they come back as `error` on the
+      // result, so translate to the same thrown-Error shape apiFetch() used
+      // to produce, keeping every existing catch block below unchanged.
+      if (dbError) throw new Error(dbError.message);
+      setData({ items: (items ?? []) as MeetingRow[], total: count ?? 0 });
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
