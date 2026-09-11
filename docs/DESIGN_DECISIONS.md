@@ -81,3 +81,49 @@ Schema ของ `Reminder` ไม่ต้องแก้ (`meetingId` ไม�
 
 - FR-03: `MeetingForm.tsx` ยังไม่แสดงป้ายบอกแหล่งที่มา (DIRECT/GROUP/EXTERNAL) ของผู้เข้าร่วมแต่ละคนให้ผู้ใช้เห็น (ข้อมูลมีอยู่แล้วใน `MeetingParticipant.source` แค่ยังไม่โชว์ใน UI)
 - BR-13: ยังไม่มี scheduler/cron ที่ยิง reminder จริงตามเวลาที่ตั้งไว้ — เป็นงาน delivery infrastructure แยกต่างหาก ไม่ใช่ schema หรือ UI
+
+---
+
+## 5. Auth Migration / RLS / View-Function-Trigger (รอบล่าสุด)
+
+> Migration: `20260910142937_supabase_auth_uuid_migration`, `20260911120000_enable_rls_policies`,
+> `20260911130000_upcoming_meetings_overdue_action_items_views`,
+> `20260911140000_process_due_reminders_function`, `20260911150000_get_meeting_context_function`,
+> `20260911160000_cancel_meeting_reminders_trigger` — ดูสถานะ FR/BR ที่ได้รับผลกระทบใน `docs/GAP_ANALYSIS.md`
+> หัวข้อบนสุด (ไม่กระทบ FR/BR ข้อไหนเลย ยกเว้น BR-14 ที่กลไกเปลี่ยนแต่ status ยัง ✅ เหมือนเดิม)
+
+### 5.1 Profile-table pattern (`public.User` ↔ `auth.users`) — ทำไมไม่ใช้ auto-insert trigger
+
+**ทางเลือกที่พิจารณา**: (ก) trigger แบบที่ Supabase แนะนำทั่วไป — `on_auth_user_created` ที่ยิง `INSERT INTO public."User"` อัตโนมัติทุกครั้งที่มี row ใหม่ใน `auth.users` กับ (ข) ไม่มี trigger เลย — ให้ application code เป็นคน `INSERT` `public."User"` เองตรงๆ ทันทีหลังเรียก `auth.admin.createUser()` สำเร็จ
+
+**ตัดสินใจ**: (ข)
+
+**เหตุผล**: ระบบนี้ไม่มี self-signup เลย (FR-01 ยัง ⚠️ ด้วยเหตุผลนี้ตรงๆ) — ทุกจุดที่สร้าง user จริง (`prisma/seed.ts`, `scripts/test-authorization.ts`) เรียก `supabaseAdmin.auth.admin.createUser()` แล้วตามด้วย `prisma.user.create({ data: { id: authUserId, email, name, role, ... } })` ทันที เพื่อกรอกข้อมูลโปรไฟล์ (`name`, `role`, `department`, `title` ฯลฯ) ที่ `auth.admin.createUser()` ไม่รู้จักและไม่มีทางรู้ (ไม่ได้อยู่ใน request ของมัน) ถ้ามี trigger insert `public."User"` อัตโนมัติคู่ขนานไปด้วย จะชนกับ `INSERT` ที่ app code ทำเองทันที (primary key ซ้ำ) เว้นแต่จะเปลี่ยน app code ให้ `UPDATE` แทน `INSERT` — เพิ่มความซับซ้อนของ 2 ระบบที่ต้อง sync กันโดยไม่ได้ประโยชน์อะไรเพิ่ม เพราะ flow การสร้าง user ของระบบนี้ไม่เคยเป็นเคสที่ trigger pattern ถูกออกแบบมาแก้ (self-signup ที่ profile ไม่มีข้อมูลบังคับอะไรนอกจาก id/email) แต่เป็นเคสที่ admin/สคริปต์เป็นคนกรอกข้อมูลโปรไฟล์ครบตั้งแต่ตอนสร้างเสมอ
+
+**ผลคือ**: `public."User"` ทุก row สร้างโดย application code เท่านั้น ไม่มี race condition ระหว่าง trigger กับ app code ให้ต้องกังวล และถ้าวันหนึ่งเปิด self-signup จริง (แก้ FR-01) ก็แค่เพิ่ม route ใหม่ที่ทำ 2 ขั้นตอนเดียวกันนี้ (createUser แล้ว insert profile) ไม่ต้องรื้อ pattern ที่มีอยู่
+
+### 5.2 Notification ไม่มี admin-bypass บน select/update (ต่างจาก `assertOwner()` pattern ปกติของตารางอื่น)
+
+**ทางเลือกที่พิจารณา**: (ก) ใช้ pattern เดียวกับทุกตารางอื่นที่มีเจ้าของ — owner-or-admin ทั้ง SELECT/UPDATE (แบบที่ RLS ของ `User`/`Project`/`Task` ฯลฯ ใช้ ซึ่งแปลตรงมาจาก `assertOwner()` checks ที่มีอยู่แล้วในแอป — "translated 1:1 from the assertOwner() checks already live in each route" ตามที่บันทึกไว้ใน commit ของ `20260911120000_enable_rls_policies`) กับ (ข) owner-only ล้วนๆ ไม่มี admin bypass เลยสำหรับทั้ง SELECT และ UPDATE
+
+**ตัดสินใจ**: (ข)
+
+**เหตุผล**: `assertOwner()` มี admin-bypass ทุกจุดเพราะมี use case จริงรองรับ — admin ต้องแก้ไข/ลบข้อมูลแทนเจ้าของได้จริงในสถานการณ์จริง (เช่น ผู้ดูแลระบบช่วยแก้ไข meeting ให้ผู้ใช้ที่ลาออกไปแล้ว) แต่ `Notification` ไม่มี route หรือหน้า UI ไหนในระบบเลยที่ต้องให้ admin อ่านหรือ mark-read การแจ้งเตือนแทนคนอื่น (ตรวจแล้ว: ไม่มี `src/app/api/notifications/**` เลยสักไฟล์ — ทุกจุดที่สร้าง `Notification` ทำผ่าน Prisma ตรงๆ ในโค้ด server เช่น `PATCH /api/tasks/[id]` สร้าง `TASK_ASSIGNED` notification โดยตรง ไม่มี endpoint ให้ list/mark-read ข้ามผู้ใช้เลยแม้แต่จุดเดียว) การใส่ admin-bypass ไว้ล่วงหน้าโดยไม่มี use case จริงรองรับจะเป็นการเปิดช่องให้ admin อ่านเนื้อหาที่อาจละเอียดอ่อนของคนอื่น (เช่นข้อความแจ้งเตือนงานที่มอบหมาย) โดยไม่มีเหตุผลทางธุรกิจรองรับเลย ขัดกับหลัก least privilege ตรงๆ — INSERT ยังคงเป็น admin-only เหมือนเดิม (ไม่ใช่ `insert_all_authenticated` แบบตารางอื่น) เพราะทุก insert จริงวันนี้วิ่งผ่าน Prisma (bypass RLS อยู่แล้ว) การตั้งเป็น admin-only ไว้ก็แค่ปิดไม่ให้ authenticated ทั่วไป insert แจ้งเตือนปลอมยัดใส่ user อื่นผ่าน PostgREST ตรงๆ ได้ในอนาคต ถ้าวันหนึ่งมี route จริงที่ต้องให้ admin จัดการ notification ของคนอื่น (เช่นหน้า admin ดู notification log) ค่อยเพิ่ม policy ตอนนั้นตาม use case จริง ไม่ใช่เปิดสิทธิ์ไว้ล่วงหน้าแบบเดา
+
+### 5.3 ทำไม `is_admin()`/`is_meeting_participant()` เป็น `SECURITY DEFINER` แต่ `process_due_reminders()`/`get_meeting_context()` เป็น `SECURITY INVOKER`
+
+**ทางเลือกที่พิจารณา**: ให้ทั้ง 4 ฟังก์ชันเป็น `SECURITY DEFINER` เหมือนกันหมด (เขียน pattern เดียวจำง่าย ไม่ต้องคิดแยกแต่ละตัว) กับ เลือก security mode ตามหน้าที่จริงของแต่ละฟังก์ชัน
+
+**ตัดสินใจ**: เลือกตามหน้าที่จริง — `DEFINER` 2 ตัว (`is_admin`, `is_meeting_participant`), `INVOKER` 2 ตัว (`process_due_reminders`, `get_meeting_context`)
+
+**เหตุผล**: `is_admin()`/`is_meeting_participant()` ถูกเรียก**จากข้างใน `CREATE POLICY` ของตารางอื่น** (เช่น policy ของ `MeetingNote`/`Decision`/`RelatedResource`/`Reminder` เรียก `is_meeting_participant("meetingId")`, เกือบทุกตารางเรียก `is_admin()`) — ถ้าเป็น `SECURITY INVOKER` ธรรมดา การเช็ค "ผู้ใช้นี้เป็น ADMIN ไหม" ข้างในฟังก์ชันต้อง `SELECT` จาก `public."User"` ซึ่งตัว `public."User"` เองก็มี RLS ของตัวเองเปิดอยู่ (`select_all_authenticated` วันนี้ทุกคนอ่านได้ก็จริง แต่ถ้าวันหนึ่ง policy นั้นถูกทำให้แคบลง การเรียก `SELECT` ซ้อนแบบนี้จะพังทันทีหรือได้ผลลัพธ์ผิด) `SECURITY DEFINER` ทำให้ query ภายในฟังก์ชันรันด้วยสิทธิ์เจ้าของฟังก์ชัน (ข้าม RLS ของ `User`/`MeetingParticipant`/`Person` ที่มันอ่าน) ซึ่งจำเป็นเพื่อให้ policy อื่นเรียกใช้ได้โดยไม่ recursion กลับเข้า RLS ของตัวเอง — คู่กับ `SET search_path = ''` เพื่อบล็อก search_path hijacking (ทุก identifier ในฟังก์ชัน schema-qualify ไว้แล้ว)
+
+`process_due_reminders()`/`get_meeting_context()` ไม่เคยถูกเรียกจากข้างใน policy อื่นเลย — เป็นฟังก์ชันที่ route/ผู้ใช้เรียก**ตรงๆ**เพื่ออ่านข้อมูล ไม่มีเหตุผลให้ข้าม RLS ของใครทั้งสิ้น ถ้าตั้งเป็น `SECURITY DEFINER` โดยไม่จำเป็นจะกลายเป็นการเปิดช่องให้ authenticated ทุกคนเห็นข้อมูลเกินกว่าที่ RLS ของ `Reminder`/`Meeting`/`Task` ตั้งใจจะกรองไว้ — แม้วันนี้ `select_all_authenticated` ของตารางเหล่านี้จะ "ทุกคนอ่านได้" เหมือนกันอยู่แล้วก็ตาม แต่การตั้งเป็น `SECURITY INVOKER` ไว้ตั้งแต่แรกทำให้ถ้าวันหนึ่ง SELECT policy ของ `Reminder`/`Task` ถูกทำให้แคบลง (เช่น จำกัดเฉพาะผู้เข้าร่วม/ผู้จัด) ฟังก์ชันทั้งสองนี้จะเคารพ policy ใหม่นั้นโดยอัตโนมัติทันที ไม่ต้องมีใครจำได้ว่าต้องกลับมาแก้โค้ดฟังก์ชันเพิ่ม (ต่างจาก `DEFINER` ที่จะ "ค้าง" สิทธิ์แบบเก่าไว้เงียบๆ จนกว่าจะมีคนสังเกตเห็น)
+
+### 5.4 ทำไม `Task.delete` ไม่รวม assignee (ต่างจาก `update` ที่รวม)
+
+**ทางเลือกที่พิจารณา** (ทั้งคู่เป็น `assertOwner()` check ที่มีอยู่จริงในแอปมาตั้งแต่ก่อนงาน RLS รอบนี้แล้ว — RLS แค่ "translate 1:1" มันมาเป็น policy เท่านั้น บันทึกไว้ตรงนี้เพราะเป็น design เดิมที่ไม่เคยถูกอธิบาย "ทำไม" ไว้ที่ไหนมาก่อน): (ก) ให้ assignee ลบ task ของตัวเองได้เหมือนที่แก้ไขได้ (สมมาตรกับ update) กับ (ข) จำกัด delete ไว้แค่ creator (หรือ admin) เท่านั้น ตัด assignee ออกจาก delete
+
+**ตัดสินใจ**: (ข) — ตรงกับที่ `src/app/api/tasks/[id]/route.ts` บังคับไว้จริงวันนี้ (`PATCH`: `existing.assigneeId === user.id || existing.createdById === user.id`; `DELETE`: `existing.createdById === user.id` เท่านั้น ไม่เช็ค `assigneeId` เลย)
+
+**เหตุผล**: assignee คือคน "รับผิดชอบงาน" ไม่ใช่เจ้าของงาน — สิ่งที่ assignee ควรทำได้คือปรับ `status`/เพิ่ม comment/แนบไฟล์ความคืบหน้า (ตรงกับที่ `UPDATE` อนุญาต) แต่การลบ task ทั้งแถวเป็นการตัดสินใจระดับ "งานนี้ไม่ควรมีอยู่ในระบบอีกต่อไป" ซึ่งควรเป็นสิทธิ์ของคนที่สร้าง/มอบหมายงาน (creator) เท่านั้น — ถ้าให้ assignee ลบได้ด้วยจะเปิดความเสี่ยงที่ assignee ลบ task ทิ้งเพื่อหนีงานที่ไม่อยากรับผิดชอบ โดยที่ creator ไม่รู้ตัวเลยและไม่มีทางตรวจสอบย้อนหลังได้ (เป็น hard delete ไม่เก็บ log) ต่างจาก `UPDATE` ที่ต่อให้ assignee แก้ไข field ต่างๆ ตัว task ก็ยังอยู่ครบให้ creator เห็นและตรวจสอบย้อนหลังได้เสมอ ความไม่สมมาตรระหว่าง update/delete นี้จึงสะท้อนความแตกต่างจริงระหว่าง "จัดการงานของตัวเองที่ได้รับมอบหมาย" (assignee ทำได้เต็มที่) กับ "ตัดสินใจว่างานนี้ควรมีอยู่ในระบบหรือไม่" (สงวนไว้ให้ creator/admin เท่านั้น ตรงกับที่ผู้สร้างงานควรเป็นคนตัดสินใจว่างานที่ตัวเองมอบหมายไปยังจำเป็นอยู่ไหม)
