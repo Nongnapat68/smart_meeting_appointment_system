@@ -4,15 +4,17 @@ import { useState } from "react";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { relativeTime } from "@/lib/format";
-import type { MeetingNote, Decision, RelatedResource, ResourceType } from "@prisma/client";
+import type { ResourceType } from "@prisma/client";
+import type { NoteWithAuthor, DecisionWithUser, ResourceWithUser } from "./types";
 
 // FR-11/12/13: Notes, Decisions and Related Resources — each its own entity,
 // each supporting multiple rows per meeting, individually attributed. These
 // three cards are the UI counterpart to GET/POST /api/meetings/[id]/{notes,decisions,resources}.
-
-type NoteWithAuthor = MeetingNote & { author: { name: string } | null };
-type DecisionWithUser = Decision & { decidedBy: { name: string } | null };
-type ResourceWithUser = RelatedResource & { addedBy: { name: string } | null };
+//
+// Out of scope for hybrid migration round 1 (Meeting resource only) — these
+// three still go through their existing Next.js API routes/Prisma. Only the
+// prop types changed (see ./types.ts), since the parent page now hands them
+// rows read via supabase-js instead of Prisma.
 
 const RESOURCE_TYPE_LABEL: Record<ResourceType, string> = {
   LINK: "ลิงก์",

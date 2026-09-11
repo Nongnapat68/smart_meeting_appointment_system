@@ -1,30 +1,43 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
 import { formatDateTime } from "@/lib/format";
 import { meetingStatusBadge, participantSourceBadge, StatusBadge, taskStatusBadge } from "@/components/ui/StatusBadge";
 import { MeetingActions } from "./MeetingActions";
 import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./MeetingContext";
+import type { MeetingDetail } from "./types";
 
 export default async function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const meeting = await prisma.meeting.findUnique({
-    where: { id },
-    include: {
-      organizer: { select: { id: true, name: true, avatarUrl: true } },
-      project: { select: { id: true, name: true } },
-      participants: { include: { person: true, sourceGroup: { select: { id: true, name: true } } } },
-      groups: true,
-      tasks: true,
-      aiSummary: true,
-      onlineMeetingResource: true,
-      notes: { include: { author: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
-      decisions: { include: { decidedBy: { select: { name: true } } }, orderBy: { decidedAt: "desc" } },
-      resources: { include: { addedBy: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
-    },
-  });
+  // Hybrid migration round 1 (Meeting resource): reads go straight through
+  // supabase-js against RLS (select_all_authenticated on every table here)
+  // instead of Next.js API + Prisma. This is a Server Component, so it uses
+  // the cookie-bound server client (src/lib/supabase/server.ts), not the
+  // browser client used by client components like meetings/page.tsx.
+  const supabase = await createClient();
+  const { data: meeting, error } = await supabase
+    .from("Meeting")
+    .select(
+      `*,
+      organizer:User(id,name,avatarUrl),
+      project:Project(id,name),
+      participants:MeetingParticipant(*, person:Person(*), sourceGroup:ContactGroup(id,name)),
+      groups:ContactGroup(*),
+      tasks:Task(*),
+      aiSummary:AISummary(*),
+      onlineMeetingResource:OnlineMeetingResource(*),
+      notes:MeetingNote(*, author:User(name)),
+      decisions:Decision(*, decidedBy:User(name)),
+      resources:RelatedResource(*, addedBy:User(name))`
+    )
+    .eq("id", id)
+    .order("createdAt", { referencedTable: "notes", ascending: false })
+    .order("decidedAt", { referencedTable: "decisions", ascending: false })
+    .order("createdAt", { referencedTable: "resources", ascending: false })
+    .maybeSingle<MeetingDetail>();
+  if (error) throw new Error(error.message);
   if (!meeting) notFound();
 
   const badge = meetingStatusBadge(meeting.status);
