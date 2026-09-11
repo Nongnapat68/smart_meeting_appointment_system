@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
@@ -30,11 +30,36 @@ export default function PeoplePage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (q) params.set("q", q);
-      params.set("pageSize", "50");
-      const res = await api.get<PeopleResponse>(`/api/people?${params.toString()}`);
-      setData(res);
+      const supabase = createClient();
+      const PAGE_SIZE = 50;
+      let query = supabase
+        .from("Person")
+        .select("*, groupMemberships:ContactGroupMember(*, group:ContactGroup(*))", { count: "exact" })
+        .order("name", { ascending: true })
+        .range(0, PAGE_SIZE - 1);
+      if (q) {
+        // Same 3-field OR search GET /api/people used to do (name/email/department
+        // "contains"). PostgREST's or() takes one filter-list string — wrapping
+        // each ilike pattern in double quotes keeps a comma typed into the
+        // search box from being misread as another filter.
+        const pattern = `%${q}%`;
+        query = query.or(`name.ilike."${pattern}",email.ilike."${pattern}",department.ilike."${pattern}"`);
+      }
+      const { data: items, count, error: dbError } = await query;
+      if (dbError) throw new Error(dbError.message);
+
+      // Stats are always unfiltered (independent of `q`), same as the old route.
+      const [{ count: totalActive }, { count: totalExternal }, { count: totalAll }] = await Promise.all([
+        supabase.from("Person").select("*", { count: "exact", head: true }).eq("status", "ACTIVE"),
+        supabase.from("Person").select("*", { count: "exact", head: true }).eq("type", "EXTERNAL"),
+        supabase.from("Person").select("*", { count: "exact", head: true }),
+      ]);
+
+      setData({
+        items: (items ?? []) as PersonRow[],
+        total: count ?? 0,
+        stats: { totalAll: totalAll ?? 0, totalActive: totalActive ?? 0, totalExternal: totalExternal ?? 0 },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -207,7 +232,30 @@ function AddPersonModal({
     setError(null);
     setLoading(true);
     try {
-      await api.post("/api/people", { name, email, phone, title, department, type });
+      // Person.id has no DB default (Prisma's @default(cuid()) is a
+      // client-side-only default) and Person.updatedAt has no DB default
+      // either (@updatedAt is Prisma-managed, not a DB trigger) — both must
+      // be supplied explicitly on a direct insert.
+      const supabase = createClient();
+      const { error: dbError } = await supabase.from("Person").insert({
+        id: crypto.randomUUID(),
+        name,
+        email,
+        phone,
+        title,
+        department,
+        type,
+        status: "ACTIVE",
+        updatedAt: new Date().toISOString(),
+      });
+      if (dbError) {
+        // Person.email is @unique — a duplicate hits Postgres error 23505
+        // (unique_violation); translate it to the same message the old
+        // pre-check (findUnique then 409) used to show.
+        throw new Error(
+          dbError.code === "23505" ? "มีผู้ติดต่อที่ใช้อีเมลนี้อยู่แล้ว" : dbError.message
+        );
+      }
       setName("");
       setEmail("");
       setPhone("");
