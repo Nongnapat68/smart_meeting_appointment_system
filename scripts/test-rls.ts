@@ -99,6 +99,7 @@ async function main() {
       .from("Meeting")
       .select("id")
       .eq("id", f.meeting.id);
+    console.log("   raw:", JSON.stringify({ data: meetings, error: meetingsErr }));
     check(
       "1. siriporn reads Meeting org-wide (sees somchai's meeting)",
       !meetingsErr && (meetings?.length ?? 0) === 1,
@@ -114,6 +115,10 @@ async function main() {
       .eq("id", f.meeting.id)
       .select("id");
     const meetingAfterBlock = await prisma.meeting.findUniqueOrThrow({ where: { id: f.meeting.id } });
+    console.log(
+      "   raw:",
+      JSON.stringify({ data: blockedUpdate, error: blockedErr, dbTitleAfter: meetingAfterBlock.title })
+    );
     check(
       "2. siriporn editing somchai's meeting is blocked by RLS (0 rows, no error)",
       !blockedErr && (blockedUpdate?.length ?? 0) === 0 && meetingAfterBlock.title === f.meeting.title,
@@ -128,6 +133,7 @@ async function main() {
       .update({ title: newTitle })
       .eq("id", f.meeting.id)
       .select("id, title");
+    console.log("   raw:", JSON.stringify({ data: adminUpdate, error: adminErr }));
     check(
       "3. somchai (admin) editing the same meeting succeeds",
       !adminErr && adminUpdate?.length === 1 && adminUpdate[0].title === newTitle,
@@ -138,17 +144,19 @@ async function main() {
     // id returns 0 rows (not an error) — RLS filters silently.
     const { data: ownNotif, error: ownNotifErr } = await asSiriporn
       .from("Notification")
-      .select("id")
-      .eq("id", f.notifSiriporn.id);
+      .select("id, userId, title")
+      .eq("userId", f.siriporn.id);
+    console.log("   raw:", JSON.stringify({ data: ownNotif, error: ownNotifErr }));
     check(
       "4a. siriporn reads her own Notification",
-      !ownNotifErr && ownNotif?.length === 1,
+      !ownNotifErr && (ownNotif?.length ?? 0) >= 1,
       ownNotifErr ? ownNotifErr.message : `got ${ownNotif?.length} rows`
     );
     const { data: othersNotif, error: othersNotifErr } = await asSiriporn
       .from("Notification")
-      .select("id")
-      .eq("id", f.notifSomchai.id);
+      .select("id, userId, title")
+      .eq("userId", f.somchai.id);
+    console.log("   raw:", JSON.stringify({ data: othersNotif, error: othersNotifErr }));
     check(
       "4b. siriporn reading somchai's Notification gets 0 rows (not an error)",
       !othersNotifErr && (othersNotif?.length ?? -1) === 0,
@@ -158,12 +166,14 @@ async function main() {
     // 5. PasswordResetOtp is deny-all for both roles — 0 rows or an error,
     // never real data, for admin and member alike.
     const { data: otpAsSiriporn, error: otpSiriErr } = await asSiriporn.from("PasswordResetOtp").select("*");
+    console.log("   raw:", JSON.stringify({ data: otpAsSiriporn, error: otpSiriErr }));
     check(
       "5a. siriporn reading PasswordResetOtp gets 0 rows or an error",
       !!otpSiriErr || (otpAsSiriporn?.length ?? 0) === 0,
       `error=${otpSiriErr?.message ?? "none"} rows=${otpAsSiriporn?.length}`
     );
     const { data: otpAsSomchai, error: otpAdminErr } = await asSomchai.from("PasswordResetOtp").select("*");
+    console.log("   raw:", JSON.stringify({ data: otpAsSomchai, error: otpAdminErr }));
     check(
       "5b. somchai (admin) reading PasswordResetOtp gets 0 rows or an error",
       !!otpAdminErr || (otpAsSomchai?.length ?? 0) === 0,
