@@ -2,19 +2,33 @@
 -- QUERIES.sql — คำตอบ 15 ข้อ ในหัวข้อ 8 "Expected Database Queries / Operations"
 -- ของ requirements/requirements.md.md
 -- =============================================================================
--- รันจริงแล้วกับ dev database ที่ seed ไว้ (prisma/dev.db, สร้างโดย `npm run db:seed`
--- ล้วนๆ — ไม่มีการทับข้อมูลด้วยมือเพิ่มเติม) โดยใช้ Node's built-in `node:sqlite`
--- (DatabaseSync, read-only mode) — ดูผลลัพธ์ที่ยืนยันแล้วทั้ง 15 ข้อในหมวด
--- "VERIFIED OUTPUT" ท้ายไฟล์
+-- Dialect: PostgreSQL (Supabase). ใช้ NOW() ตรงๆ — ไม่มีการแปลง unix-epoch
+-- แบบไฟล์เวอร์ชันก่อนหน้า (ซึ่งเขียนไว้ตอน dev database ยังเป็น SQLite ที่
+-- Prisma เก็บ DateTime เป็น unix-epoch มิลลิวินาที) เพราะ dev database ปัจจุบัน
+-- คือ Supabase Postgres จริงแล้ว ไม่ต้องแปลงอะไรอีก
 --
--- หมายเหตุ dialect: dev database เป็น SQLite และ Prisma เก็บคอลัมน์ DateTime เป็น
--- INTEGER unix-epoch มิลลิวินาที (ไม่ใช่ TEXT/ISO) จึงต้องแปลงด้วย
--- `datetime(col/1000, 'unixepoch')` ตอนแสดงผล และเทียบ "เวลาปัจจุบัน" ด้วย
--- `(strftime('%s','now') * 1000)` แทน CURRENT_TIMESTAMP ตรงๆ — เป็น quirk ของ
--- Prisma+SQLite ไม่ใช่ query ผิด (บน PostgreSQL จริงจะใช้ NOW() ปกติได้เลย)
+-- ข้อ 4, 7, 9, 14 เรียกผ่าน View/Function ที่สร้างไว้แล้วโดยตรง
+-- (upcoming_meetings, process_due_reminders(), overdue_action_items,
+-- get_meeting_context()) ตามที่ระบุไว้ — ไม่เขียน SELECT ซ้ำ logic เดิม
 --
--- ค่าที่ hardcode ไว้ในแต่ละ query (ชื่อคน/กลุ่ม/โปรเจกต์/มีตติ้ง) อ้างอิงข้อมูลจริงจาก
--- prisma/seed.ts เพื่อให้ query กลับผลลัพธ์ที่ตรวจสอบได้ทันทีโดยไม่ต้องรู้ cuid ภายใน
+-- ค่าที่ hardcode ไว้ในแต่ละ query (ชื่อคน/กลุ่ม/โปรเจกต์/มีตติ้ง) อ้างอิงข้อมูลจริงที่มีอยู่ใน
+-- Supabase ตอนนี้ (seed จาก prisma/seed.ts บวกการเปลี่ยนสถานะจริงที่เกิดขึ้นระหว่างพัฒนา
+-- เช่น meeting หนึ่งถูก cancel ไปแล้วผ่าน trigger test ก่อนหน้านี้ในเซสชันนี้) เพื่อให้ query
+-- กลับผลลัพธ์ที่ตรวจสอบได้ทันทีโดยไม่ต้องรู้ cuid ภายใน
+--
+-- รันจริงทุกข้อกับฐานข้อมูล Supabase Postgres จริง (ไม่ใช่จำลองแบบ dev SQLite เดิม)
+-- ผ่าน Prisma's $queryRawUnsafe ซึ่งส่ง SQL text ตรงไปยัง Postgres จริงและคืนแถวจริง
+-- กลับมา — ไม่มี psql หรือเบราว์เซอร์เข้า Supabase SQL editor ในสภาพแวดล้อมนี้ แต่กลไก
+-- การส่ง/รับเป็น SQL ดิบไปยัง Postgres เดียวกันทุกประการ ดูผลลัพธ์จริงทั้ง 15 ข้อในหมวด
+-- "VERIFIED OUTPUT" ท้ายไฟล์ — คัดลอกมาจาก raw output จริง ไม่ได้พิมพ์เอง
+--
+-- ข้อ 7 (process_due_reminders): ฐานข้อมูลจริง ณ ตอนรันไม่มี Reminder ที่
+-- status = PENDING เหลืออยู่เลย (2 รายการสุดท้ายถูก trigger เปลี่ยนเป็น
+-- CANCELLED ไปแล้วตอนทดสอบ trg_cancel_meeting_reminders ก่อนหน้านี้ในเซสชัน
+-- เดียวกัน) เพื่อพิสูจน์ฟังก์ชันด้วยข้อมูลจริงที่ไม่ว่างเปล่า จึง INSERT reminder
+-- ทดสอบ 1 แถว (status PENDING, scheduledAt ในอดีต) บน meeting จริงชั่วคราว
+-- รัน query แล้ว DELETE แถวนั้นทิ้งทันที — ฐานข้อมูลหลังรันสคริปต์นี้จึงไม่ต่างจาก
+-- ก่อนรันแม้แต่แถวเดียว (verified ด้วย SELECT count(*) ก่อน/หลัง)
 -- =============================================================================
 
 
@@ -26,10 +40,10 @@ SELECT
     p.email,
     p.title,
     cgm.role,
-    datetime(cgm.joinedAt / 1000, 'unixepoch') AS joinedAt
-FROM ContactGroupMember cgm
-JOIN Person p ON p.id = cgm.personId
-JOIN ContactGroup cg ON cg.id = cgm.groupId
+    cgm."joinedAt"
+FROM "ContactGroupMember" cgm
+JOIN "Person" p ON p.id = cgm."personId"
+JOIN "ContactGroup" cg ON cg.id = cgm."groupId"
 WHERE cg.name = 'ทีมวิจัย AI Lab'          -- <<< เปลี่ยนชื่อกลุ่มตรงนี้เพื่อดูกลุ่มอื่น
 ORDER BY cgm.role DESC, p.name;
 
@@ -41,9 +55,9 @@ SELECT
     cg.name AS group_name,
     cg.description,
     cgm.role
-FROM ContactGroupMember cgm
-JOIN ContactGroup cg ON cg.id = cgm.groupId
-JOIN Person p ON p.id = cgm.personId
+FROM "ContactGroupMember" cgm
+JOIN "ContactGroup" cg ON cg.id = cgm."groupId"
+JOIN "Person" p ON p.id = cgm."personId"
 WHERE p.name = 'สมชาย ใจดี'              -- <<< เปลี่ยนชื่อบุคคลตรงนี้
 ORDER BY cg.name;
 
@@ -55,30 +69,23 @@ SELECT
     p.name,
     p.email,
     mp.role,
-    mp.rsvpStatus,
+    mp."rsvpStatus",
     mp.source,
     cg.name AS source_group
-FROM MeetingParticipant mp
-JOIN Person p ON p.id = mp.personId
-JOIN Meeting m ON m.id = mp.meetingId
-LEFT JOIN ContactGroup cg ON cg.id = mp.sourceGroupId
+FROM "MeetingParticipant" mp
+JOIN "Person" p ON p.id = mp."personId"
+JOIN "Meeting" m ON m.id = mp."meetingId"
+LEFT JOIN "ContactGroup" cg ON cg.id = mp."sourceGroupId"
 WHERE m.title = 'ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ'   -- <<< เปลี่ยนชื่อ meeting ตรงนี้
 ORDER BY mp.role DESC, p.name;
 
 
 -- =============================================================================
--- ข้อ 4: แสดง Meeting ที่กำลังจะเกิดขึ้น (ยังไม่ถูกยกเลิก)
+-- ข้อ 4: แสดง Meeting ที่กำลังจะเกิดขึ้น — ผ่าน view upcoming_meetings โดยตรง
+-- (docs/deliverables/schema.sql §6 — status NOT IN ('CANCELLED','COMPLETED')
+-- AND startTime > NOW(), join ชื่อ organizer + project เข้ามาให้แล้ว)
 -- =============================================================================
-SELECT
-    title,
-    type,
-    status,
-    datetime(startTime / 1000, 'unixepoch') AS startTime,
-    location
-FROM Meeting
-WHERE startTime > (strftime('%s', 'now') * 1000)
-  AND status != 'CANCELLED'
-ORDER BY startTime ASC;
+SELECT * FROM upcoming_meetings;
 
 
 -- =============================================================================
@@ -87,11 +94,11 @@ ORDER BY startTime ASC;
 SELECT
     m.title,
     m.status,
-    datetime(m.startTime / 1000, 'unixepoch') AS startTime
-FROM Meeting m
-JOIN Project pr ON pr.id = m.projectId
+    m."startTime"
+FROM "Meeting" m
+JOIN "Project" pr ON pr.id = m."projectId"
 WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'   -- <<< เปลี่ยนชื่อ project ตรงนี้
-ORDER BY m.startTime;
+ORDER BY m."startTime";
 
 
 -- =============================================================================
@@ -100,39 +107,19 @@ ORDER BY m.startTime;
 SELECT
     title,
     status,
-    datetime(startTime / 1000, 'unixepoch') AS startTime
-FROM Meeting
-WHERE startTime <= (strftime('%s', 'now') * 1000)
-ORDER BY startTime DESC;
+    "startTime"
+FROM "Meeting"
+WHERE "startTime" <= NOW()
+ORDER BY "startTime" DESC;
 
 
 -- =============================================================================
--- ข้อ 7: แสดง Reminder ที่ถึงเวลาต้องส่ง (PENDING และเลยเวลานัดส่งแล้ว)
+-- ข้อ 7: แสดง Reminder ที่ถึงเวลาต้องส่ง — ผ่าน function process_due_reminders()
+-- โดยตรง (docs/deliverables/schema.sql §7 — status = 'PENDING' AND
+-- scheduledAt <= NOW(), เรียกใช้จริงใน
+-- src/app/api/reminders/process-due/route.ts แทน query ตรงๆ ที่เคยมี)
 -- =============================================================================
--- (ก) ผลจริง ณ เวลาปัจจุบัน
-SELECT
-    r.id,
-    m.title,
-    r.status,
-    datetime(r.scheduledAt / 1000, 'unixepoch') AS scheduledAt
-FROM Reminder r
-JOIN Meeting m ON m.id = r.meetingId
-WHERE r.status = 'PENDING'
-  AND r.scheduledAt <= (strftime('%s', 'now') * 1000)
-ORDER BY r.scheduledAt;
-
--- (ข) จำลองว่าเวลาปัจจุบันคือ 2026-09-10 เพื่อพิสูจน์ว่า logic การเทียบเวลาถูกต้อง
---     (ใช้ตอนที่ (ก) คืนแถวว่างเพราะ reminder ตัวอย่างทั้งหมดถูกตั้งไว้ในอนาคตจริงๆ)
-SELECT
-    r.id,
-    m.title,
-    r.status,
-    datetime(r.scheduledAt / 1000, 'unixepoch') AS scheduledAt
-FROM Reminder r
-JOIN Meeting m ON m.id = r.meetingId
-WHERE r.status = 'PENDING'
-  AND r.scheduledAt <= (strftime('%s', '2026-09-10') * 1000)
-ORDER BY r.scheduledAt;
+SELECT * FROM process_due_reminders();
 
 
 -- =============================================================================
@@ -141,26 +128,21 @@ ORDER BY r.scheduledAt;
 SELECT
     r.id,
     m.title,
-    r.failureReason,
-    r.retryCount,
-    datetime(r.scheduledAt / 1000, 'unixepoch') AS scheduledAt
-FROM Reminder r
-JOIN Meeting m ON m.id = r.meetingId
+    r."failureReason",
+    r."retryCount",
+    r."scheduledAt"
+FROM "Reminder" r
+JOIN "Meeting" m ON m.id = r."meetingId"
 WHERE r.status = 'FAILED'
-ORDER BY r.scheduledAt;
+ORDER BY r."scheduledAt";
 
 
 -- =============================================================================
--- ข้อ 9: แสดง Action Items ที่ยังไม่เสร็จ (ทั้งระบบ)
+-- ข้อ 9: แสดง Action Items ที่ยังไม่เสร็จ — ผ่าน view overdue_action_items
+-- โดยตรง (docs/deliverables/schema.sql §6 — status <> 'COMPLETED' AND
+-- dueDate < NOW(), join ชื่อ assignee เข้ามาให้แล้ว)
 -- =============================================================================
-SELECT
-    title,
-    status,
-    priority,
-    datetime(dueDate / 1000, 'unixepoch') AS dueDate
-FROM Task
-WHERE status != 'COMPLETED'
-ORDER BY dueDate;
+SELECT * FROM overdue_action_items;
 
 
 -- =============================================================================
@@ -170,11 +152,11 @@ SELECT
     t.title,
     t.status,
     t.priority,
-    datetime(t.dueDate / 1000, 'unixepoch') AS dueDate
-FROM Task t
-JOIN Person p ON p.id = t.assigneePersonId
-WHERE p.name = 'ศิริพร ใจดี'              -- <<< เปลี่ยนชื่อบุคคลตรงนี้
-ORDER BY t.dueDate;
+    t."dueDate"
+FROM "Task" t
+JOIN "Person" p ON p.id = t."assigneePersonId"
+WHERE p.name = 'สมชาย ใจดี'              -- <<< เปลี่ยนชื่อบุคคลตรงนี้
+ORDER BY t."dueDate";
 
 
 -- =============================================================================
@@ -183,13 +165,13 @@ ORDER BY t.dueDate;
 SELECT
     m.title AS meeting,
     d.content,
-    datetime(d.decidedAt / 1000, 'unixepoch') AS decidedAt,
-    u.name AS decidedBy
-FROM Decision d
-JOIN Meeting m ON m.id = d.meetingId
-LEFT JOIN User u ON u.id = d.decidedById
+    d."decidedAt",
+    u.name AS "decidedBy"
+FROM "Decision" d
+JOIN "Meeting" m ON m.id = d."meetingId"
+LEFT JOIN "User" u ON u.id = d."decidedById"
 WHERE m.status = 'COMPLETED'
-ORDER BY d.decidedAt DESC;
+ORDER BY d."decidedAt" DESC;
 
 
 -- =============================================================================
@@ -199,8 +181,8 @@ SELECT
     o.name,
     o.url,
     COUNT(m.id) AS used_by_meetings
-FROM OnlineMeetingResource o
-JOIN Meeting m ON m.onlineMeetingResourceId = o.id
+FROM "OnlineMeetingResource" o
+JOIN "Meeting" m ON m."onlineMeetingResourceId" = o.id
 GROUP BY o.id
 HAVING COUNT(m.id) > 1;
 
@@ -210,54 +192,26 @@ HAVING COUNT(m.id) > 1;
 -- =============================================================================
 SELECT
     n.content,
-    datetime(n.createdAt / 1000, 'unixepoch') AS createdAt,
+    n."createdAt",
     u.name AS author,
     m.title AS meeting
-FROM MeetingNote n
-JOIN Meeting m ON m.id = n.meetingId
-JOIN Project pr ON pr.id = m.projectId
-LEFT JOIN User u ON u.id = n.authorId
+FROM "MeetingNote" n
+JOIN "Meeting" m ON m.id = n."meetingId"
+JOIN "Project" pr ON pr.id = m."projectId"
+LEFT JOIN "User" u ON u.id = n."authorId"
 WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'   -- <<< เปลี่ยนชื่อ project ตรงนี้
-ORDER BY n.createdAt;
+ORDER BY n."createdAt";
 
 
 -- =============================================================================
--- ข้อ 14: รวบรวมข้อมูลที่จำเป็นสำหรับสร้าง Pre-meeting Summary (FR-15)
+-- ข้อ 14: รวบรวมข้อมูลที่จำเป็นสำหรับสร้าง Pre-meeting Summary (FR-15) —
+-- ผ่าน function get_meeting_context(meeting_id) โดยตรง
+-- (docs/deliverables/schema.sql §7 — ตรรกะเดียวกับ gatherMeetingAiContext()
+-- ใน src/lib/meeting-ai-context.ts: related/overdue tasks + past
+-- decisions/notes/resources จาก meeting ก่อนหน้าใน project เดียวกัน, คืนเป็น
+-- JSON เดียว)
 -- =============================================================================
--- จำลองสิ่งที่ generateMeetingSummary() ใน src/lib/ai.ts ต้องดึงมาจริง: notes เก่า,
--- decisions เก่า, action items ที่ยังไม่เสร็จ, และ resources ที่เกี่ยวข้อง — ทั้งหมดจาก
--- ประวัติของ project เดียวกับ meeting ครั้งใหม่ที่กำลังจะเตรียมข้อมูลให้
-SELECT 'NOTE' AS source_type, n.content AS detail, datetime(n.createdAt / 1000, 'unixepoch') AS at
-FROM MeetingNote n
-JOIN Meeting m ON m.id = n.meetingId
-JOIN Project pr ON pr.id = m.projectId
-WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'   -- <<< เปลี่ยนชื่อ project ตรงนี้
-
-UNION ALL
-
-SELECT 'DECISION', d.content, datetime(d.decidedAt / 1000, 'unixepoch')
-FROM Decision d
-JOIN Meeting m ON m.id = d.meetingId
-JOIN Project pr ON pr.id = m.projectId
-WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'
-
-UNION ALL
-
-SELECT 'PENDING_TASK', t.title, datetime(t.dueDate / 1000, 'unixepoch')
-FROM Task t
-JOIN Project pr ON pr.id = t.projectId
-WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'
-  AND t.status != 'COMPLETED'
-
-UNION ALL
-
-SELECT 'RESOURCE', r.title || ' — ' || r.url, datetime(r.createdAt / 1000, 'unixepoch')
-FROM RelatedResource r
-JOIN Meeting m ON m.id = r.meetingId
-JOIN Project pr ON pr.id = m.projectId
-WHERE pr.name = 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'
-
-ORDER BY source_type, at;
+SELECT get_meeting_context('<meeting id จริง — ดูตัวอย่างจริงใน VERIFIED OUTPUT ด้านล่าง>');
 
 
 -- =============================================================================
@@ -270,69 +224,70 @@ SELECT
     p.name AS participant,
     mp.source,
     cg.name AS source_group
-FROM MeetingParticipant mp
-JOIN Meeting m ON m.id = mp.meetingId
-JOIN Person p ON p.id = mp.personId
-LEFT JOIN ContactGroup cg ON cg.id = mp.sourceGroupId
-WHERE mp.meetingId IN (
-    SELECT meetingId FROM MeetingParticipant WHERE source = 'DIRECT'
+FROM "MeetingParticipant" mp
+JOIN "Meeting" m ON m.id = mp."meetingId"
+JOIN "Person" p ON p.id = mp."personId"
+LEFT JOIN "ContactGroup" cg ON cg.id = mp."sourceGroupId"
+WHERE mp."meetingId" IN (
+    SELECT "meetingId" FROM "MeetingParticipant" WHERE source = 'DIRECT'
     INTERSECT
-    SELECT meetingId FROM MeetingParticipant WHERE source = 'GROUP'
+    SELECT "meetingId" FROM "MeetingParticipant" WHERE source = 'GROUP'
 )
 ORDER BY m.title, mp.source, p.name;
 
 
 -- =============================================================================
--- ✅ VERIFIED OUTPUT — รันจริงกับ prisma/dev.db (สร้างสดใหม่จาก `npm run db:seed`
--- ล้วนๆ หลังปรับ seed data ให้เป็นบริบทคณะเทคโนโลยีสารสนเทศและการสื่อสาร) ผ่าน node:sqlite
--- (DatabaseSync, read-only) เมื่อ 2026-09-07 14:38 UTC (ตรงกับ "now" ที่ query ข้อ 4/6/7 ใช้เทียบ)
--- คัดลอกผลจริงมาไว้ตรงนี้เพื่อยืนยันว่าทุก query รันได้จริงและได้ผลลัพธ์สมเหตุสมผล
--- ไม่ใช่ query ที่เขียนแล้วไม่เคยรัน — reproduce ได้เองด้วย:
---   node -e "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync('./prisma/dev.db',{readOnly:true}); console.log(db.prepare(`<query ข้อที่ต้องการ>`).all())"
+-- ✅ VERIFIED OUTPUT — รันจริงทุกข้อกับ Supabase Postgres จริง (โปรเจกต์เดียวกับที่
+-- แอปใช้งานอยู่ตอนนี้ ไม่ใช่ dev database แยกต่างหาก) เมื่อ 2026-09-11 ผ่าน
+-- Prisma $queryRawUnsafe (ส่ง SQL text ตรงไปยัง Postgres จริง — ไม่มี psql/
+-- Supabase SQL editor ในสภาพแวดล้อมนี้ แต่คือ SQL ดิบไปยัง Postgres เดียวกัน)
+-- คัดลอกจาก raw JSON output จริงที่ได้กลับมา ไม่ใช่ query ที่เขียนแล้วไม่เคยรัน
 -- =============================================================================
 --
 -- ข้อ 1 (สมาชิกกลุ่ม 'ทีมวิจัย AI Lab'): 3 แถว
---   ศิริพร ใจดี (LEADER), นรินทร์ ชัยเจริญ (MEMBER), สมหญิง รักการงาน (MEMBER)
+--   นรินทร์ ชัยเจริญ (MEMBER), สมหญิง รักการงาน (MEMBER), ศิริพร ใจดี (LEADER)
 --
 -- ข้อ 2 (กลุ่มของ 'สมชาย ใจดี'): 4 แถว
 --   กลุ่มผู้บริหารคณะ (MEMBER), กลุ่มอาจารย์สาขาวิชาวิศวกรรมซอฟต์แวร์ (LEADER),
 --   คณะกรรมการบริหารหลักสูตร (LEADER), ทีมโครงงานนักศึกษา A (LEADER)
 --
 -- ข้อ 3 (ผู้เข้าร่วม 'ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ'): 4 แถว
---   ศิริพร ใจดี (ORGANIZER/DIRECT), นรินทร์ ชัยเจริญ (ATTENDEE/GROUP←ทีมวิจัย AI Lab),
---   สมหญิง รักการงาน (ATTENDEE/GROUP←ทีมวิจัย AI Lab), วิชิต พงษ์สวัสดิ์ (ATTENDEE/EXTERNAL)
+--   นรินทร์ ชัยเจริญ (ATTENDEE/GROUP←ทีมวิจัย AI Lab), วิชิต พงษ์สวัสดิ์ (ATTENDEE/EXTERNAL),
+--   สมหญิง รักการงาน (ATTENDEE/GROUP←ทีมวิจัย AI Lab), ศิริพร ใจดี (ORGANIZER/DIRECT)
 --
--- ข้อ 4 (meeting ที่กำลังจะเกิดขึ้น): 5 แถว — เรียงเวลา:
---   ประชุมทีมพัฒนาระบบ AI Lab ประจำสัปดาห์ (2026-09-08, ACTIVE),
---   ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ (2026-09-09, ACTIVE),
---   ประชุมหารือความร่วมมือวิจัยกับสถาบันพันธมิตร (2026-09-11, PENDING),
---   วางแผน Sprint การออกแบบเว็บไซต์สาขาวิชา (2026-09-13, POSTPONED),
---   ประชุมทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) ประจำไตรมาส (2026-09-16, PENDING)
---   [ยืนยันว่า filter status != CANCELLED ทำงานถูกต้อง: "Emergency Server Patch Review" ซึ่งถูก
---    ยกเลิกไว้ตั้งแต่ seed ไม่ปรากฏในผลลัพธ์]
+-- ข้อ 4 (SELECT * FROM upcoming_meetings): 4 แถว — เรียงเวลา:
+--   ประชุมทีมพัฒนาระบบ AI Lab ประจำสัปดาห์ (2026-09-11, ACTIVE, organizer: สมชาย ใจดี),
+--   ประชุมหารือความร่วมมือวิจัยกับสถาบันพันธมิตร (2026-09-14, PENDING, organizer: ศิริพร ใจดี),
+--   วางแผน Sprint การออกแบบเว็บไซต์สาขาวิชา (2026-09-16, POSTPONED, organizer: วิชัย พงษ์สวัสดิ์),
+--   ประชุมทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) ประจำไตรมาส (2026-09-19, PENDING, organizer: ศิริพร ใจดี)
+--   [ยืนยันว่า filter ทำงานถูกต้อง: "ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ" ซึ่งถูก
+--    cancel ไปแล้วจริง (ผ่าน trigger test ก่อนหน้าในเซสชันนี้) ไม่ปรากฏในผลลัพธ์ — status = CANCELLED]
 --
 -- ข้อ 5 (meeting ของ project 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'): 1 แถว
---   — "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)" (COMPLETED, 2026-08-08)
+--   "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)" (COMPLETED, 2026-08-11)
 --
 -- ข้อ 6 (meeting history ที่ผ่านมาแล้ว เรียงล่าสุดก่อน): 2 แถว
---   Emergency Server Patch Review (2026-09-05, CANCELLED), ประชุมเริ่มต้นโครงการวิจัย (Kickoff) (2026-08-08, COMPLETED)
+--   Emergency Server Patch Review (2026-09-08, CANCELLED),
+--   ประชุมเริ่มต้นโครงการวิจัย (Kickoff) (2026-08-11, COMPLETED)
 --
--- ข้อ 7 (ก) reminder ที่ถึงเวลาส่งจริง ณ ตอนรัน: 0 แถว — ถูกต้องตามข้อมูลจริง เพราะ
---   reminder ตัวอย่างทั้งหมดถูกตั้งไว้ในอนาคต (เร็วสุดคือ 2026-09-08) ยังไม่ถึงกำหนด ณ วันที่รัน
---   (ข) จำลองเป็นวันที่ 2026-09-20: ได้ 2 แถว — พิสูจน์ว่า WHERE clause ทำงานถูกต้องจริง
---   (ทั้งคู่คือ reminder ของ "ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ" — BR-11:
---   1 meeting มีได้หลาย reminder)
+-- ข้อ 7 (SELECT * FROM process_due_reminders()): 1 แถว — ฐานข้อมูลจริงไม่มี
+--   PENDING reminder เหลืออยู่เลย ณ ตอนรัน (2 รายการสุดท้ายถูก trigger เปลี่ยนเป็น
+--   CANCELLED ไปแล้วก่อนหน้านี้ในเซสชัน) จึง INSERT reminder ทดสอบชั่วคราว 1 แถว
+--   (status PENDING, scheduledAt = 1 ชั่วโมงก่อน NOW()) บน "ประชุมทีมพัฒนาระบบ AI
+--   Lab ประจำสัปดาห์" ก่อนรัน — ฟังก์ชันคืนแถวนั้นถูกต้อง แล้ว DELETE ทิ้งทันทีหลัง
+--   capture ผลลัพธ์ (ฐานข้อมูลไม่มีร่องรอยเหลือ — ตรวจแล้วด้วย SELECT count(*))
 --
 -- ข้อ 8 (reminder ที่ส่งไม่สำเร็จ): 1 แถว
 --   Emergency Server Patch Review — "ไม่สามารถเชื่อมต่อผู้ให้บริการอีเมลได้ (SMTP timeout)", retryCount=2
 --
--- ข้อ 9 (action items ที่ยังไม่เสร็จ ทั้งระบบ): 6 แถว (เรียงตาม dueDate)
---   สรุปงบประมาณไตรมาส 4, ตรวจสอบและยืนยันชุดข้อมูลทดสอบชุดที่ 2,
---   สรุปรายชื่อผู้เชี่ยวชาญสำหรับเชิญ Peer Review, เตรียมเอกสารประกอบการขอทุนวิจัยเพิ่มเติม,
---   ทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) กับสถาบันพันธมิตร, สัมภาษณ์ผู้สมัครทุนผู้ช่วยวิจัย (Research Assistant)
+-- ข้อ 9 (SELECT * FROM overdue_action_items): 3 แถว (เรียงตาม dueDate)
+--   สรุปงบประมาณไตรมาส 4 (IN_PROGRESS, assignee: สมชาย ใจดี),
+--   ตรวจสอบและยืนยันชุดข้อมูลทดสอบชุดที่ 2 (NOT_STARTED, assignee: ศิริพร ใจดี),
+--   สรุปรายชื่อผู้เชี่ยวชาญสำหรับเชิญ Peer Review (NOT_STARTED, assignee: ศิริพร ใจดี)
 --
--- ข้อ 10 (action items ของ 'ศิริพร ใจดี'): 2 แถว
---   ตรวจสอบและยืนยันชุดข้อมูลทดสอบชุดที่ 2 (NOT_STARTED), สรุปรายชื่อผู้เชี่ยวชาญสำหรับเชิญ Peer Review (NOT_STARTED)
+-- ข้อ 10 (action items ของ 'สมชาย ใจดี'): 3 แถว
+--   สรุปงบประมาณไตรมาส 4 (IN_PROGRESS), เตรียมเอกสารประกอบการขอทุนวิจัยเพิ่มเติม (IN_PROGRESS),
+--   สัมภาษณ์ผู้สมัครทุนผู้ช่วยวิจัย (Research Assistant) (IN_PROGRESS)
 --
 -- ข้อ 11 (decisions จาก meeting ที่ COMPLETED แล้ว): 2 แถว (ทั้งคู่จาก "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)")
 --   "อนุมัติงบประมาณระยะที่ 1 ของโครงการวิจัยที่ 250,000 บาท",
@@ -340,21 +295,27 @@ ORDER BY m.title, mp.source, p.name;
 --
 -- ข้อ 12 (online link ที่ใช้กับหลาย meeting): 1 แถว
 --   "Google Meet — ความร่วมมือกับสถาบันพันธมิตร" ใช้กับ 2 meetings
---   (ประชุมหารือความร่วมมือวิจัย + ประชุมทบทวน MOU ประจำไตรมาส)
 --   ["Zoom Room B — ทีมวิจัย AI Lab" ใช้แค่ 1 meeting ในข้อมูลปัจจุบัน จึงไม่เข้าเงื่อนไข HAVING > 1 — ถูกต้อง]
 --
 -- ข้อ 13 (meeting notes ของ project 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'): 2 แถว
 --   (ทั้งคู่จาก "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)", โดย สมชาย ใจดี)
 --   "ทีมเห็นตรงกันว่าจะเริ่มเก็บข้อมูลชุดแรก...", "วิชัยรับผิดชอบเตรียมแผนการเก็บและเตรียมข้อมูล..."
 --
--- ข้อ 14 (ข้อมูลสำหรับ pre-meeting summary ของ project 'งานวิจัย: ระบบผู้ช่วย AI สำหรับการเตรียมประชุม'): 7 แถว
---   DECISION x2, NOTE x2, PENDING_TASK x2 (สรุปงบประมาณไตรมาส 4, ทบทวนบันทึกข้อตกลงความร่วมมือ (MOU) กับสถาบันพันธมิตร),
---   RESOURCE x1 (แผนงานวิจัย Research Master Plan)
+-- ข้อ 14 (SELECT get_meeting_context('cmtvn06oa0027uwl416vfk1b0') — meeting
+--   "ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ", อยู่ใน project
+--   'โครงการทุนวิจัย AI Lab ปี 2569'): คืน JSON เดียว —
+--   relatedTasks: 3 รายการ (ทุก Task ของ project นี้), overdueTasks: 2 ใน 3 รายการนั้น
+--   ที่ยังไม่เสร็จและเลยกำหนดแล้ว (subset ถูกต้องตรงกับ FR-16),
+--   pastMeetings/pastDecisions/pastNotes/pastResources: ว่างทั้งหมด ([]) — ถูกต้อง
+--   ตามข้อมูลจริง เพราะ project นี้มีแค่ meeting เดียว ไม่มี meeting ก่อนหน้าให้ดึงบริบทมา
+--   (ตัวอย่างที่มี pastMeetings จริงต้องมี project ที่มีอย่างน้อย 2 meeting ซึ่งข้อมูล seed
+--   ปัจจุบันยังไม่มีกรณีนั้น — ดู DESIGN_DECISIONS.md/GAP_ANALYSIS.md ถ้าต้องการเพิ่ม)
 --
 -- ข้อ 15 (ผู้เข้าร่วมที่มาจาก Group ปนกับ Direct ในมีตติ้งเดียวกัน): 7 แถว จาก 2 meetings
---   "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)": สมชาย ใจดี (DIRECT), กิตติชัย นามดี + วิชัย พงษ์สวัสดิ์ (GROUP←ทีมโครงงานนักศึกษา A)
---   "ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ": ศิริพร ใจดี (DIRECT), วิชิต พงษ์สวัสดิ์ (EXTERNAL,
---   ไม่เข้าเงื่อนไข filter หลักแต่ติดมาเพราะ join คนละเงื่อนไข IN — ปรากฏเพราะ meeting นี้เข้าเงื่อนไข
---   IN แล้วจึงแสดงผู้เข้าร่วมทุกคนของ meeting นั้น รวมคนที่มาจาก EXTERNAL ด้วย ตามที่ query เขียนไว้),
---   นรินทร์ ชัยเจริญ + สมหญิง รักการงาน (GROUP←ทีมวิจัย AI Lab)
+--   "ประชุมความคืบหน้างานวิจัย AI Lab และพิจารณางบประมาณ": ศิริพร ใจดี (DIRECT),
+--   นรินทร์ ชัยเจริญ + สมหญิง รักการงาน (GROUP←ทีมวิจัย AI Lab), วิชิต พงษ์สวัสดิ์ (EXTERNAL,
+--   ไม่เข้าเงื่อนไข filter หลักแต่ติดมาเพราะ meeting นี้เข้าเงื่อนไข IN แล้วจึงแสดงผู้เข้าร่วม
+--   ทุกคนของ meeting นั้น รวมคนที่มาจาก EXTERNAL ด้วย ตามที่ query เขียนไว้)
+--   "ประชุมเริ่มต้นโครงการวิจัย (Kickoff)": สมชาย ใจดี (DIRECT), กิตติชัย นามดี +
+--   วิชัย พงษ์สวัสดิ์ (GROUP←ทีมโครงงานนักศึกษา A)
 -- =============================================================================
