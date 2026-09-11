@@ -11,6 +11,21 @@
 > ประมวลผล reminder ที่ถึงเวลา กันส่งซ้ำ) (C) eslint cleanup เหลือ 0 warning — ตรวจสอบจริงผ่าน `npm run build`,
 > `tsc --noEmit`, `npm run lint` (0 warning), `npm run test:authz` (16 passed) และ end-to-end ผ่าน HTTP จริง
 > (login จริง → POST/GET ทุก endpoint ใหม่ → เห็นผลใน DB จริง) ไม่ใช่แค่เดา
+> + รอบ Auth Migration/RLS/View-Function-Trigger (ล่าสุด): ย้าย login/session จาก JWT+bcrypt ของระบบเองไปเป็น
+> Supabase Auth ทั้งหมด (`User.id` ตอนนี้คือ uuid เดียวกับ `auth.users.id` ข้าม schema, `ON DELETE CASCADE`) —
+> ไม่กระทบสถานะ FR/BR ข้อไหนเลยเพราะเป็นการย้าย mechanism ของ auth/session ที่มีอยู่แล้ว ไม่ใช่ feature ใหม่หรือ
+> พฤติกรรมที่ requirements.md ข้อไหนพูดถึงโดยตรง จากนั้นเปิด Row Level Security บนทั้ง 20 ตารางจริง (72 policy รวม
+> `is_admin()`/`is_meeting_participant()` เป็น SECURITY DEFINER helper) เป็นชั้นป้องกันเพิ่มที่ระดับ database เอง
+> (defense-in-depth สำหรับ client เข้าถึงตรงในอนาคตผ่าน supabase-js/PostgREST) — **ไม่มี BR ข้อไหนใน 20 ข้อพูดถึง
+> "สิทธิ์การเข้าถึงข้อมูล" โดยตรง** (ตรวจสอบแล้วทั้ง requirements.md หมวด Business Rules) จึงไม่ผูกกับ BR ข้อใด
+> ข้อหนึ่งเป็นพิเศษ แต่เสริมความถูกต้องของระบบโดยรวมตาม "Key Design Principle" (หัวข้อ 11) — เดิม authorization
+> ทั้งหมดพึ่ง `assertOwner()` ที่ชั้น application อย่างเดียว (Prisma connect เป็น role ที่มี BYPASSRLS จึง RLS ยัง
+> ไม่กระทบ path การใช้งานจริงวันนี้เลย) สุดท้ายเพิ่ม 2 view (`upcoming_meetings`, `overdue_action_items`),
+> 2 function (`process_due_reminders()`, `get_meeting_context()`), 1 trigger (`trg_cancel_meeting_reminders`) ตอบ
+> requirements.md หัวข้อ 8 ข้อ 4/7/9/14 โดยตรงที่ระดับ SQL — **BR-14 เปลี่ยนกลไกจริง** (ดูแถว BR-14 ด้านล่าง):
+> ย้าย logic "meeting ถูกยกเลิก → cancel reminder ที่ค้าง" จาก application code (`updateMany` ใน
+> `cancel/route.ts`) ไปเป็น DB trigger แทน — BR-13 (`process-due` endpoint) ยังคง behavior เดิมทุกประการ แค่
+> ดึง due-set ผ่าน `process_due_reminders()` แทน query ตรงๆ (ผลลัพธ์เหมือนเดิม ไม่ใช่การเปลี่ยนพฤติกรรม)
 > ดูเหตุผลการออกแบบแต่ละจุดใน `docs/DESIGN_DECISIONS.md`
 >
 > สถานะ: ✅ ทำแล้วตรงสเปก · ⚠️ ทำบางส่วนแต่ไม่ครบ · ❌ ยังไม่ได้ทำ · ➖ N/A (ยังทดสอบไม่ได้เพราะ entity ที่เกี่ยวข้องยังไม่มีอยู่ในระบบ ไม่ใช่ "ทำบางส่วน" หรือ "ไม่ได้ทำ" ในความหมายปกติ)
@@ -83,7 +98,7 @@
 | BR-11 | Meeting มีได้หลาย Reminder | ✅ | ยืนยันซ้ำผ่าน UI จริงแล้ว — ดู FR-10 |
 | BR-12 | Reminder แต่ละรายการตรวจสอบสถานะได้ | ✅ | ไม่เปลี่ยนแปลง |
 | BR-13 | ป้องกันส่ง Reminder ซ้ำ | ✅ (เดิม ⚠️ → ✅) | `POST /api/reminders/process-due` (admin only) ดึง Reminder ที่ `status=PENDING` และถึงเวลาแล้ว ส่งอีเมล (mock ผ่าน `sendEmail()`) แล้ว flip เป็น `SENT` ด้วย `updateMany({where:{id,status:"PENDING"}})` — กันยิงซ้ำแม้เรียกซ้อนกันจริง (ไม่ใช่แค่เรียงลำดับ) **ทดสอบจริง**: สร้าง reminder ที่ due แล้วจริง → เรียก endpoint 2 ครั้งติดกัน → ครั้งแรก `{"processed":1,"status":"SENT"}` ครั้งสอง `{"processed":0}` DB ยืนยัน `SENT` ค่าเดียว log อีเมลจริงแค่ 1 ครั้ง ไม่ใช่ 2 — เป็น endpoint เรียกเอง ไม่ใช่ cron รันตลอด 24 ชม. (ตามขอบเขตที่กำหนดไว้ ไม่ใช่ scope ที่ขาด) |
-| BR-14 | Meeting ยกเลิก → reminder ที่ค้างเปลี่ยนเป็น CANCELLED | ✅ | ไม่เปลี่ยนแปลง |
+| BR-14 | Meeting ยกเลิก → reminder ที่ค้างเปลี่ยนเป็น CANCELLED | ✅ (กลไกเปลี่ยน — เดิม application code → ตอนนี้ DB trigger) | **ย้ายจาก application logic ไปเป็น DB trigger แล้ว**: เดิม `POST /api/meetings/[id]/cancel` ทำ 2 คำสั่งแยก (`prisma.meeting.update` + `prisma.reminder.updateMany`) — ตอนนี้ route เหลือแค่ update `Meeting.status` อย่างเดียว, trigger `trg_cancel_meeting_reminders` (`AFTER UPDATE OF status ON "Meeting"`, `WHEN (NEW.status = 'CANCELLED' AND OLD.status IS DISTINCT FROM 'CANCELLED')`) เป็นคน `UPDATE "Reminder" SET status='CANCELLED' WHERE "meetingId"=NEW.id AND status='PENDING'` แทน **ทดสอบจริง**: cancel meeting ที่มี 2 reminder จริงผ่าน API ด้วย session organizer จริง แล้ว query ตาราง `Reminder` ตรงๆ ยืนยัน status เปลี่ยนเป็น `CANCELLED` ทั้งคู่ (ไม่ใช่แค่เชื่อว่า trigger ทำงาน) — พฤติกรรมที่ผู้ใช้เห็นเหมือนเดิมทุกประการ เปลี่ยนแค่ว่า guarantee นี้บังคับที่ DB layer แล้ว ไม่ใช่แค่ endpoint เดียว (ถ้ามี code path อื่นในอนาคตที่ set `Meeting.status = 'CANCELLED'` ตรงๆ โดยไม่ผ่าน route นี้ ก็ยังถูก cascade cancel reminder ให้เหมือนกัน) |
 | BR-15 | Meeting มีได้หลาย Notes/Resources/Decisions/ActionItems | ✅ | ยืนยันซ้ำผ่าน UI จริงแล้ว — ดู FR-11/12/13 |
 | BR-16 | Action Item แยกงานเสร็จ/ค้างได้ | ✅ | ไม่เปลี่ยนแปลง |
 | BR-17 | ข้อมูลประชุมในอดีตเรียกดูได้เพื่อเป็นบริบทครั้งถัดไป | ✅ | ไม่เปลี่ยนแปลงจากรอบก่อน |
