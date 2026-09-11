@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Person } from "@prisma/client";
-import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { ErrorBanner } from "@/components/ui/Feedback";
@@ -18,7 +18,25 @@ export function PersonActions({ person }: { person: Person }) {
   async function handleDelete() {
     setDeleting(true);
     try {
-      await api.delete(`/api/people/${person.id}`);
+      // delete_admin_only RLS policy replaces assertOwner(user, false, ...)
+      // (this was already admin-only regardless of who the record belongs
+      // to) — a blocked DELETE just matches 0 rows silently, so .select()
+      // + checking for null is what turns that into a thrown error here.
+      // MeetingParticipant.personId is onDelete: Restrict (BR-02), so a
+      // person with meeting history still fails at the DB level (Postgres
+      // 23503, foreign_key_violation) — translated to the same friendly
+      // message the old app-level pre-check used to show.
+      const supabase = createClient();
+      const { data, error } = await supabase.from("Person").delete().eq("id", person.id).select().maybeSingle();
+      if (error) {
+        throw new Error(
+          error.code === "23503"
+            ? 'ไม่สามารถลบผู้ติดต่อนี้ได้เพราะมีประวัติเข้าร่วมประชุมอยู่ — เปลี่ยนสถานะเป็น "ไม่ใช้งาน" แทน เพื่อไม่ให้ประวัติการประชุมหายไป'
+            : error.message
+        );
+      }
+      if (!data) throw new Error("เฉพาะผู้ดูแลระบบเท่านั้นที่ลบผู้ติดต่อได้ หรือไม่พบผู้ติดต่อนี้");
+
       showToast("ลบผู้ติดต่อสำเร็จ", "success");
       router.push("/people");
       router.refresh();
@@ -98,7 +116,18 @@ function EditPersonModal({
     setError(null);
     setLoading(true);
     try {
-      await api.put(`/api/people/${person.id}`, { name, phone, title, department, status });
+      // update_unlinked_or_owner_or_admin RLS policy replaces assertOwner()'s
+      // "!existing.userId || existing.userId === user.id" check — same 0-row
+      // silent-block subtlety as handleDelete above.
+      const supabase = createClient();
+      const { data, error: dbError } = await supabase
+        .from("Person")
+        .update({ name, phone, title, department, status, updatedAt: new Date().toISOString() })
+        .eq("id", person.id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error("คุณไม่มีสิทธิ์แก้ไขข้อมูลผู้ติดต่อของผู้ใช้รายอื่น หรือไม่พบผู้ติดต่อนี้");
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
