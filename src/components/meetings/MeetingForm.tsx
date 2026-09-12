@@ -383,22 +383,56 @@ export function MeetingForm({
       const groupIds = selectedGroups.map((g) => g.id);
 
       if (isEdit && initial) {
-        const payload = {
-          title,
-          description,
-          type,
-          status,
-          startTime: startIso,
-          endTime: endIso,
-          location,
-          projectId: projectId || null,
-          onlineMeetingResourceId: onlineMeetingResourceId || null,
-          participantPersonIds,
-          groupIds,
-          externalEmails,
-        };
-        await api.put(`/api/meetings/${initial.meeting.id}`, payload);
+        // Hybrid migration (Meeting resource, edit round): edit goes
+        // straight through update_meeting_with_participants() instead of
+        // PUT /api/meetings/[id] — see
+        // prisma/migrations/20260912100000_update_meeting_with_participants_function
+        // and docs/DESIGN_DECISIONS.md §5.7. This form always has a decided
+        // value for every regular field (never omits one) and always
+        // computes all three participant-related arrays from its own
+        // selection state above, so every RPC parameter here is passed
+        // explicitly — the NULL-means-"leave participants/groups alone"
+        // sentinel the function supports is for other, non-UI callers, not
+        // exercised by this real call site.
+        const { data: meeting, error: rpcError } = await createClient().rpc(
+          "update_meeting_with_participants",
+          {
+            p_meeting_id: initial.meeting.id,
+            p_title: title,
+            p_start_time: startIso,
+            p_end_time: endIso,
+            p_description: description || null,
+            p_type: type,
+            p_status: status,
+            p_location: location || null,
+            p_project_id: projectId || null,
+            p_online_meeting_resource_id: onlineMeetingResourceId || null,
+            p_participant_person_ids: participantPersonIds,
+            p_group_ids: groupIds,
+            p_external_emails: externalEmails,
+          }
+        );
+        if (rpcError) throw new Error(rpcError.message);
+
         showToast("บันทึกการเปลี่ยนแปลงสำเร็จ", "success");
+
+        // FR-09: same best-effort, non-fatal notify step as the create
+        // branch below (and as the old PUT handler's own try/catch around
+        // notifyParticipantsByEmail) — a delivery hiccup here must not
+        // imply the edit itself failed, since the RPC above already
+        // committed it. `reason: "updated"` keeps the email subject as
+        // "อัปเดตนัดหมาย" (the old PUT handler's own subject), not the
+        // create flow's "คำเชิญเข้าร่วมประชุมใหม่" — see notify/route.ts.
+        try {
+          await api.post(`/api/meetings/${meeting.id}/notify`, { reason: "updated" });
+        } catch (notifyErr) {
+          console.error("notify failed for meeting", meeting.id, notifyErr);
+          showToast(
+            notifyErr instanceof Error ? notifyErr.message : "ส่งอีเมลแจ้งเตือนผู้เข้าร่วมไม่สำเร็จ",
+            "error"
+          );
+        }
+
         router.push(`/meetings/${initial.meeting.id}`);
       } else {
         // Hybrid migration round 1 (Meeting resource): create goes straight
