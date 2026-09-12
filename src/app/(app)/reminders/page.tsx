@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
@@ -32,12 +33,53 @@ export default function RemindersPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = statusFilter ? `?status=${statusFilter}` : "";
-      const res = await api.get<{ items: ReminderRow[]; counts: Record<ReminderStatus, number> }>(
-        `/api/reminders${params}`
+      const supabase = createClient();
+
+      // Hybrid migration (Reminders resource) — GET list -> supabase-js
+      // direct select. select_all_authenticated RLS policy on Reminder is
+      // org-wide (`USING (true)`) — unlike Task's assigneeId scoping, no
+      // .eq() narrowing by user is needed here; every signed-in user
+      // already saw every reminder under the old route too (no where-
+      // clause beyond the status/meetingId filters below). This page never
+      // sends meetingId (that filter is only used by MeetingForm.tsx's own
+      // still-Prisma-backed GET /api/reminders?meetingId= call, out of this
+      // migration's scope), so only the status branch is wired here.
+      let query = supabase
+        .from("Reminder")
+        .select(
+          `*,
+          meeting:Meeting(*, participants:MeetingParticipant(*, person:Person(*)))`
+        )
+        .order("scheduledAt", { ascending: false })
+        .limit(100);
+      if (statusFilter) query = query.eq("status", statusFilter);
+
+      const { data: items, error: itemsError } = await query;
+      if (itemsError) throw new Error(itemsError.message);
+
+      // counts: the old route's prisma.reminder.groupBy() had NO where-
+      // clause at all (confirmed in src/app/api/reminders/route.ts — unlike
+      // Task's scope-filtered groupBy), so it always counted every Reminder
+      // in the system, regardless of which status tab was selected.
+      // Computing counts from `items` above would be wrong on two counts:
+      // it's filtered by whichever status is selected, and it's capped at
+      // the same 100-row `.limit(100)` the old `take: 100` had — a system
+      // with >100 reminders would undercount. So counts still need their
+      // own separate, wholly unfiltered query, same as before — just as
+      // four count-only (`head: true`) requests instead of one groupBy,
+      // since PostgREST has no groupBy equivalent over REST.
+      const statuses: ReminderStatus[] = ["PENDING", "SENT", "FAILED", "CANCELLED"];
+      const countResults = await Promise.all(
+        statuses.map((s) => supabase.from("Reminder").select("*", { count: "exact", head: true }).eq("status", s))
       );
-      setItems(res.items);
-      setCounts(res.counts);
+      const counts = { PENDING: 0, SENT: 0, FAILED: 0, CANCELLED: 0 } as Record<ReminderStatus, number>;
+      countResults.forEach((res, i) => {
+        if (res.error) throw new Error(res.error.message);
+        counts[statuses[i]] = res.count ?? 0;
+      });
+
+      setItems((items ?? []) as ReminderRow[]);
+      setCounts(counts);
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -67,7 +109,21 @@ export default function RemindersPage() {
   async function cancel(id: string) {
     setBusyId(id);
     try {
-      await api.post(`/api/reminders/${id}/cancel`);
+      // Hybrid migration — POST cancel -> supabase-js direct update.
+      // update_meeting_organizer_or_admin RLS policy (Reminder -> Meeting,
+      // organizerId = auth.uid(), or admin) replaces assertOwner() here —
+      // same silent-0-rows-on-block pattern as every other resource in this
+      // migration, so .select().maybeSingle() + null-check turns a blocked
+      // update into a thrown error. No notification side-effect to worry
+      // about here, unlike Task's status update.
+      const { data, error: dbError } = await createClient()
+        .from("Reminder")
+        .update({ status: "CANCELLED" })
+        .eq("id", id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error("เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่ยกเลิกการแจ้งเตือนนี้ได้ หรือไม่พบการแจ้งเตือนนี้");
       showToast("ยกเลิกการแจ้งเตือนแล้ว", "success");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "ยกเลิกไม่สำเร็จ", "error");
