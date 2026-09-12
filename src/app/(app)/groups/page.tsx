@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { Modal } from "@/components/ui/Modal";
 import type { ContactGroup } from "@prisma/client";
 
-type GroupRow = ContactGroup & { _count: { members: number } };
+// PostgREST's embedded-count syntax (`members:ContactGroupMember(count)`)
+// comes back as a one-element array (`[{ count: N }]`), not the nested
+// `_count: { members: N }` shape Prisma's `include: { _count: ... }` gave —
+// same member-count need as before, different response shape.
+type GroupRow = ContactGroup & { members: { count: number }[] };
 
 const ICON_CHOICES = ["group", "work", "gavel", "campaign", "hub", "diversity_3"];
 
@@ -23,8 +27,17 @@ export default function GroupsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<{ items: GroupRow[] }>("/api/groups");
-      setGroups(res.items);
+      // Hybrid migration (Groups resource, mirrors the People round — see
+      // people/page.tsx's load()) — GET list -> supabase-js direct select,
+      // no new RPC needed since this is a single-table read plus one
+      // embedded count, both of which RLS's select_all_authenticated policy
+      // on ContactGroup/ContactGroupMember allows for any signed-in user.
+      const { data: items, error: dbError } = await createClient()
+        .from("ContactGroup")
+        .select("*, members:ContactGroupMember(count)")
+        .order("createdAt", { ascending: false });
+      if (dbError) throw new Error(dbError.message);
+      setGroups((items ?? []) as GroupRow[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -77,7 +90,7 @@ export default function GroupsPage() {
                 <h3 className="font-headline-md text-headline-md text-on-background mb-1">{g.name}</h3>
                 <p className="font-body-md text-body-md text-on-surface-variant flex items-center gap-1">
                   <span className="material-symbols-outlined text-base">person</span>
-                  {g._count.members} สมาชิก
+                  {g.members[0]?.count ?? 0} สมาชิก
                 </p>
               </div>
               {g.description && (
@@ -121,7 +134,26 @@ function CreateGroupModal({
     setError(null);
     setLoading(true);
     try {
-      await api.post("/api/groups", { name, description, icon });
+      // insert_all_authenticated RLS policy lets any signed-in user create a
+      // group, but createdById must still be set to *this* user (it drives
+      // the update/delete "creator or admin" policies later) — same
+      // getUser()-then-write shape MeetingForm.tsx's create flow uses.
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+      // ContactGroup.id and updatedAt have no DB default (Prisma's
+      // @default(cuid()) / @updatedAt are client-side-only defaults, same
+      // as Person's direct insert) — both must be supplied explicitly.
+      const { error: dbError } = await supabase.from("ContactGroup").insert({
+        id: crypto.randomUUID(),
+        name,
+        description: description || null,
+        icon,
+        createdById: authData.user.id,
+        updatedAt: new Date().toISOString(),
+      });
+      if (dbError) throw new Error(dbError.message);
       setName("");
       setDescription("");
       onCreated();

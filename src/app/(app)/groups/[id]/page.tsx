@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
@@ -33,8 +32,26 @@ export default function GroupDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<{ group: GroupDetail }>(`/api/groups/${params.id}`);
-      setGroup(res.group);
+      // Hybrid migration (Groups resource, mirrors the People round) — GET
+      // detail -> supabase-js nested select, no new RPC needed. Ordering a
+      // *nested* relation is a different call than ordering the parent row
+      // set: PostgREST needs `referencedTable` naming the embed's alias
+      // (`members`, `meetings`) rather than a plain `.order("role")`, which
+      // would (wrongly) try to order ContactGroup itself by a column it
+      // doesn't have. `foreignTable` is the same option under its old,
+      // deprecated name — meetings/[id]/page.tsx's already-migrated GET
+      // uses `referencedTable`, so this follows that same convention.
+      const { data: group, error: dbError } = await createClient()
+        .from("ContactGroup")
+        .select("*, members:ContactGroupMember(*, person:Person(*)), meetings:Meeting(*)")
+        .eq("id", params.id)
+        .order("role", { referencedTable: "members", ascending: true })
+        .order("startTime", { referencedTable: "meetings", ascending: false })
+        .limit(20, { referencedTable: "meetings" })
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!group) throw new Error("ไม่พบกลุ่มนี้");
+      setGroup(group as GroupDetail);
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -51,7 +68,20 @@ export default function GroupDetailPage() {
   async function removeMember(personId: string) {
     setRemovingId(personId);
     try {
-      await api.delete(`/api/groups/${params.id}/members/${personId}`);
+      // delete_group_creator_or_admin RLS policy replaces assertOwner()'s
+      // "group.createdById === user.id" check — a blocked DELETE just
+      // matches 0 rows silently (no thrown error), so .select() + checking
+      // for null is what turns that into a thrown error here, same pattern
+      // as Person's delete/update in PersonActions.tsx.
+      const { data, error: dbError } = await createClient()
+        .from("ContactGroupMember")
+        .delete()
+        .eq("groupId", params.id)
+        .eq("personId", personId)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error("เฉพาะผู้สร้างกลุ่มหรือผู้ดูแลระบบเท่านั้นที่ลบสมาชิกออกจากกลุ่มนี้ได้ หรือไม่พบสมาชิกนี้ในกลุ่ม");
       showToast("ลบสมาชิกออกจากกลุ่มแล้ว", "success");
       load();
     } catch (err) {
@@ -64,7 +94,19 @@ export default function GroupDetailPage() {
   async function deleteGroup() {
     setDeleting(true);
     try {
-      await api.delete(`/api/groups/${params.id}`);
+      // delete_creator_or_admin RLS policy replaces assertOwner() — same
+      // 0-row silent-block subtlety as removeMember above. No need to
+      // delete ContactGroupMember rows first: schema.prisma declares
+      // ContactGroupMember.group as onDelete: Cascade, so Postgres removes
+      // them automatically when the group row goes.
+      const { data, error: dbError } = await createClient()
+        .from("ContactGroup")
+        .delete()
+        .eq("id", params.id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error("เฉพาะผู้สร้างกลุ่มหรือผู้ดูแลระบบเท่านั้นที่ลบกลุ่มนี้ได้ หรือไม่พบกลุ่มนี้");
       showToast("ลบกลุ่มสำเร็จ", "success");
       router.push("/groups");
     } catch (err) {
@@ -280,7 +322,25 @@ function AddMemberModal({
     setAddingId(personId);
     setError(null);
     try {
-      await api.post(`/api/groups/${groupId}/members`, { personId, role: "MEMBER" });
+      // insert_group_creator_or_admin RLS policy replaces assertOwner()'s
+      // "group.createdById === user.id" check — same 0-row silent-block
+      // subtlety as removeMember/deleteGroup above. ContactGroupMember.id
+      // has no DB default (Prisma's @default(cuid()) is client-side-only,
+      // same as Person.id) so it must be supplied explicitly; joinedAt and
+      // role both have real DB defaults (CURRENT_TIMESTAMP / 'MEMBER') but
+      // role is passed anyway to keep intent explicit at the call site.
+      const { data, error: dbError } = await createClient()
+        .from("ContactGroupMember")
+        .insert({ id: crypto.randomUUID(), groupId, personId, role: "MEMBER" })
+        .select()
+        .maybeSingle();
+      if (dbError) {
+        // @@unique([groupId, personId]) — adding someone already in the
+        // group hits Postgres error 23505 (unique_violation); translate it
+        // to a friendly message instead of the raw constraint text.
+        throw new Error(dbError.code === "23505" ? "คนนี้อยู่ในกลุ่มนี้อยู่แล้ว" : dbError.message);
+      }
+      if (!data) throw new Error("เฉพาะผู้สร้างกลุ่มหรือผู้ดูแลระบบเท่านั้นที่เพิ่มสมาชิกในกลุ่มนี้ได้");
       onAdded();
     } catch (err) {
       setError(err instanceof Error ? err.message : "เพิ่มสมาชิกไม่สำเร็จ");
