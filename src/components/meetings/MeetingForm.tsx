@@ -135,10 +135,21 @@ export function MeetingForm({
       .then(({ data, error }) => {
         if (!error) setGroups((data ?? []) as (ContactGroup & { members: { count: number }[] })[]);
       });
-    api
-      .get<{ items: OnlineMeetingResource[] }>("/api/online-resources")
-      .then((r) => setOnlineResources(r.items))
-      .catch(() => {});
+    // Hybrid migration (OnlineMeetingResource resource, closing out the
+    // round after createOnlineResource()'s insert below) — GET list ->
+    // supabase-js direct select. Ordered by name ascending, matching the
+    // old GET /api/online-resources route's `orderBy: { name: "asc" }`
+    // exactly (checked the actual route before picking this, not guessed).
+    // select_all_authenticated RLS policy has no condition, so unlike the
+    // write paths elsewhere in this migration there's no 0-row/null case
+    // to special-case here.
+    createClient()
+      .from("OnlineMeetingResource")
+      .select("*")
+      .order("name", { ascending: true })
+      .then(({ data, error }) => {
+        if (!error) setOnlineResources((data ?? []) as OnlineMeetingResource[]);
+      });
   }, []);
 
   // Edit mode: reminders already exist on the meeting, so load and manage
