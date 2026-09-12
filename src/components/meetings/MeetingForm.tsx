@@ -286,12 +286,36 @@ export function MeetingForm({
     if (!newResourceName.trim() || !newResourceUrl.trim()) return;
     setCreatingResource(true);
     try {
-      const res = await api.post<{ resource: OnlineMeetingResource }>("/api/online-resources", {
-        name: newResourceName,
-        url: newResourceUrl,
-      });
-      setOnlineResources((prev) => [...prev, res.resource]);
-      setOnlineMeetingResourceId(res.resource.id);
+      // Hybrid migration (OnlineMeetingResource resource) — POST create ->
+      // direct .insert(). insert_all_authenticated RLS policy (WITH CHECK
+      // (true), no condition) lets any signed-in user create one, same as
+      // the old route's authorization level. OnlineMeetingResource.id and
+      // updatedAt have no DB default (Prisma's @default(cuid())/@updatedAt
+      // are client-side-only, same as every other direct insert in this
+      // migration) so both are supplied explicitly; createdById comes from
+      // getUser(), same shape as ContactGroup/Project's create flows.
+      // .select().single() returns the full inserted row so
+      // OnlineMeetingResource's id/name/url all land in state exactly like
+      // the old route's `{ resource }` response did.
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+      const { data: resource, error: dbError } = await supabase
+        .from("OnlineMeetingResource")
+        .insert({
+          id: crypto.randomUUID(),
+          name: newResourceName,
+          url: newResourceUrl,
+          createdById: authData.user.id,
+          updatedAt: new Date().toISOString(),
+        })
+        .select()
+        .single<OnlineMeetingResource>();
+      if (dbError) throw new Error(dbError.message);
+
+      setOnlineResources((prev) => [...prev, resource]);
+      setOnlineMeetingResourceId(resource.id);
       setShowNewResourceForm(false);
       setNewResourceName("");
       setNewResourceUrl("");
