@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Task } from "@prisma/client";
-import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { formatDate } from "@/lib/format";
 
@@ -19,7 +19,29 @@ export function TaskQuickToggle({ task }: { task: Task }) {
     setChecked(next);
     setLoading(true);
     try {
-      await api.patch(`/api/tasks/${task.id}`, { status: next ? "COMPLETED" : "NOT_STARTED" });
+      // update_assignee_or_creator_or_admin RLS policy replaces
+      // assertOwner() — same 0-row silent-block subtlety as every other
+      // resource in this migration, so .select().maybeSingle() + null-
+      // check turns it into a thrown error. completedAt/updatedAt aren't
+      // in the request's literal `{status}` example, but both need
+      // setting by hand: completedAt mirrors the old PATCH route's own
+      // logic (dropping it would silently break dashboard/page.tsx's
+      // "recently completed" feed, which reads Task.completedAt directly
+      // via Prisma) and updatedAt has no DB default (Prisma's @updatedAt
+      // is client-side-only) so it goes stale forever otherwise.
+      const nextStatus = next ? "COMPLETED" : "NOT_STARTED";
+      const { data, error: dbError } = await createClient()
+        .from("Task")
+        .update({
+          status: nextStatus,
+          completedAt: next ? new Date().toISOString() : null,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", task.id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error("เฉพาะผู้รับผิดชอบ ผู้สร้างงาน หรือผู้ดูแลระบบเท่านั้นที่แก้ไขงานนี้ได้ หรือไม่พบงานนี้");
       router.refresh();
     } catch (err) {
       setChecked(!next);

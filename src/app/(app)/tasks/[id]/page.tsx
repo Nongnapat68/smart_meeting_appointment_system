@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
@@ -38,8 +39,36 @@ export default function TaskDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<{ task: TaskDetail }>(`/api/tasks/${params.id}`);
-      setTask(res.task);
+      // Hybrid migration (Tasks resource) — GET detail -> supabase-js
+      // nested select, matching the old include{} shape field-for-field:
+      // project/meeting/assigneePerson stay full rows (old code used
+      // `true`, not a `select`), assignee/createdBy stay narrowed to just
+      // what TaskDetail declares (old code used `select: {...}`).
+      // assignee/createdBy both point at User via two different FKs
+      // (assigneeId/createdById), so PostgREST needs the !fkey hint to
+      // pick one — confirmed live: the same embed without it fails with
+      // PGRST201 "more than one relationship was found". comments/
+      // attachments keep the old orderBy directions via referencedTable
+      // (comments createdAt asc, attachments uploadedAt desc).
+      const { data: task, error: dbError } = await createClient()
+        .from("Task")
+        .select(
+          `*,
+          project:Project(*),
+          meeting:Meeting(*),
+          assignee:User!Task_assigneeId_fkey(id,name,avatarUrl),
+          assigneePerson:Person(*),
+          createdBy:User!Task_createdById_fkey(name),
+          comments:TaskComment(*, author:User(*)),
+          attachments:TaskAttachment(*)`
+        )
+        .eq("id", params.id)
+        .order("createdAt", { referencedTable: "comments", ascending: true })
+        .order("uploadedAt", { referencedTable: "attachments", ascending: false })
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!task) throw new Error("ไม่พบงานนี้");
+      setTask(task as TaskDetail);
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -56,7 +85,25 @@ export default function TaskDetailPage() {
   async function markComplete() {
     if (!task) return;
     try {
-      await api.patch(`/api/tasks/${task.id}`, { status: "COMPLETED" });
+      // update_assignee_or_creator_or_admin RLS policy replaces
+      // assertOwner() — same 0-row silent-block subtlety as every other
+      // resource in this migration, so .select().maybeSingle() + null-
+      // check turns it into a thrown error. This button only renders when
+      // task.status !== "COMPLETED" (see JSX below), so it's always a
+      // fresh transition into COMPLETED — completedAt is set unconditionally
+      // (mirrors the old PATCH route's own logic; dropping it would
+      // silently break dashboard/page.tsx's "recently completed" feed,
+      // which reads Task.completedAt directly via Prisma). updatedAt has
+      // no DB default (Prisma's @updatedAt is client-side-only) so it's
+      // set by hand too.
+      const { data, error: dbError } = await createClient()
+        .from("Task")
+        .update({ status: "COMPLETED", completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+        .eq("id", task.id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error("เฉพาะผู้รับผิดชอบ ผู้สร้างงาน หรือผู้ดูแลระบบเท่านั้นที่แก้ไขงานนี้ได้ หรือไม่พบงานนี้");
       showToast("บันทึกงานเสร็จสิ้นแล้ว", "success");
       load();
     } catch (err) {
@@ -69,7 +116,32 @@ export default function TaskDetailPage() {
     if (!task || !comment.trim()) return;
     setPosting(true);
     try {
-      await api.post(`/api/tasks/${task.id}/comments`, { content: comment });
+      // insert_task_assignee_or_creator_or_admin RLS policy replaces
+      // assertOwner() here. Unlike UPDATE/DELETE's silent 0-row filtering,
+      // a blocked INSERT's WITH CHECK actually raises a real Postgres
+      // error (42501, "new row violates row-level security policy") —
+      // confirmed against the same policy shape in the Groups round's
+      // ContactGroupMember insert — so a caller who isn't this task's
+      // assignee/creator/admin gets a clear thrown error straight from
+      // dbError, not a silent no-op. Not selecting the inserted row back:
+      // this component always calls load() right after anyway (the old
+      // code did too, ignoring the POST response's `comment` payload
+      // entirely), so fetching it here would be pure over-fetch.
+      // TaskComment.id has no DB default (Prisma's @default(cuid()) is
+      // client-side-only, same as every other direct insert in this
+      // migration) so it's supplied explicitly; createdAt has a real DB
+      // default (CURRENT_TIMESTAMP) so it's left out.
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+      const { error: dbError } = await supabase.from("TaskComment").insert({
+        id: crypto.randomUUID(),
+        taskId: task.id,
+        authorId: authData.user.id,
+        content: comment,
+      });
+      if (dbError) throw new Error(dbError.message);
       setComment("");
       load();
     } catch (err) {
