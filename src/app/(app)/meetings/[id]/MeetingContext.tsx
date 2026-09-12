@@ -1,20 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { relativeTime } from "@/lib/format";
 import type { ResourceType } from "@prisma/client";
 import type { NoteWithAuthor, DecisionWithUser, ResourceWithUser } from "./types";
 
 // FR-11/12/13: Notes, Decisions and Related Resources — each its own entity,
-// each supporting multiple rows per meeting, individually attributed. These
-// three cards are the UI counterpart to GET/POST /api/meetings/[id]/{notes,decisions,resources}.
+// each supporting multiple rows per meeting, individually attributed.
 //
-// Out of scope for hybrid migration round 1 (Meeting resource only) — these
-// three still go through their existing Next.js API routes/Prisma. Only the
-// prop types changed (see ./types.ts), since the parent page now hands them
-// rows read via supabase-js instead of Prisma.
+// Hybrid migration (MeetingNote/Decision/RelatedResource round) — POST is
+// the only thing here (no GET: initial rows arrive as
+// initialNotes/initialDecisions/initialResources props, read by the parent
+// page's own nested select back in Meeting round 1 — see ./types.ts). The
+// old GET /api/meetings/[id]/{notes,decisions,resources} routes still exist
+// but nothing here calls them anymore.
 
 const RESOURCE_TYPE_LABEL: Record<ResourceType, string> = {
   LINK: "ลิงก์",
@@ -45,8 +46,37 @@ export function MeetingNotesCard({
     if (!content.trim()) return;
     setPosting(true);
     try {
-      const res = await api.post<{ note: NoteWithAuthor }>(`/api/meetings/${meetingId}/notes`, { content });
-      setNotes((prev) => [res.note, ...prev]);
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+      // insert_organizer_or_participant_or_admin RLS policy replaces
+      // assertOwner() here. Same as TaskComment's insert: a blocked INSERT's
+      // WITH CHECK raises a real Postgres error (42501), not a silent
+      // no-op, so a plain throw on dbError is enough — no null-check dance
+      // like UPDATE/DELETE need. MeetingNote.id has no DB default (Prisma's
+      // @default(cuid()) is client-side-only) so it's supplied explicitly;
+      // updatedAt has no DB default either (Prisma's @updatedAt is
+      // client-side-only) so it goes stale/violates NOT NULL forever if
+      // nothing sets it once Prisma is out of the write path; createdAt has
+      // a real DB default (CURRENT_TIMESTAMP) so it's left out. author's
+      // select shape matches the parent page's own notes:MeetingNote(*,
+      // author:User(name)) embed exactly — this component only ever reads
+      // author?.name, and NoteWithAuthor (./types.ts) declares nothing more.
+      const { data, error: dbError } = await supabase
+        .from("MeetingNote")
+        .insert({
+          id: crypto.randomUUID(),
+          meetingId,
+          authorId: authData.user.id,
+          content,
+          updatedAt: new Date().toISOString(),
+        })
+        .select("*, author:User(name)")
+        .single();
+      if (dbError) throw new Error(dbError.message);
+
+      setNotes((prev) => [data as NoteWithAuthor, ...prev]);
       setContent("");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "เพิ่มบันทึกไม่สำเร็จ", "error");
@@ -106,8 +136,31 @@ export function MeetingDecisionsCard({
     if (!content.trim()) return;
     setPosting(true);
     try {
-      const res = await api.post<{ decision: DecisionWithUser }>(`/api/meetings/${meetingId}/decisions`, { content });
-      setDecisions((prev) => [res.decision, ...prev]);
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+      // Same insert_organizer_or_participant_or_admin RLS policy shape as
+      // MeetingNote above — plain throw on dbError, no null-check needed.
+      // Decision.id has no DB default (client-side-only cuid()) so it's
+      // supplied explicitly; decidedAt/createdAt both have real DB defaults
+      // (CURRENT_TIMESTAMP) so neither is set here. decidedBy's select
+      // shape matches the parent page's decisions:Decision(*,
+      // decidedBy:User(name)) embed — DecisionWithUser (./types.ts)
+      // declares nothing more than decidedBy.name.
+      const { data, error: dbError } = await supabase
+        .from("Decision")
+        .insert({
+          id: crypto.randomUUID(),
+          meetingId,
+          decidedById: authData.user.id,
+          content,
+        })
+        .select("*, decidedBy:User(name)")
+        .single();
+      if (dbError) throw new Error(dbError.message);
+
+      setDecisions((prev) => [data as DecisionWithUser, ...prev]);
       setContent("");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "บันทึกมติไม่สำเร็จ", "error");
@@ -172,12 +225,36 @@ export function MeetingResourcesCard({
     if (!title.trim() || !url.trim()) return;
     setPosting(true);
     try {
-      const res = await api.post<{ resource: ResourceWithUser }>(`/api/meetings/${meetingId}/resources`, {
-        title,
-        url,
-        type,
-      });
-      setResources((prev) => [res.resource, ...prev]);
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+      // Same insert_organizer_or_participant_or_admin RLS policy shape as
+      // MeetingNote/Decision above — plain throw on dbError, no null-check
+      // needed. RelatedResource.id has no DB default (client-side-only
+      // cuid()) so it's supplied explicitly; type is sent explicitly too
+      // even though the column has a DB default ('LINK'), matching the old
+      // route's own `data: {..., type: body.type, ...}` (the UI always has
+      // a real selected value, never omits it); createdAt has a real DB
+      // default (CURRENT_TIMESTAMP) so it's left out. addedBy's select
+      // shape matches the parent page's resources:RelatedResource(*,
+      // addedBy:User(name)) embed — ResourceWithUser (./types.ts) declares
+      // nothing more than addedBy.name.
+      const { data, error: dbError } = await supabase
+        .from("RelatedResource")
+        .insert({
+          id: crypto.randomUUID(),
+          meetingId,
+          addedById: authData.user.id,
+          title,
+          url,
+          type,
+        })
+        .select("*, addedBy:User(name)")
+        .single();
+      if (dbError) throw new Error(dbError.message);
+
+      setResources((prev) => [data as ResourceWithUser, ...prev]);
       setTitle("");
       setUrl("");
       setType("LINK");
