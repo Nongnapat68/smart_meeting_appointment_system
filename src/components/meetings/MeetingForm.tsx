@@ -38,7 +38,11 @@ export interface MeetingFormInitial {
 interface SelectedGroup {
   id: string;
   name: string;
-  members: Person[];
+  // Only `id` (totalParticipantCount's dedup Set) and `name` (the member
+  // chip's truncated name list) are actually read from this array anywhere
+  // in this file — not the full Person the old /api/groups/:id response
+  // nested, so the query below only pulls these two columns.
+  members: { id: string; name: string }[];
 }
 
 export function MeetingForm({
@@ -94,7 +98,10 @@ export function MeetingForm({
     initial?.meeting.participants.filter((p) => p.source !== "GROUP").map((p) => p.person) ?? []
   );
   const [selectedGroups, setSelectedGroups] = useState<SelectedGroup[]>([]);
-  const [groups, setGroups] = useState<(ContactGroup & { _count: { members: number } })[]>([]);
+  // PostgREST's embedded-count syntax (`members:ContactGroupMember(count)`)
+  // comes back as `[{ count: N }]`, not Prisma's `_count: { members: N }` —
+  // same shape groups/page.tsx's GroupRow uses.
+  const [groups, setGroups] = useState<(ContactGroup & { members: { count: number }[] })[]>([]);
   const [personQuery, setPersonQuery] = useState("");
   const [personResults, setPersonResults] = useState<Person[]>([]);
   const [externalEmail, setExternalEmail] = useState("");
@@ -104,10 +111,18 @@ export function MeetingForm({
 
   useEffect(() => {
     api.get<{ items: Project[] }>("/api/projects").then((r) => setProjects(r.items)).catch(() => {});
-    api
-      .get<{ items: (ContactGroup & { _count: { members: number } })[] }>("/api/groups")
-      .then((r) => setGroups(r.items))
-      .catch(() => {});
+    // Hybrid migration (Groups resource, mirrors the People round) — same
+    // count-embed query as groups/page.tsx's load(), still needed here for
+    // the "(N คน)" count shown next to each group in the picker below
+    // (verified against the actual JSX, not dropped despite the plan's
+    // note to skip it).
+    createClient()
+      .from("ContactGroup")
+      .select("*, members:ContactGroupMember(count)")
+      .order("createdAt", { ascending: false })
+      .then(({ data, error }) => {
+        if (!error) setGroups((data ?? []) as (ContactGroup & { members: { count: number }[] })[]);
+      });
     api
       .get<{ items: OnlineMeetingResource[] }>("/api/online-resources")
       .then((r) => setOnlineResources(r.items))
@@ -210,12 +225,21 @@ export function MeetingForm({
   async function addGroupById(groupId: string) {
     if (!groupId || selectedGroups.some((g) => g.id === groupId)) return;
     try {
-      const res = await api.get<{ group: { name: string; members: { person: Person }[] } }>(
-        `/api/groups/${groupId}`
-      );
-      const members = res.group.members.map((m) => m.person);
+      // Hybrid migration — same nested members:ContactGroupMember(...)
+      // embed groups/[id]/page.tsx's load() uses, but pulling only id+name
+      // off Person (all this picker actually reads via SelectedGroup.members
+      // above), not the full nested person:Person(*) that page needs for
+      // its member table.
+      const { data: group, error } = await createClient()
+        .from("ContactGroup")
+        .select("name, members:ContactGroupMember(person:Person(id, name))")
+        .eq("id", groupId)
+        .maybeSingle<{ name: string; members: { person: { id: string; name: string } }[] }>();
+      if (error) throw new Error(error.message);
+      if (!group) throw new Error("ไม่พบกลุ่มนี้");
+      const members = group.members.map((m) => m.person);
       setSelectedGroups((prev) =>
-        prev.some((g) => g.id === groupId) ? prev : [...prev, { id: groupId, name: res.group.name, members }]
+        prev.some((g) => g.id === groupId) ? prev : [...prev, { id: groupId, name: group.name, members }]
       );
     } catch {
       showToast("โหลดข้อมูลกลุ่มไม่สำเร็จ", "error");
@@ -763,7 +787,7 @@ export function MeetingForm({
                   .filter((g) => !selectedGroups.some((sg) => sg.id === g.id))
                   .map((g) => (
                     <option key={g.id} value={g.id}>
-                      {g.name} ({g._count.members})
+                      {g.name} ({g.members[0]?.count ?? 0})
                     </option>
                   ))}
               </select>
