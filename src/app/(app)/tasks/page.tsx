@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState, ErrorBanner, FullPageSpinner, Spinner } from "@/components/ui/Feedback";
 import { formatDate } from "@/lib/format";
@@ -40,13 +41,49 @@ export default function TasksPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (tab !== "ALL") params.set("status", tab);
-      const res = await api.get<{ items: TaskRow[]; statusCounts: Record<TaskStatus, number> }>(
-        `/api/tasks?${params.toString()}`
-      );
-      setItems(res.items);
-      setStatusCounts(res.statusCounts);
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+      // Hybrid migration (Tasks resource) — GET list -> supabase-js direct
+      // select. scope stays "mine" (assigneeId = the signed-in user) since
+      // this page never actually sends a scope=all query param (checked —
+      // the old fetch only ever set `status`), matching the old route's own
+      // default. assignee/createdBy both point at User via two different
+      // FKs (assigneeId/createdById), so PostgREST needs the !fkey hint to
+      // pick one — confirmed live: the same embed without it fails with
+      // PGRST201 "more than one relationship was found".
+      //
+      // Fetched WITHOUT a status filter (unlike the old items query, which
+      // *did* filter by status) so statusCounts below always reflects every
+      // status, not just the currently selected tab — same numbers the old
+      // route's separate prisma.task.groupBy() call produced from its own
+      // scope-only where clause, but from one query instead of two. Not
+      // paginated, matching the old route (which never paginated either) —
+      // needed so the counts come out complete.
+      const { data: allItems, error: dbError } = await supabase
+        .from("Task")
+        .select(
+          `*,
+          project:Project(id,name),
+          meeting:Meeting(id,title),
+          assignee:User!Task_assigneeId_fkey(name),
+          assigneePerson:Person(name)`
+        )
+        .eq("assigneeId", authData.user.id)
+        .order("status", { ascending: true })
+        .order("dueDate", { ascending: true });
+      if (dbError) throw new Error(dbError.message);
+
+      const counts: Record<TaskStatus, number> = { NOT_STARTED: 0, IN_PROGRESS: 0, COMPLETED: 0 };
+      (allItems ?? []).forEach((t) => {
+        counts[t.status as TaskStatus] += 1;
+      });
+
+      const filtered = tab === "ALL" ? (allItems ?? []) : (allItems ?? []).filter((t) => t.status === tab);
+
+      setItems(filtered as TaskRow[]);
+      setStatusCounts(counts);
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -64,7 +101,30 @@ export default function TasksPage() {
     const nextStatus = task.status === "COMPLETED" ? "NOT_STARTED" : "COMPLETED";
     setItems((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t)));
     try {
-      await api.patch(`/api/tasks/${task.id}`, { status: nextStatus });
+      // update_assignee_or_creator_or_admin RLS policy replaces
+      // assertOwner() — a blocked update matches 0 rows silently, so
+      // .select().maybeSingle() + null-check turns that into a thrown
+      // error, same pattern as every other resource in this migration.
+      // completedAt/updatedAt aren't in the request's literal `{status}`
+      // example, but both need setting by hand here: completedAt mirrors
+      // the old PATCH route's own logic (set on the COMPLETED transition,
+      // cleared otherwise) and dropping it would silently break
+      // dashboard/page.tsx's "recently completed" feed, which reads
+      // Task.completedAt directly via Prisma; updatedAt has no DB default
+      // (Prisma's @updatedAt is client-side-only) so it goes stale forever
+      // if nothing sets it once Prisma is out of the write path.
+      const { data, error: dbError } = await createClient()
+        .from("Task")
+        .update({
+          status: nextStatus,
+          completedAt: nextStatus === "COMPLETED" ? new Date().toISOString() : null,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", task.id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error("เฉพาะผู้รับผิดชอบ ผู้สร้างงาน หรือผู้ดูแลระบบเท่านั้นที่แก้ไขงานนี้ได้ หรือไม่พบงานนี้");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "อัปเดตสถานะไม่สำเร็จ", "error");
       load();
