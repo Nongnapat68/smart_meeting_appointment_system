@@ -2,17 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { Modal } from "@/components/ui/Modal";
 import { projectStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import type { Project } from "@prisma/client";
 
+// PostgREST's embedded-count syntax (`members:ProjectMember(count)`) comes
+// back as a one-element array (`[{ count: N }]`), not Prisma's nested
+// `_count: { members: N }` shape — same pattern as Groups' GroupRow.
+// `progress` isn't a DB column either way (see load() below).
 type ProjectRow = Project & {
   progress: number;
   _count: { meetings: number; tasks: number };
-  members: { personId: string }[];
+  members: { count: number }[];
 };
 
 export default function ProjectsPage() {
@@ -26,8 +30,35 @@ export default function ProjectsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get<{ items: ProjectRow[] }>("/api/projects");
-      setProjects(res.items);
+      // Hybrid migration (Projects resource, mirrors People/Groups) — GET
+      // list -> supabase-js direct select, no new RPC needed (this is a
+      // read). `progress` isn't a DB column — the old route computed it
+      // from two separate prisma.task.count() calls PER project (an N+1
+      // pattern); tasks:Task(status) pulls just the status column here
+      // instead, so it's computed the same way below but in this one round
+      // trip covering every project, not N extra queries.
+      const { data: items, error: dbError } = await createClient()
+        .from("Project")
+        .select(
+          `*,
+          manager:User(id,name,avatarUrl),
+          members:ProjectMember(count),
+          meetings:Meeting(count),
+          tasks:Task(status)`
+        )
+        .order("createdAt", { ascending: false });
+      if (dbError) throw new Error(dbError.message);
+
+      const rows = (items ?? []).map((p) => {
+        const taskTotal = p.tasks.length;
+        const taskCompleted = p.tasks.filter((t: { status: string }) => t.status === "COMPLETED").length;
+        return {
+          ...p,
+          progress: taskTotal > 0 ? Math.round((taskCompleted / taskTotal) * 100) : 0,
+          _count: { meetings: p.meetings[0]?.count ?? 0, tasks: taskTotal },
+        };
+      });
+      setProjects(rows as ProjectRow[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -94,7 +125,7 @@ export default function ProjectsPage() {
                   </div>
                 </div>
                 <div className="flex justify-between items-center pt-4 border-t border-outline-variant/50">
-                  <span className="font-label-md text-label-md text-on-surface-variant">{p.members.length} ผู้เกี่ยวข้อง</span>
+                  <span className="font-label-md text-label-md text-on-surface-variant">{p.members[0]?.count ?? 0} ผู้เกี่ยวข้อง</span>
                   <div className="flex items-center gap-1 text-on-surface-variant">
                     <span className="material-symbols-outlined text-sm">calendar_month</span>
                     <span className="font-label-md text-label-md">{p._count.meetings} การประชุม</span>
@@ -140,7 +171,33 @@ function CreateProjectModal({
     setError(null);
     setLoading(true);
     try {
-      await api.post("/api/projects", { name, description, startDate, endDate });
+      // Hybrid migration (Projects resource) — POST create -> direct
+      // .insert(). Confirmed from this very form's submit payload (no
+      // memberIds field anywhere on it) that project creation never seeds
+      // ProjectMember rows, so this is a genuine single-table write with
+      // no need for update_project_with_members()'s atomic multi-table
+      // replace — that RPC exists for the *edit* member-replace case only
+      // (see prisma/migrations/20260912090000_update_project_with_members_function).
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+
+      // Project.id and updatedAt have no DB default (Prisma's
+      // @default(cuid()) / @updatedAt are client-side-only, same as every
+      // other direct insert in this migration) — both supplied explicitly.
+      // status is left out to fall back on the DB's own DEFAULT 'ACTIVE',
+      // same value the zod schema defaulted to server-side, since this
+      // form never offers a status choice.
+      const { error: dbError } = await supabase.from("Project").insert({
+        id: crypto.randomUUID(),
+        name,
+        description: description || null,
+        startDate: startDate ? new Date(startDate).toISOString() : null,
+        endDate: endDate ? new Date(endDate).toISOString() : null,
+        managerId: authData.user.id,
+        updatedAt: new Date().toISOString(),
+      });
+      if (dbError) throw new Error(dbError.message);
       setName("");
       setDescription("");
       setStartDate("");
