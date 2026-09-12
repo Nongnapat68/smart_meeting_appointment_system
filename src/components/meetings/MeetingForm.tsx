@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner } from "@/components/ui/Feedback";
 import { toDatetimeLocalValue, formatDateTime } from "@/lib/format";
 import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
-import type { ContactGroup, Meeting, MeetingParticipant, OnlineMeetingResource, Person, Project, Reminder } from "@prisma/client";
+import type { ContactGroup, Meeting, MeetingParticipant, OnlineMeetingResource, Person, Reminder } from "@prisma/client";
 
 // FR-10 example offsets straight from the requirements doc (7d/2d/1d/1h before).
 const REMINDER_PRESETS = [
@@ -68,7 +68,11 @@ export function MeetingForm({
   const [endTime, setEndTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.endTime) : "");
   const [location, setLocation] = useState(initial?.meeting.location ?? "");
   const [projectId, setProjectId] = useState(initial?.meeting.projectId ?? "");
-  const [projects, setProjects] = useState<Project[]>([]);
+  // Hybrid migration (Projects resource) — only `id`/`name` are ever read
+  // from this list (see the <option> below), confirmed against the actual
+  // JSX before narrowing the select, not guessed the way Groups' member
+  // count was almost dropped incorrectly in that round.
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
   // FR-07/BR-09: reusable Online Meeting Resource — pick an existing one or
   // create a new one inline, instead of retyping the URL into `location`.
@@ -110,7 +114,15 @@ export function MeetingForm({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get<{ items: Project[] }>("/api/projects").then((r) => setProjects(r.items)).catch(() => {});
+    // Hybrid migration (Projects resource) — GET list -> supabase-js direct
+    // select, narrowed to id+name only (see the projects state above).
+    createClient()
+      .from("Project")
+      .select("id, name")
+      .order("createdAt", { ascending: false })
+      .then(({ data, error }) => {
+        if (!error) setProjects((data ?? []) as { id: string; name: string }[]);
+      });
     // Hybrid migration (Groups resource, mirrors the People round) — same
     // count-embed query as groups/page.tsx's load(), still needed here for
     // the "(N คน)" count shown next to each group in the picker below
