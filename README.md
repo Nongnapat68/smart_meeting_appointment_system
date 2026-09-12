@@ -112,9 +112,15 @@ npm run dev
 - **Auth**: ใช้ [Supabase Auth](https://supabase.com/docs/guides/auth) ทั้งหมด — ไม่มีระบบ JWT/bcrypt เขียนเอง `User.id`
   ในฐานข้อมูลคือ uuid เดียวกับ `auth.users.id` (FK ข้าม schema, `ON DELETE CASCADE`)
 - **Row Level Security**: เปิดครบทั้ง 20 ตารางจริงในระบบ (72 policy) เป็นชั้นป้องกันเพิ่มที่ระดับ database — application layer
-  (`assertOwner()` ในทุก route) ยังคงเป็นชั้นตรวจสอบสิทธิ์หลักเหมือนเดิม
-- **Database objects เพิ่มเติม**: 2 Views (`upcoming_meetings`, `overdue_action_items`), 2 Functions
-  (`process_due_reminders()`, `get_meeting_context()`), 1 Trigger (`trg_cancel_meeting_reminders`)
+  (`assertOwner()` ในทุก route ที่ยังเป็น Prisma) ยังคงเป็นชั้นตรวจสอบสิทธิ์หลักสำหรับ route ที่ยังไม่ย้าย
+- **Hybrid migration**: บาง resource (Meetings/People/Groups/Projects/Tasks/Reminders/OnlineMeetingResource/Meeting
+  Notes-Decisions-Resources) ย้ายจาก Next.js API + Prisma ไปเรียก Supabase ตรงผ่าน `supabase-js`/PostgREST จาก
+  browser แล้ว — RLS (ไม่ใช่ `assertOwner()`) เป็นชั้นตรวจสอบสิทธิ์หลักของจุดที่ย้ายแล้ว route/API เดิมบางเส้นทางยังอยู่ในโค้ด
+  (ไม่ได้ลบ) แต่ไม่มี frontend เรียกแล้ว — ดูรายละเอียดที่ `docs/DESIGN_DECISIONS.md`
+- **Database objects เพิ่มเติม**: 2 Views (`upcoming_meetings`, `overdue_action_items`), 5 Functions
+  (`process_due_reminders()`, `get_meeting_context()`, `create_meeting_with_participants()`,
+  `update_project_with_members()`, `update_meeting_with_participants()` — สามตัวหลังเป็น RPC เขียนข้อมูลแบบ atomic
+  สำหรับ hybrid migration ไม่ใช่แค่ query อ่านอย่างเดียวแบบสองตัวแรก), 1 Trigger (`trg_cancel_meeting_reminders`)
 
 ดูเหตุผลการออกแบบแต่ละจุดแบบละเอียด (ทางเลือกที่พิจารณา/ตัดสินใจ/เหตุผล) ที่ [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md)
 
@@ -126,7 +132,7 @@ npm run dev
 |---|---|
 | [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) | เทียบระบบปัจจุบันกับ requirements ทุกข้อ (FR/BR) พร้อมหลักฐาน |
 | [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md) | เหตุผลการออกแบบ schema/ระบบในแต่ละจุด |
-| [`docs/ER_DIAGRAM.md`](docs/ER_DIAGRAM.md) | ER diagram ของฐานข้อมูล |
-| [`docs/DATA_DICTIONARY.md`](docs/DATA_DICTIONARY.md) | รายละเอียดทุกตาราง/คอลัมน์/enum |
+| [`docs/deliverables/ER_DIAGRAM.md`](docs/deliverables/ER_DIAGRAM.md) | ER diagram ของฐานข้อมูล |
+| [`docs/deliverables/DATA_DICTIONARY.md`](docs/deliverables/DATA_DICTIONARY.md) | รายละเอียดทุกตาราง/คอลัมน์/enum/View/Function/Trigger |
 | [`docs/deliverables/schema.sql`](docs/deliverables/schema.sql) | DDL เต็มของฐานข้อมูล (ตาราง/enum/RLS/View/Function/Trigger) |
 | [`docs/deliverables/QUERIES.sql`](docs/deliverables/QUERIES.sql) | SQL query ตัวอย่างที่แสดงความสามารถของระบบ |

@@ -1149,18 +1149,20 @@ GRANT SELECT ON public.overdue_action_items TO authenticated;
 
 
 -- =============================================================================
--- 7. FUNCTIONS (4) — requirements.md §8 items 7 and 14, plus two hybrid-
+-- 7. FUNCTIONS (5) — requirements.md §8 items 7 and 14, plus three hybrid-
 --    migration RPCs added afterward (create_meeting_with_participants,
---    update_project_with_members — see docs/DESIGN_DECISIONS.md §5.5/§5.6).
---    process_due_reminders()/get_meeting_context() are SECURITY INVOKER
---    (not DEFINER like the RLS helpers above) since they only read data and
---    never need to cross another user's RLS; the two RPCs below mutate data
---    and mix INVOKER/DEFINER per-function (see each one's own header
---    comment for why). Verbatim from
+--    update_project_with_members, update_meeting_with_participants — see
+--    docs/DESIGN_DECISIONS.md §5.5/§5.6/§5.7). process_due_reminders()/
+--    get_meeting_context() are SECURITY INVOKER (not DEFINER like the RLS
+--    helpers above) since they only read data and never need to cross
+--    another user's RLS; the three RPCs below mutate data and mix
+--    INVOKER/DEFINER per-function (see each one's own header comment for
+--    why). Verbatim from
 --    prisma/migrations/20260911140000_process_due_reminders_function,
 --    20260911150000_get_meeting_context_function,
---    20260911170000_create_meeting_with_participants_function and
---    20260912090000_update_project_with_members_function.
+--    20260911170000_create_meeting_with_participants_function,
+--    20260912090000_update_project_with_members_function and
+--    20260912100000_update_meeting_with_participants_function.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.process_due_reminders()
@@ -1528,6 +1530,190 @@ GRANT EXECUTE ON FUNCTION public.update_project_with_members(
   text, text, text, text, timestamp, timestamp, text[]
 ) TO authenticated;
 
+-- update_meeting_with_participants() — hybrid migration (Meeting resource,
+-- edit round): atomic replacement for PUT /api/meetings/[id]'s multi-step
+-- write (update Meeting fields -> conditionally replace _MeetingGroups ->
+-- conditionally replace MeetingParticipant wholesale). The three
+-- participant-related params (p_participant_person_ids/p_group_ids/
+-- p_external_emails) all DEFAULT NULL: NULL on all three means "leave
+-- groups/participants alone" (mirrors the old handler's own
+-- `!== undefined` checks, not `!= null`); an empty array on any of them
+-- means "replace with nothing" — Postgres distinguishes a NULL array from
+-- an empty one natively, so no extra sentinel was needed. Every other
+-- editable field is a plain column SET (partial update, not a full
+-- replace) since this function's one real caller always supplies a
+-- decided value for each. SECURITY INVOKER (unlike
+-- create_meeting_with_participants(), which is DEFINER): this function
+-- never writes a Notification row the caller lacks direct RLS permission
+-- for, so Meeting's update_organizer_or_admin and MeetingParticipant/
+-- _MeetingGroups's organizer-or-admin policies already gate every write
+-- here. Authorization is still checked explicitly first, against the
+-- meeting's *existing* organizerId (not a parameter — update can't
+-- reassign the organizer), to reproduce the old assertOwner() error
+-- message exactly. See docs/DESIGN_DECISIONS.md §5.7 (including one
+-- documented INVOKER-vs-DEFINER edge case around external-email
+-- collisions with existing internal Person rows).
+CREATE OR REPLACE FUNCTION public.update_meeting_with_participants(
+  p_meeting_id text,
+  p_title text,
+  p_start_time timestamp,
+  p_end_time timestamp,
+  p_description text DEFAULT NULL,
+  p_type text DEFAULT 'SINGLE',
+  p_status text DEFAULT 'PENDING',
+  p_location text DEFAULT NULL,
+  p_project_id text DEFAULT NULL,
+  p_online_meeting_resource_id text DEFAULT NULL,
+  p_participant_person_ids text[] DEFAULT NULL,
+  p_group_ids text[] DEFAULT NULL,
+  p_external_emails text[] DEFAULT NULL
+)
+RETURNS public."Meeting"
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_organizer_id uuid;
+  v_organizer_person_id text;
+  v_email text;
+  v_person_id text;
+  v_meeting public."Meeting";
+BEGIN
+  -- ---- Authorization FIRST, against the meeting's EXISTING organizerId
+  -- (see header) — before touching any table. ----
+  SELECT "organizerId", "organizerPersonId" INTO v_organizer_id, v_organizer_person_id
+  FROM public."Meeting" WHERE id = p_meeting_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'ไม่พบการประชุมนี้';
+  END IF;
+
+  IF v_organizer_id IS DISTINCT FROM auth.uid() AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่แก้ไขการประชุมนี้ได้' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_title IS NULL OR btrim(p_title) = '' THEN
+    RAISE EXCEPTION 'กรุณากรอกหัวข้อการประชุม';
+  END IF;
+  IF p_end_time <= p_start_time THEN
+    RAISE EXCEPTION 'เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม';
+  END IF;
+
+  -- ---- 1. Meeting's own editable fields — partial update (plain column
+  -- SET), not a full-replace the way groups/participants below are ----
+  UPDATE public."Meeting"
+  SET title = p_title,
+      description = p_description,
+      type = p_type::public."MeetingType",
+      status = p_status::public."MeetingStatus",
+      "startTime" = p_start_time,
+      "endTime" = p_end_time,
+      location = p_location,
+      "projectId" = p_project_id,
+      "onlineMeetingResourceId" = p_online_meeting_resource_id,
+      "updatedAt" = now()
+  WHERE id = p_meeting_id;
+
+  -- ---- 2. Meeting <-> ContactGroup join rows — only touched if p_group_ids
+  -- was actually passed (NULL = leave alone, matching the old handler's
+  -- `groupIds !== undefined` check on `groups: { set: [...] }`) ----
+  IF p_group_ids IS NOT NULL THEN
+    DELETE FROM public."_MeetingGroups" WHERE "B" = p_meeting_id;
+    IF array_length(p_group_ids, 1) > 0 THEN
+      INSERT INTO public."_MeetingGroups" ("A", "B")
+      SELECT DISTINCT g, p_meeting_id FROM unnest(p_group_ids) AS g
+      ON CONFLICT DO NOTHING;
+    END IF;
+  END IF;
+
+  -- ---- 3. MeetingParticipant — full replace, ONLY if at least one of the
+  -- three participant-related params was actually passed (NULL on all three
+  -- = don't touch, matching the old handler's shouldResolveParticipants
+  -- check: `participantPersonIds !== undefined || groupIds !== undefined ||
+  -- externalEmails !== undefined`). Same DIRECT/GROUP/EXTERNAL resolution
+  -- and organizer-always-wins special case as
+  -- create_meeting_with_participants()'s steps 3-5. ----
+  IF p_participant_person_ids IS NOT NULL OR p_group_ids IS NOT NULL OR p_external_emails IS NOT NULL THEN
+    DELETE FROM public."MeetingParticipant" WHERE "meetingId" = p_meeting_id;
+
+    -- ---- 3a. DIRECT (explicit picks always win; BR-04) ----
+    IF p_participant_person_ids IS NOT NULL AND array_length(p_participant_person_ids, 1) > 0 THEN
+      INSERT INTO public."MeetingParticipant" (id, "meetingId", "personId", role, "rsvpStatus", source, "sourceGroupId")
+      SELECT
+        gen_random_uuid()::text, p_meeting_id, pid,
+        CASE WHEN pid = v_organizer_person_id THEN 'ORGANIZER' ELSE 'ATTENDEE' END::public."ParticipantRole",
+        'PENDING'::public."RsvpStatus",
+        'DIRECT'::public."ParticipantSource",
+        NULL
+      FROM (SELECT DISTINCT pid FROM unnest(p_participant_person_ids) AS pid) d
+      ON CONFLICT ("meetingId", "personId") DO NOTHING;
+    END IF;
+
+    -- ---- 3b. GROUP (first selected group wins per person; ON CONFLICT DO
+    -- NOTHING below skips anyone DIRECT already claimed) ----
+    IF p_group_ids IS NOT NULL AND array_length(p_group_ids, 1) > 0 THEN
+      INSERT INTO public."MeetingParticipant" (id, "meetingId", "personId", role, "rsvpStatus", source, "sourceGroupId")
+      SELECT
+        gen_random_uuid()::text, p_meeting_id, m."personId",
+        CASE WHEN m."personId" = v_organizer_person_id THEN 'ORGANIZER' ELSE 'ATTENDEE' END::public."ParticipantRole",
+        'PENDING'::public."RsvpStatus",
+        CASE WHEN m."personId" = v_organizer_person_id THEN 'DIRECT' ELSE 'GROUP' END::public."ParticipantSource",
+        CASE WHEN m."personId" = v_organizer_person_id THEN NULL ELSE m."groupId" END
+      FROM (
+        SELECT DISTINCT ON (cgm."personId") cgm."personId", cgm."groupId"
+        FROM public."ContactGroupMember" cgm
+        WHERE cgm."groupId" = ANY(p_group_ids)
+        ORDER BY cgm."personId", array_position(p_group_ids, cgm."groupId")
+      ) m
+      ON CONFLICT ("meetingId", "personId") DO NOTHING;
+    END IF;
+
+    -- ---- 3c. EXTERNAL (upsert Person per raw email, one at a time,
+    -- mirroring resolveParticipants()'s prisma upsert loop — see header for
+    -- the RLS edge case this INVOKER version has that create()'s DEFINER
+    -- version doesn't) ----
+    IF p_external_emails IS NOT NULL THEN
+      FOREACH v_email IN ARRAY p_external_emails LOOP
+        INSERT INTO public."Person" (id, name, email, type, status, "createdAt", "updatedAt")
+        VALUES (gen_random_uuid()::text, split_part(v_email, '@', 1), v_email, 'EXTERNAL', 'ACTIVE', now(), now())
+        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+        RETURNING id INTO v_person_id;
+
+        INSERT INTO public."MeetingParticipant" (id, "meetingId", "personId", role, "rsvpStatus", source, "sourceGroupId")
+        VALUES (
+          gen_random_uuid()::text, p_meeting_id, v_person_id,
+          CASE WHEN v_person_id = v_organizer_person_id THEN 'ORGANIZER' ELSE 'ATTENDEE' END::public."ParticipantRole",
+          'PENDING'::public."RsvpStatus",
+          CASE WHEN v_person_id = v_organizer_person_id THEN 'DIRECT' ELSE 'EXTERNAL' END::public."ParticipantSource",
+          NULL
+        )
+        ON CONFLICT ("meetingId", "personId") DO NOTHING;
+      END LOOP;
+    END IF;
+  END IF;
+
+  -- ---- 4. No Reminder, no Notification — the old PUT handler never
+  -- touched either (only POST /api/meetings did), so neither does this
+  -- function. ----
+
+  SELECT * INTO v_meeting FROM public."Meeting" WHERE id = p_meeting_id;
+  RETURN v_meeting;
+END;
+$$;
+
+COMMENT ON FUNCTION public.update_meeting_with_participants(
+  text, text, timestamp, timestamp, text, text, text, text, text, text, text[], text[], text[]
+) IS
+  'Hybrid migration (Meeting resource, edit round): atomic replacement for PUT /api/meetings/[id] — updates Meeting''s editable fields (partial, plain column SET), optionally replaces _MeetingGroups (p_group_ids IS NOT NULL) and optionally replaces MeetingParticipant wholesale via DIRECT/GROUP/EXTERNAL resolution identical to create_meeting_with_participants() (any of the three participant params IS NOT NULL), all in one function body (auto-rollback on any failure). NULL on a participant-related param means "leave as-is"; an empty array means "replace with nothing" — distinct from NULL, mirroring the old handler''s `!== undefined` checks. SECURITY INVOKER, not DEFINER: unlike create, this function never writes a Notification row the caller lacks direct RLS permission for, so Meeting''s update_organizer_or_admin and MeetingParticipant/_MeetingGroups''s organizer-or-admin policies already gate every write here. See docs/DESIGN_DECISIONS.md §5.7.';
+
+REVOKE ALL ON FUNCTION public.update_meeting_with_participants(
+  text, text, timestamp, timestamp, text, text, text, text, text, text, text[], text[], text[]
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.update_meeting_with_participants(
+  text, text, timestamp, timestamp, text, text, text, text, text, text, text[], text[], text[]
+) TO authenticated;
+
 
 -- =============================================================================
 -- 8. TRIGGER (1) — BR-14: fills the "0 triggers" gap that existed until
@@ -1579,17 +1765,19 @@ EXECUTE FUNCTION public.cancel_meeting_reminders();
 -- with a query showing the schema no longer exists. Raw counts from that
 -- run are in this deliverable's accompanying report.
 --
--- ⚠️ Function count above the dry run's own count: create_meeting_with_participants()
--- and update_project_with_members() were added to this file AFTER that
--- empty-schema dry run (section 7 now has 4 functions, not 2 — 7 functions
--- total in the whole file, not 5). They were never re-run through that same
--- fresh-schema test as part of updating this deliverable file. Both are
--- real, currently deployed functions on the actual live `public` schema
--- (via their own migrations, prisma/migrations/20260911170000_.../20260912090000_...)
--- and create_meeting_with_participants() is already load-bearing in
--- production (every real meeting creation goes through it) — just not
+-- ⚠️ Function count above the dry run's own count: create_meeting_with_participants(),
+-- update_project_with_members() and update_meeting_with_participants() were
+-- all added to this file AFTER that empty-schema dry run (section 7 now has
+-- 5 functions, not 2 — 8 functions total in the whole file, not 5). None of
+-- the three were ever re-run through that same fresh-schema test as part of
+-- updating this deliverable file. All three are real, currently deployed
+-- functions on the actual live `public` schema (via their own migrations,
+-- prisma/migrations/20260911170000_.../20260912090000_.../20260912100000_...)
+-- and both create_meeting_with_participants() and
+-- update_meeting_with_participants() are already load-bearing in production
+-- (every real meeting create/edit goes through one or the other) — just not
 -- re-verified specifically as *this consolidated schema.sql file, replayed
--- from empty*, still applies cleanly end-to-end with them included.
+-- from empty*, still applies cleanly end-to-end with all three included.
 -- See docs/deliverables/DATA_DICTIONARY.md and ER_DIAGRAM.md for narrative
 -- documentation of every table/enum/relationship, and QUERIES.sql for the
 -- 15 requirements.md §8 queries run against the real `public` schema this
