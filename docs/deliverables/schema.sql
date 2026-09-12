@@ -1149,11 +1149,18 @@ GRANT SELECT ON public.overdue_action_items TO authenticated;
 
 
 -- =============================================================================
--- 7. FUNCTIONS (2) — requirements.md §8 items 7 and 14. SECURITY INVOKER
---    (not DEFINER like the RLS helpers above) — these only read data, they
---    never need to cross another user's RLS. Verbatim from
---    prisma/migrations/20260911140000_process_due_reminders_function and
---    20260911150000_get_meeting_context_function.
+-- 7. FUNCTIONS (4) — requirements.md §8 items 7 and 14, plus two hybrid-
+--    migration RPCs added afterward (create_meeting_with_participants,
+--    update_project_with_members — see docs/DESIGN_DECISIONS.md §5.5/§5.6).
+--    process_due_reminders()/get_meeting_context() are SECURITY INVOKER
+--    (not DEFINER like the RLS helpers above) since they only read data and
+--    never need to cross another user's RLS; the two RPCs below mutate data
+--    and mix INVOKER/DEFINER per-function (see each one's own header
+--    comment for why). Verbatim from
+--    prisma/migrations/20260911140000_process_due_reminders_function,
+--    20260911150000_get_meeting_context_function,
+--    20260911170000_create_meeting_with_participants_function and
+--    20260912090000_update_project_with_members_function.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION public.process_due_reminders()
@@ -1265,6 +1272,262 @@ COMMENT ON FUNCTION public.get_meeting_context(text) IS
 REVOKE ALL ON FUNCTION public.get_meeting_context(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_meeting_context(text) TO authenticated;
 
+-- create_meeting_with_participants() — hybrid migration (Meeting resource):
+-- atomic replacement for the multi-step Prisma writes POST /api/meetings
+-- used to do (insert Meeting -> insert MeetingParticipant per invitee ->
+-- insert Reminder per offset -> insert Notification per invited internal
+-- user), all in one function body so a failure anywhere rolls back
+-- everything. SECURITY DEFINER (unlike the two functions above): a MEMBER
+-- organizer must be able to insert Notification rows for other invitees,
+-- which the admin-only Notification INSERT policy blocks under INVOKER —
+-- safe only because auth.uid() is checked against p_organizer_id (or
+-- is_admin()) before any table is touched. See docs/DESIGN_DECISIONS.md §5.5.
+CREATE OR REPLACE FUNCTION public.create_meeting_with_participants(
+  p_organizer_id uuid,
+  p_title text,
+  p_start_time timestamp,
+  p_end_time timestamp,
+  p_description text DEFAULT NULL,
+  p_type text DEFAULT 'SINGLE',
+  p_status text DEFAULT 'PENDING',
+  p_location text DEFAULT NULL,
+  p_project_id text DEFAULT NULL,
+  p_online_meeting_resource_id text DEFAULT NULL,
+  p_participant_person_ids text[] DEFAULT '{}',
+  p_group_ids text[] DEFAULT '{}',
+  p_external_emails text[] DEFAULT '{}',
+  p_reminder_offset_minutes int[] DEFAULT ARRAY[30]
+)
+RETURNS public."Meeting"
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_caller_id uuid;
+  v_meeting_id text;
+  v_organizer_person_id text;
+  v_email text;
+  v_person_id text;
+  v_offset int;
+  v_meeting public."Meeting";
+BEGIN
+  -- ---- Authorization FIRST, before touching any table (see header) ----
+  v_caller_id := auth.uid();
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'ต้องเข้าสู่ระบบก่อนใช้งาน' USING ERRCODE = '28000';
+  END IF;
+  IF p_organizer_id IS DISTINCT FROM v_caller_id AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'ไม่มีสิทธิ์สร้างการประชุมในนามผู้ใช้อื่น' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_title IS NULL OR btrim(p_title) = '' THEN
+    RAISE EXCEPTION 'กรุณากรอกหัวข้อการประชุม';
+  END IF;
+  IF p_end_time <= p_start_time THEN
+    RAISE EXCEPTION 'เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม';
+  END IF;
+
+  v_meeting_id := gen_random_uuid()::text;
+  SELECT id INTO v_organizer_person_id FROM public."Person" WHERE "userId" = p_organizer_id;
+
+  -- ---- 1. Meeting ----
+  INSERT INTO public."Meeting" (
+    id, title, description, type, status, "startTime", "endTime", location,
+    "createdAt", "updatedAt", "organizerId", "organizerPersonId", "projectId",
+    "onlineMeetingResourceId"
+  ) VALUES (
+    v_meeting_id, p_title, p_description, p_type::public."MeetingType", p_status::public."MeetingStatus",
+    p_start_time, p_end_time, p_location, now(), now(), p_organizer_id, v_organizer_person_id,
+    p_project_id, p_online_meeting_resource_id
+  );
+
+  -- ---- 2. Meeting <-> ContactGroup join rows ("เพิ่มทั้งกลุ่ม") ----
+  IF p_group_ids IS NOT NULL AND array_length(p_group_ids, 1) > 0 THEN
+    INSERT INTO public."_MeetingGroups" ("A", "B")
+    SELECT DISTINCT g, v_meeting_id FROM unnest(p_group_ids) AS g
+    ON CONFLICT DO NOTHING;
+  END IF;
+
+  -- ---- 3. MeetingParticipant — DIRECT (explicit picks always win; BR-04) ----
+  IF p_participant_person_ids IS NOT NULL AND array_length(p_participant_person_ids, 1) > 0 THEN
+    INSERT INTO public."MeetingParticipant" (id, "meetingId", "personId", role, "rsvpStatus", source, "sourceGroupId")
+    SELECT
+      gen_random_uuid()::text, v_meeting_id, pid,
+      CASE WHEN pid = v_organizer_person_id THEN 'ORGANIZER' ELSE 'ATTENDEE' END::public."ParticipantRole",
+      'PENDING'::public."RsvpStatus",
+      'DIRECT'::public."ParticipantSource",
+      NULL
+    FROM (SELECT DISTINCT pid FROM unnest(p_participant_person_ids) AS pid) d
+    ON CONFLICT ("meetingId", "personId") DO NOTHING;
+  END IF;
+
+  -- ---- 4. MeetingParticipant — GROUP (first selected group wins per person;
+  -- ON CONFLICT DO NOTHING below skips anyone DIRECT already claimed) ----
+  IF p_group_ids IS NOT NULL AND array_length(p_group_ids, 1) > 0 THEN
+    INSERT INTO public."MeetingParticipant" (id, "meetingId", "personId", role, "rsvpStatus", source, "sourceGroupId")
+    SELECT
+      gen_random_uuid()::text, v_meeting_id, m."personId",
+      CASE WHEN m."personId" = v_organizer_person_id THEN 'ORGANIZER' ELSE 'ATTENDEE' END::public."ParticipantRole",
+      'PENDING'::public."RsvpStatus",
+      CASE WHEN m."personId" = v_organizer_person_id THEN 'DIRECT' ELSE 'GROUP' END::public."ParticipantSource",
+      CASE WHEN m."personId" = v_organizer_person_id THEN NULL ELSE m."groupId" END
+    FROM (
+      SELECT DISTINCT ON (cgm."personId") cgm."personId", cgm."groupId"
+      FROM public."ContactGroupMember" cgm
+      WHERE cgm."groupId" = ANY(p_group_ids)
+      ORDER BY cgm."personId", array_position(p_group_ids, cgm."groupId")
+    ) m
+    ON CONFLICT ("meetingId", "personId") DO NOTHING;
+  END IF;
+
+  -- ---- 5. MeetingParticipant — EXTERNAL (upsert Person per raw email,
+  -- one at a time, mirroring resolveParticipants()'s prisma upsert loop) ----
+  IF p_external_emails IS NOT NULL THEN
+    FOREACH v_email IN ARRAY p_external_emails LOOP
+      INSERT INTO public."Person" (id, name, email, type, status, "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, split_part(v_email, '@', 1), v_email, 'EXTERNAL', 'ACTIVE', now(), now())
+      ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+      RETURNING id INTO v_person_id;
+
+      INSERT INTO public."MeetingParticipant" (id, "meetingId", "personId", role, "rsvpStatus", source, "sourceGroupId")
+      VALUES (
+        gen_random_uuid()::text, v_meeting_id, v_person_id,
+        CASE WHEN v_person_id = v_organizer_person_id THEN 'ORGANIZER' ELSE 'ATTENDEE' END::public."ParticipantRole",
+        'PENDING'::public."RsvpStatus",
+        CASE WHEN v_person_id = v_organizer_person_id THEN 'DIRECT' ELSE 'EXTERNAL' END::public."ParticipantSource",
+        NULL
+      )
+      ON CONFLICT ("meetingId", "personId") DO NOTHING;
+    END LOOP;
+  END IF;
+
+  -- ---- 6. Reminder — one row per requested offset (FR-10/BR-11) ----
+  IF p_reminder_offset_minutes IS NOT NULL THEN
+    FOREACH v_offset IN ARRAY p_reminder_offset_minutes LOOP
+      IF v_offset > 0 THEN
+        INSERT INTO public."Reminder" (id, "meetingId", "scheduledAt", status, "createdAt")
+        VALUES (gen_random_uuid()::text, v_meeting_id, p_start_time - (v_offset || ' minutes')::interval, 'PENDING', now());
+      END IF;
+    END LOOP;
+  END IF;
+
+  -- ---- 7. Notification — every invited internal user except the organizer
+  -- themselves. THE insert the Notification RLS policy would block for a
+  -- MEMBER caller without this function's SECURITY DEFINER. ----
+  INSERT INTO public."Notification" (id, "userId", type, title, body, "isRead", "relatedId", "createdAt")
+  SELECT gen_random_uuid()::text, p."userId", 'MEETING_INVITE', 'คำเชิญเข้าร่วมประชุมใหม่', p_title, false, v_meeting_id, now()
+  FROM public."MeetingParticipant" mp
+  JOIN public."Person" p ON p.id = mp."personId"
+  WHERE mp."meetingId" = v_meeting_id
+    AND p."userId" IS NOT NULL
+    AND p."userId" <> p_organizer_id;
+
+  SELECT * INTO v_meeting FROM public."Meeting" WHERE id = v_meeting_id;
+  RETURN v_meeting;
+END;
+$$;
+
+COMMENT ON FUNCTION public.create_meeting_with_participants(
+  uuid, text, timestamp, timestamp, text, text, text, text, text, text, text[], text[], text[], int[]
+) IS
+  'Hybrid migration round 1 (Meeting resource): atomic replacement for POST /api/meetings — inserts Meeting, MeetingParticipant (DIRECT/GROUP/EXTERNAL, same precedence as resolveParticipants()), Reminder per offset, and Notification per invited internal user, all in one function body (auto-rollback on any failure). SECURITY DEFINER so a MEMBER organizer can insert Notification rows for other invitees despite the admin-only Notification INSERT policy — safe only because auth.uid() is checked against p_organizer_id (or is_admin()) before anything else runs. See docs/DESIGN_DECISIONS.md.';
+
+REVOKE ALL ON FUNCTION public.create_meeting_with_participants(
+  uuid, text, timestamp, timestamp, text, text, text, text, text, text, text[], text[], text[], int[]
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.create_meeting_with_participants(
+  uuid, text, timestamp, timestamp, text, text, text, text, text, text, text[], text[], text[], int[]
+) TO authenticated;
+
+-- update_project_with_members() — hybrid migration (Projects resource):
+-- atomic replacement for the member-replace step of PUT /api/projects/[id]
+-- (full-replace, not a partial PATCH — every editable field is required on
+-- every call). SECURITY INVOKER (unlike the function above): Project's own
+-- update_manager_or_admin RLS policy already blocks a non-manager/non-admin
+-- caller at the first UPDATE, so no separate authorization check is needed
+-- in the body — a blocked UPDATE matches 0 rows silently, which the
+-- `IF NOT FOUND` check turns into an explicit exception. Not wired to any
+-- route/UI yet this round (projects/page.tsx only has list+create;
+-- projects/[id]/page.tsx is a read-only Server Component still on Prisma) —
+-- added as verified, ready infrastructure for a future editing round. See
+-- docs/DESIGN_DECISIONS.md §5.6.
+CREATE OR REPLACE FUNCTION public.update_project_with_members(
+  p_project_id text,
+  p_name text,
+  p_description text,
+  p_status text,
+  p_start_date timestamp,
+  p_end_date timestamp,
+  p_member_person_ids text[]
+)
+RETURNS public."Project"
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_project public."Project";
+BEGIN
+  IF p_name IS NULL OR btrim(p_name) = '' THEN
+    RAISE EXCEPTION 'กรุณากรอกชื่อโปรเจกต์';
+  END IF;
+
+  -- ---- 1. Project's own editable fields ----
+  UPDATE public."Project"
+  SET "name" = p_name,
+      "description" = p_description,
+      "status" = p_status::public."ProjectStatus",
+      "startDate" = p_start_date,
+      "endDate" = p_end_date,
+      "updatedAt" = now()
+  WHERE "id" = p_project_id
+  RETURNING * INTO v_project;
+
+  -- update_manager_or_admin blocks a non-manager/non-admin caller here
+  -- silently (0 rows, no exception) — surface it explicitly instead of
+  -- falling through to touch ProjectMember for a project this caller was
+  -- never allowed to edit.
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'ไม่พบโปรเจกต์นี้ หรือคุณไม่มีสิทธิ์แก้ไข';
+  END IF;
+
+  -- ---- 2. Replace ProjectMember wholesale (empty array = remove all,
+  -- not an error — same "no error on empty" contract the request asked
+  -- for) ----
+  DELETE FROM public."ProjectMember" WHERE "projectId" = p_project_id;
+
+  IF p_member_person_ids IS NOT NULL AND array_length(p_member_person_ids, 1) > 0 THEN
+    -- ProjectMember.id has no DB default (Prisma's @default(cuid()) is
+    -- client-side-only, same as every other cuid() id in this schema), so
+    -- it's generated here explicitly. DISTINCT guards against
+    -- @@unique(["projectId","personId"]) if the same id is passed twice.
+    -- A personId with no matching Person row hits the
+    -- ProjectMember_personId_fkey FK violation (23503) here and the whole
+    -- function aborts — the UPDATE and DELETE above roll back with it, so
+    -- the project is never left with its old fields but no members, or
+    -- new fields but a half-applied member list.
+    INSERT INTO public."ProjectMember" ("id", "projectId", "personId")
+    SELECT gen_random_uuid()::text, p_project_id, person_id
+    FROM (SELECT DISTINCT person_id FROM unnest(p_member_person_ids) AS person_id) d;
+  END IF;
+
+  RETURN v_project;
+END;
+$$;
+
+COMMENT ON FUNCTION public.update_project_with_members(
+  text, text, text, text, timestamp, timestamp, text[]
+) IS
+  'Atomic replacement for PUT /api/projects/[id]''s member-replace step: updates Project''s editable fields, then replaces every ProjectMember row for it with p_member_person_ids in one function body (auto-rollback on any failure, e.g. a bogus personId hitting the ProjectMember_personId_fkey FK violation). Full-replace, not a partial PATCH. SECURITY INVOKER, not DEFINER: Project''s own update_manager_or_admin RLS policy already blocks a non-manager/non-admin caller at the first UPDATE, so no separate authorization check is written into the function body. See docs/DESIGN_DECISIONS.md §5.6.';
+
+REVOKE ALL ON FUNCTION public.update_project_with_members(
+  text, text, text, text, timestamp, timestamp, text[]
+) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.update_project_with_members(
+  text, text, text, text, timestamp, timestamp, text[]
+) TO authenticated;
+
 
 -- =============================================================================
 -- 8. TRIGGER (1) — BR-14: fills the "0 triggers" gap that existed until
@@ -1315,6 +1578,18 @@ EXECUTE FUNCTION public.cancel_meeting_reminders();
 -- `DROP SCHEMA ... CASCADE` removed every trace of it — confirmed after
 -- with a query showing the schema no longer exists. Raw counts from that
 -- run are in this deliverable's accompanying report.
+--
+-- ⚠️ Function count above the dry run's own count: create_meeting_with_participants()
+-- and update_project_with_members() were added to this file AFTER that
+-- empty-schema dry run (section 7 now has 4 functions, not 2 — 7 functions
+-- total in the whole file, not 5). They were never re-run through that same
+-- fresh-schema test as part of updating this deliverable file. Both are
+-- real, currently deployed functions on the actual live `public` schema
+-- (via their own migrations, prisma/migrations/20260911170000_.../20260912090000_...)
+-- and create_meeting_with_participants() is already load-bearing in
+-- production (every real meeting creation goes through it) — just not
+-- re-verified specifically as *this consolidated schema.sql file, replayed
+-- from empty*, still applies cleanly end-to-end with them included.
 -- See docs/deliverables/DATA_DICTIONARY.md and ER_DIAGRAM.md for narrative
 -- documentation of every table/enum/relationship, and QUERIES.sql for the
 -- 15 requirements.md §8 queries run against the real `public` schema this
