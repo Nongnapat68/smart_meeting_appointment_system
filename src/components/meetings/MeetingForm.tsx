@@ -543,9 +543,9 @@ export function MeetingForm({
                     onChange={(e) => setStatus(e.target.value as Meeting["status"])}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   >
-                    <option value="PENDING">รอยืนยัน (Pending)</option>
-                    <option value="ACTIVE">ยืนยันแล้ว (Active)</option>
-                    {isEdit && <option value="COMPLETED">เสร็จสิ้น (Completed)</option>}
+                    <option value="PENDING">รอดำเนินการ</option>
+                    <option value="ACTIVE">ยืนยันแล้ว</option>
+                    {isEdit && <option value="COMPLETED">เสร็จสิ้น</option>}
                   </select>
                 </FieldLabel>
               </div>
