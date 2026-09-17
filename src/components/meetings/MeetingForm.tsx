@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner } from "@/components/ui/Feedback";
+import { DateTimeField } from "@/components/meetings/DateTimeField";
 import { toDatetimeLocalValue, formatDateTime } from "@/lib/format";
 import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import type { ContactGroup, Meeting, MeetingParticipant, OnlineMeetingResource, Person, Reminder } from "@prisma/client";
@@ -28,6 +29,21 @@ function offsetLabel(minutes: number): string {
   if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)} วันก่อน`;
   if (minutes % 60 === 0) return `${minutes / 60} ชั่วโมงก่อน`;
   return `${minutes} นาทีก่อน`;
+}
+
+function defaultStartValue(): string {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  d.setHours(d.getHours() + 1);
+  return toDatetimeLocalValue(d);
+}
+
+function defaultEndValue(startLocal: string): string {
+  return toDatetimeLocalValue(new Date(new Date(startLocal).getTime() + 60 * 60 * 1000));
+}
+
+function datePartOf(local: string): string {
+  return local.slice(0, 10);
 }
 
 export interface MeetingFormInitial {
@@ -64,10 +80,10 @@ export function MeetingForm({
   const [description, setDescription] = useState(initial?.meeting.description ?? "");
   const [type, setType] = useState<"SINGLE" | "PROJECT">(initial?.meeting.type ?? "SINGLE");
   const [status] = useState<Meeting["status"]>(initial?.meeting.status ?? "PENDING");
-  const [startTime, setStartTime] = useState(
-    initial ? toDatetimeLocalValue(initial.meeting.startTime) : ""
+  const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.startTime) : defaultStartValue());
+  const [endTime, setEndTime] = useState(
+    initial ? toDatetimeLocalValue(initial.meeting.endTime) : defaultEndValue(defaultStartValue())
   );
-  const [endTime, setEndTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.endTime) : "");
   const [location, setLocation] = useState(initial?.meeting.location ?? "");
   const [projectId, setProjectId] = useState(initial?.meeting.projectId ?? "");
   // Hybrid migration (Projects resource) — only `id`/`name` are ever read
@@ -115,7 +131,6 @@ export function MeetingForm({
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const nowLocal = toDatetimeLocalValue(new Date());
 
   useEffect(() => {
     // Hybrid migration (Projects resource) — GET list -> supabase-js direct
@@ -376,6 +391,15 @@ export function MeetingForm({
     }
   }
 
+  function handleStartChange(v: string) {
+    setStartTime(v);
+    setEndTime((prev) => {
+      if (!prev) return prev;
+      if (new Date(prev) <= new Date(v)) return defaultEndValue(v);
+      return prev;
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -630,32 +654,13 @@ p_project_id: resolvedProjectId || null,
             </h3>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FieldLabel label="เริ่ม">
-                  <input
-                    type="datetime-local"
-                    required
-                    min={nowLocal}
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
-                  />
-                  <p className="mt-1 text-body-md text-on-surface-variant">
-                    เลือกวันที่ แล้วตั้งเวลาในส่วนชั่วโมง (ชม.) และนาที (น.)
-                  </p>
-                </FieldLabel>
-                <FieldLabel label="สิ้นสุด">
-                  <input
-                    type="datetime-local"
-                    required
-                    min={nowLocal}
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
-                  />
-                  <p className="mt-1 text-body-md text-on-surface-variant">
-                    เลือกวันที่ แล้วตั้งเวลาในส่วนชั่วโมง (ชม.) และนาที (น.)
-                  </p>
-                </FieldLabel>
+                <DateTimeField label="เริ่ม" value={startTime} onChange={handleStartChange} />
+                <DateTimeField
+                  label="สิ้นสุด"
+                  value={endTime}
+                  onChange={setEndTime}
+                  minDateKey={datePartOf(startTime)}
+                />
               </div>
               <FieldLabel label="สถานที่ (ห้องประชุมจริง)">
                 <div className="relative">
