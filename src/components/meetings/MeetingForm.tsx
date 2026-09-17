@@ -591,6 +591,9 @@ export function MeetingForm({
                     onChange={(e) => setStartTime(e.target.value)}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   />
+                  <p className="mt-1 text-body-md text-on-surface-variant">
+                    เลือกวันที่ แล้วตั้งเวลาในส่วนชั่วโมง (ชม.) และนาที (น.)
+                  </p>
                 </FieldLabel>
                 <FieldLabel label="สิ้นสุด">
                   <input
@@ -600,6 +603,9 @@ export function MeetingForm({
                     onChange={(e) => setEndTime(e.target.value)}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   />
+                  <p className="mt-1 text-body-md text-on-surface-variant">
+                    เลือกวันที่ แล้วตั้งเวลาในส่วนชั่วโมง (ชม.) และนาที (น.)
+                  </p>
                 </FieldLabel>
               </div>
               <FieldLabel label="สถานที่ (ห้องประชุมจริง)">
