@@ -63,7 +63,7 @@ export function MeetingForm({
   const [title, setTitle] = useState(initial?.meeting.title ?? "");
   const [description, setDescription] = useState(initial?.meeting.description ?? "");
   const [type, setType] = useState<"SINGLE" | "PROJECT">(initial?.meeting.type ?? "SINGLE");
-  const [status, setStatus] = useState<Meeting["status"]>(initial?.meeting.status ?? "PENDING");
+  const [status] = useState<Meeting["status"]>(initial?.meeting.status ?? "PENDING");
   const [startTime, setStartTime] = useState(
     initial ? toDatetimeLocalValue(initial.meeting.startTime) : ""
   );
@@ -568,17 +568,6 @@ p_project_id: resolvedProjectId || null,
                   >
                     <option value="SINGLE">การประชุมเดี่ยว (Single)</option>
                     <option value="PROJECT">เชื่อมโยงกับโปรเจกต์ (Project)</option>
-                  </select>
-                </FieldLabel>
-                <FieldLabel label="สถานะ">
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as Meeting["status"])}
-                    className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
-                  >
-                    <option value="PENDING">รอดำเนินการ</option>
-                    <option value="ACTIVE">ยืนยันแล้ว</option>
-                    {isEdit && <option value="COMPLETED">เสร็จสิ้น</option>}
                   </select>
                 </FieldLabel>
               </div>
