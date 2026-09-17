@@ -256,7 +256,7 @@ export default function TasksPage() {
                           <div className="flex justify-between items-start mb-1 gap-2">
                             <Link
                               href={`/tasks/${t.id}`}
-                              className={`font-body-lg text-body-lg font-semibold text-on-surface group-hover:text-primary transition-colors ${t.status === "COMPLETED" ? "line-through text-on-surface-variant" : ""}`}
+                              className={`font-body-lg text-body-lg font-semibold text-on-surface group-hover:text-primary transition-colors ${t.status === "COMPLETED" ? "text-on-surface-variant" : ""}`}
                             >
                               {t.title}
                             </Link>
