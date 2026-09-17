@@ -46,7 +46,7 @@ export function Sidebar() {
           className="w-full flex items-center justify-center gap-2 bg-primary text-on-primary py-3 rounded-lg font-body-md text-body-md font-semibold hover:opacity-90 active:scale-95 duration-200 transition-all shadow-sm"
         >
           <span className="material-symbols-outlined">add</span>
-          นัดหมายใหม่
+          สร้างการประชุม
         </Link>
       </div>
 

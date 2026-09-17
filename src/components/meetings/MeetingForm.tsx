@@ -499,7 +499,7 @@ export function MeetingForm({
     <div className="pt-8 px-container-margin max-w-5xl mx-auto pb-16">
       <div className="mb-8">
         <h2 className="font-display-lg text-display-lg text-on-surface mb-2">
-          {isEdit ? "แก้ไขการนัดหมาย" : "สร้างการนัดหมาย"}
+          {isEdit ? "แก้ไขการประชุม" : "สร้างการประชุม"}
         </h2>
         <p className="font-body-lg text-body-lg text-on-surface-variant">ระบุรายละเอียดการประชุมและเลือกผู้เข้าร่วม</p>
       </div>
