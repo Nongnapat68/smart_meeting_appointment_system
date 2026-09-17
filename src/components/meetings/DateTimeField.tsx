@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate } from "@/lib/format";
 
@@ -8,6 +8,8 @@ const ROW_HEIGHT = 36;
 const VISIBLE_ROWS = 5;
 const CENTER_IDX = Math.floor(VISIBLE_ROWS / 2);
 const DATE_CARD_COUNT = 14;
+
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 const WEEKDAY_FMT = new Intl.DateTimeFormat("en-US", { weekday: "short" });
 const THAI_WEEKDAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -149,15 +151,21 @@ function WheelPicker({
   const values: number[] = [];
   for (let v = min; v <= max; v += 1) values.push(v);
   const ref = useRef<HTMLDivElement>(null);
+  const skipNextScrollRef = useRef(false);
   const idx = values.indexOf(value);
   const effectiveIdx = idx === -1 ? 0 : idx;
 
-  useEffect(() => {
+  const center = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    const current = Math.round(el.scrollTop / ROW_HEIGHT);
-    if (current !== effectiveIdx) el.scrollTop = effectiveIdx * ROW_HEIGHT;
+    if (skipNextScrollRef.current) {
+      skipNextScrollRef.current = false;
+      return;
+    }
+    el.scrollTop = effectiveIdx * ROW_HEIGHT;
   }, [effectiveIdx]);
+
+  useIsomorphicLayoutEffect(center, [center]);
 
   function onScroll() {
     const el = ref.current;
@@ -165,7 +173,17 @@ function WheelPicker({
     const i = Math.round(el.scrollTop / ROW_HEIGHT);
     const clamped = Math.min(Math.max(i, 0), values.length - 1);
     const v = values[clamped];
-    if (v !== undefined && v !== value) onChange(v);
+    if (v !== undefined && v !== value) {
+      skipNextScrollRef.current = true;
+      onChange(v);
+    }
+  }
+
+  function pick(v: number) {
+    if (v !== value) {
+      skipNextScrollRef.current = false;
+      onChange(v);
+    }
   }
 
   return (
@@ -189,7 +207,7 @@ function WheelPicker({
                 key={v}
                 role="option"
                 aria-selected={v === value}
-                onClick={() => onChange(v)}
+                onClick={() => pick(v)}
                 className="snap-center flex items-center justify-center cursor-pointer"
                 style={{ height: ROW_HEIGHT }}
               >
