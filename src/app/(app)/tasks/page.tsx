@@ -237,7 +237,7 @@ export default function TasksPage() {
           <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
             <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 ambient-shadow overflow-hidden">
               <div className="px-6 py-4 border-b border-outline-variant/30 bg-surface-bright">
-                <h3 className="font-headline-md text-headline-md text-on-surface">งานที่ต้องดำเนินการ</h3>
+                <h3 className="font-headline-md text-headline-md text-on-surface">งานที่ต้องดำเนินการ (ของฉัน)</h3>
               </div>
               {otherTasks.length === 0 && overdueTasks.length === 0 ? (
                 <EmptyState icon="task_alt" title="ไม่มีงานในหมวดนี้" description="ลองเลือกตัวกรองอื่น" />
