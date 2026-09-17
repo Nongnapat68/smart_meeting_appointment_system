@@ -31,7 +31,7 @@ export function PersonActions({ person }: { person: Person }) {
       if (error) {
         throw new Error(
           error.code === "23503"
-            ? 'ไม่สามารถลบผู้ติดต่อนี้ได้เพราะมีประวัติเข้าร่วมประชุมอยู่ — เปลี่ยนสถานะเป็น "ไม่ใช้งาน" แทน เพื่อไม่ให้ประวัติการประชุมหายไป'
+            ? 'ไม่สามารถลบผู้ติดต่อนี้ได้เพราะมีประวัติเข้าร่วมประชุมอยู่ — เปลี่ยนสถานะเป็น "ไม่ใช้งานแล้ว" แทน เพื่อไม่ให้ประวัติการประชุมหายไป'
             : error.message
         );
       }
@@ -185,7 +185,7 @@ function EditPersonModal({
             className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
           >
             <option value="ACTIVE">ใช้งาน</option>
-            <option value="INACTIVE">ไม่ใช้งาน</option>
+            <option value="INACTIVE">ไม่ใช้งานแล้ว</option>
           </select>
         </div>
         <div className="flex justify-end gap-3 pt-2">

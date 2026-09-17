@@ -92,7 +92,7 @@ export function projectStatusBadge(status: string) {
 export function personStatusBadge(status: string) {
   return status === "ACTIVE"
     ? { label: "ใช้งาน", variant: "success" as const }
-    : { label: "ไม่ใช้งาน", variant: "neutral" as const };
+    : { label: "ไม่ใช้งานแล้ว", variant: "neutral" as const };
 }
 
 // FR-03/BR-04: labels how each MeetingParticipant ended up on the invite —
