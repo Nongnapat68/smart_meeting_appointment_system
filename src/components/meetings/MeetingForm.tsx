@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -13,19 +13,19 @@ import type { ContactGroup, Meeting, MeetingParticipant, OnlineMeetingResource, 
 
 // FR-10 example offsets straight from the requirements doc (7d/2d/1d/1h before).
 const REMINDER_PRESETS = [
-  { label: "7 à¸§à¸±à¸™à¸à¹ˆà¸­à¸™", minutes: 7 * 24 * 60 },
-  { label: "2 à¸§à¸±à¸™à¸à¹ˆà¸­à¸™", minutes: 2 * 24 * 60 },
-  { label: "1 à¸§à¸±à¸™à¸à¹ˆà¸­à¸™", minutes: 24 * 60 },
-  { label: "1 à¸Šà¸±à¹ˆà¸§à¹‚à¸¡à¸‡à¸à¹ˆà¸­à¸™", minutes: 60 },
-  { label: "30 à¸™à¸²à¸—à¸µà¸à¹ˆà¸­à¸™", minutes: 30 },
+  { label: "7 วันก่อน", minutes: 7 * 24 * 60 },
+  { label: "2 วันก่อน", minutes: 2 * 24 * 60 },
+  { label: "1 วันก่อน", minutes: 24 * 60 },
+  { label: "1 ชั่วโมงก่อน", minutes: 60 },
+  { label: "30 นาทีก่อน", minutes: 30 },
 ];
 
 function offsetLabel(minutes: number): string {
   const preset = REMINDER_PRESETS.find((p) => p.minutes === minutes);
   if (preset) return preset.label;
-  if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)} à¸§à¸±à¸™à¸à¹ˆà¸­à¸™`;
-  if (minutes % 60 === 0) return `${minutes / 60} à¸Šà¸±à¹ˆà¸§à¹‚à¸¡à¸‡à¸à¹ˆà¸­à¸™`;
-  return `${minutes} à¸™à¸²à¸—à¸µà¸à¹ˆà¸­à¸™`;
+  if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)} วันก่อน`;
+  if (minutes % 60 === 0) return `${minutes / 60} ชั่วโมงก่อน`;
+  return `${minutes} นาทีก่อน`;
 }
 
 export interface MeetingFormInitial {
@@ -40,7 +40,7 @@ interface SelectedGroup {
   name: string;
   // Only `id` (totalParticipantCount's dedup Set) and `name` (the member
   // chip's truncated name list) are actually read from this array anywhere
-  // in this file â€” not the full Person the old /api/groups/:id response
+  // in this file — not the full Person the old /api/groups/:id response
   // nested, so the query below only pulls these two columns.
   members: { id: string; name: string }[];
 }
@@ -68,13 +68,13 @@ export function MeetingForm({
   const [endTime, setEndTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.endTime) : "");
   const [location, setLocation] = useState(initial?.meeting.location ?? "");
   const [projectId, setProjectId] = useState(initial?.meeting.projectId ?? "");
-  // Hybrid migration (Projects resource) â€” only `id`/`name` are ever read
+  // Hybrid migration (Projects resource) — only `id`/`name` are ever read
   // from this list (see the <option> below), confirmed against the actual
   // JSX before narrowing the select, not guessed the way Groups' member
   // count was almost dropped incorrectly in that round.
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
 
-  // FR-07/BR-09: reusable Online Meeting Resource â€” pick an existing one or
+  // FR-07/BR-09: reusable Online Meeting Resource — pick an existing one or
   // create a new one inline, instead of retyping the URL into `location`.
   const [onlineResources, setOnlineResources] = useState<OnlineMeetingResource[]>([]);
   const [onlineMeetingResourceId, setOnlineMeetingResourceId] = useState(
@@ -95,7 +95,7 @@ export function MeetingForm({
 
   // BR-04: only participants that were picked directly (or joined as a raw
   // external email, which becomes a real Person the same way) live in this
-  // list â€” anyone invited via a whole group lives in `selectedGroups` below
+  // list — anyone invited via a whole group lives in `selectedGroups` below
   // instead, so their MeetingParticipant.source stays GROUP on save instead
   // of being silently flattened back into DIRECT.
   const [selectedPeople, setSelectedPeople] = useState<Person[]>(
@@ -103,7 +103,7 @@ export function MeetingForm({
   );
   const [selectedGroups, setSelectedGroups] = useState<SelectedGroup[]>([]);
   // PostgREST's embedded-count syntax (`members:ContactGroupMember(count)`)
-  // comes back as `[{ count: N }]`, not Prisma's `_count: { members: N }` â€”
+  // comes back as `[{ count: N }]`, not Prisma's `_count: { members: N }` —
   // same shape groups/page.tsx's GroupRow uses.
   const [groups, setGroups] = useState<(ContactGroup & { members: { count: number }[] })[]>([]);
   const [personQuery, setPersonQuery] = useState("");
@@ -114,7 +114,7 @@ export function MeetingForm({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Hybrid migration (Projects resource) â€” GET list -> supabase-js direct
+    // Hybrid migration (Projects resource) — GET list -> supabase-js direct
     // select, narrowed to id+name only (see the projects state above).
     createClient()
       .from("Project")
@@ -123,9 +123,9 @@ export function MeetingForm({
       .then(({ data, error }) => {
         if (!error) setProjects((data ?? []) as { id: string; name: string }[]);
       });
-    // Hybrid migration (Groups resource, mirrors the People round) â€” same
+    // Hybrid migration (Groups resource, mirrors the People round) — same
     // count-embed query as groups/page.tsx's load(), still needed here for
-    // the "(N à¸„à¸™)" count shown next to each group in the picker below
+    // the "(N คน)" count shown next to each group in the picker below
     // (verified against the actual JSX, not dropped despite the plan's
     // note to skip it).
     createClient()
@@ -136,7 +136,7 @@ export function MeetingForm({
         if (!error) setGroups((data ?? []) as (ContactGroup & { members: { count: number }[] })[]);
       });
     // Hybrid migration (OnlineMeetingResource resource, closing out the
-    // round after createOnlineResource()'s insert below) â€” GET list ->
+    // round after createOnlineResource()'s insert below) — GET list ->
     // supabase-js direct select. Ordered by name ascending, matching the
     // old GET /api/online-resources route's `orderBy: { name: "asc" }`
     // exactly (checked the actual route before picking this, not guessed).
@@ -160,7 +160,7 @@ export function MeetingForm({
       const res = await api.get<{ items: Reminder[] }>(`/api/reminders?meetingId=${initial.meeting.id}`);
       setExistingReminders(res.items);
     } catch {
-      // non-critical â€” reminder list just stays empty
+      // non-critical — reminder list just stays empty
     }
   };
   useEffect(() => {
@@ -170,7 +170,7 @@ export function MeetingForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.meeting.id]);
 
-  // Prefill from query params (e.g. "à¸™à¸±à¸”à¸›à¸£à¸°à¸Šà¸¸à¸¡" from a person or group detail page).
+  // Prefill from query params (e.g. "นัดประชุม" from a person or group detail page).
   useEffect(() => {
     if (prefillPersonId) {
       (async () => {
@@ -183,7 +183,7 @@ export function MeetingForm({
           if (!p) return;
           setSelectedPeople((prev) => (prev.some((sp) => sp.id === p.id) ? prev : [...prev, p]));
         } catch {
-          // best-effort prefill â€” ignore
+          // best-effort prefill — ignore
         }
       })();
     }
@@ -195,7 +195,7 @@ export function MeetingForm({
 
   // Edit mode: reconstruct the group chips from the meeting's existing
   // _MeetingGroups links (whichever whole groups were invited) so re-saving
-  // without touching them keeps sending their ids â€” otherwise the first save
+  // without touching them keeps sending their ids — otherwise the first save
   // after this fix would silently drop every previously-invited group.
   useEffect(() => {
     initial?.meeting.groups.forEach((g) => addGroupById(g.id));
@@ -204,7 +204,7 @@ export function MeetingForm({
 
   useEffect(() => {
     if (!personQuery) {
-      // Clearing stale results synchronously when the query empties out â€”
+      // Clearing stale results synchronously when the query empties out —
       // deemed safe by design (see eslint.config.mjs).
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setPersonResults([]);
@@ -213,7 +213,7 @@ export function MeetingForm({
     const t = setTimeout(async () => {
       try {
         // Same 3-field OR search GET /api/people used to do (name/email/
-        // department "contains") â€” see people/page.tsx's load() for the
+        // department "contains") — see people/page.tsx's load() for the
         // same pattern.
         const pattern = `%${personQuery}%`;
         const { data: items, error } = await createClient()
@@ -248,7 +248,7 @@ export function MeetingForm({
   async function addGroupById(groupId: string) {
     if (!groupId || selectedGroups.some((g) => g.id === groupId)) return;
     try {
-      // Hybrid migration â€” same nested members:ContactGroupMember(...)
+      // Hybrid migration — same nested members:ContactGroupMember(...)
       // embed groups/[id]/page.tsx's load() uses, but pulling only id+name
       // off Person (all this picker actually reads via SelectedGroup.members
       // above), not the full nested person:Person(*) that page needs for
@@ -259,13 +259,13 @@ export function MeetingForm({
         .eq("id", groupId)
         .maybeSingle<{ name: string; members: { person: { id: string; name: string } }[] }>();
       if (error) throw new Error(error.message);
-      if (!group) throw new Error("à¹„à¸¡à¹ˆà¸žà¸šà¸à¸¥à¸¸à¹ˆà¸¡à¸™à¸µà¹‰");
+      if (!group) throw new Error("ไม่พบกลุ่มนี้");
       const members = group.members.map((m) => m.person);
       setSelectedGroups((prev) =>
         prev.some((g) => g.id === groupId) ? prev : [...prev, { id: groupId, name: group.name, members }]
       );
     } catch {
-      showToast("à¹‚à¸«à¸¥à¸”à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸à¸¥à¸¸à¹ˆà¸¡à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ", "error");
+      showToast("โหลดข้อมูลกลุ่มไม่สำเร็จ", "error");
     }
   }
 
@@ -273,7 +273,7 @@ export function MeetingForm({
     setSelectedGroups((prev) => prev.filter((g) => g.id !== groupId));
   }
 
-  // Total distinct people being invited â€” direct picks plus everyone in each
+  // Total distinct people being invited — direct picks plus everyone in each
   // selected group, deduped (a person can be in more than one selected group,
   // or picked directly as well as belong to one).
   const totalParticipantCount = new Set([
@@ -286,7 +286,7 @@ export function MeetingForm({
     const email = externalEmail.trim();
     if (!email) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showToast("à¸£à¸¹à¸›à¹à¸šà¸šà¸­à¸µà¹€à¸¡à¸¥à¹„à¸¡à¹ˆà¸–à¸¹à¸à¸•à¹‰à¸­à¸‡", "error");
+      showToast("รูปแบบอีเมลไม่ถูกต้อง", "error");
       return;
     }
     setExternalEmails((prev) => (prev.includes(email) ? prev : [...prev, email]));
@@ -297,7 +297,7 @@ export function MeetingForm({
     if (!newResourceName.trim() || !newResourceUrl.trim()) return;
     setCreatingResource(true);
     try {
-      // Hybrid migration (OnlineMeetingResource resource) â€” POST create ->
+      // Hybrid migration (OnlineMeetingResource resource) — POST create ->
       // direct .insert(). insert_all_authenticated RLS policy (WITH CHECK
       // (true), no condition) lets any signed-in user create one, same as
       // the old route's authorization level. OnlineMeetingResource.id and
@@ -310,7 +310,7 @@ export function MeetingForm({
       // the old route's `{ resource }` response did.
       const supabase = createClient();
       const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError || !authData.user) throw new Error("à¸à¸£à¸¸à¸“à¸²à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆà¸£à¸°à¸šà¸šà¸à¹ˆà¸­à¸™à¹ƒà¸Šà¹‰à¸‡à¸²à¸™");
+      if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
 
       const { data: resource, error: dbError } = await supabase
         .from("OnlineMeetingResource")
@@ -330,9 +330,9 @@ export function MeetingForm({
       setShowNewResourceForm(false);
       setNewResourceName("");
       setNewResourceUrl("");
-      showToast("à¸ªà¸£à¹‰à¸²à¸‡à¸¥à¸´à¸‡à¸à¹Œà¸›à¸£à¸°à¸Šà¸¸à¸¡à¸ªà¸³à¹€à¸£à¹‡à¸ˆ", "success");
+      showToast("สร้างลิงก์ประชุมสำเร็จ", "success");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "à¸ªà¸£à¹‰à¸²à¸‡à¸¥à¸´à¸‡à¸à¹Œà¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ", "error");
+      showToast(err instanceof Error ? err.message : "สร้างลิงก์ไม่สำเร็จ", "error");
     } finally {
       setCreatingResource(false);
     }
@@ -355,9 +355,9 @@ export function MeetingForm({
       await api.post("/api/reminders", { meetingId: initial.meeting.id, offsetMinutes: minutes });
       setNewOffsetInput("");
       await loadReminders();
-      showToast("à¹€à¸žà¸´à¹ˆà¸¡à¸à¸²à¸£à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™à¸ªà¸³à¹€à¸£à¹‡à¸ˆ", "success");
+      showToast("เพิ่มการแจ้งเตือนสำเร็จ", "success");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "à¹€à¸žà¸´à¹ˆà¸¡à¸à¸²à¸£à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ", "error");
+      showToast(err instanceof Error ? err.message : "เพิ่มการแจ้งเตือนไม่สำเร็จ", "error");
     } finally {
       setAddingReminder(false);
     }
@@ -368,7 +368,7 @@ export function MeetingForm({
       await api.post(`/api/reminders/${id}/cancel`);
       await loadReminders();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "à¸¢à¸à¹€à¸¥à¸´à¸à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ", "error");
+      showToast(err instanceof Error ? err.message : "ยกเลิกไม่สำเร็จ", "error");
     }
   }
 
@@ -385,13 +385,13 @@ export function MeetingForm({
       if (isEdit && initial) {
         // Hybrid migration (Meeting resource, edit round): edit goes
         // straight through update_meeting_with_participants() instead of
-        // PUT /api/meetings/[id] â€” see
+        // PUT /api/meetings/[id] — see
         // prisma/migrations/20260912100000_update_meeting_with_participants_function
-        // and docs/DESIGN_DECISIONS.md Â§5.7. This form always has a decided
+        // and docs/DESIGN_DECISIONS.md §5.7. This form always has a decided
         // value for every regular field (never omits one) and always
         // computes all three participant-related arrays from its own
         // selection state above, so every RPC parameter here is passed
-        // explicitly â€” the NULL-means-"leave participants/groups alone"
+        // explicitly — the NULL-means-"leave participants/groups alone"
         // sentinel the function supports is for other, non-UI callers, not
         // exercised by this real call site.
         const { data: meeting, error: rpcError } = await createClient().rpc(
@@ -414,21 +414,21 @@ export function MeetingForm({
         );
         if (rpcError) throw new Error(rpcError.message);
 
-        showToast("à¸šà¸±à¸™à¸—à¸¶à¸à¸à¸²à¸£à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™à¹à¸›à¸¥à¸‡à¸ªà¸³à¹€à¸£à¹‡à¸ˆ", "success");
+        showToast("บันทึกการเปลี่ยนแปลงสำเร็จ", "success");
 
         // FR-09: same best-effort, non-fatal notify step as the create
         // branch below (and as the old PUT handler's own try/catch around
-        // notifyParticipantsByEmail) â€” a delivery hiccup here must not
+        // notifyParticipantsByEmail) — a delivery hiccup here must not
         // imply the edit itself failed, since the RPC above already
         // committed it. `reason: "updated"` keeps the email subject as
-        // "à¸­à¸±à¸›à¹€à¸”à¸•à¸™à¸±à¸”à¸«à¸¡à¸²à¸¢" (the old PUT handler's own subject), not the
-        // create flow's "à¸„à¸³à¹€à¸Šà¸´à¸à¹€à¸‚à¹‰à¸²à¸£à¹ˆà¸§à¸¡à¸›à¸£à¸°à¸Šà¸¸à¸¡à¹ƒà¸«à¸¡à¹ˆ" â€” see notify/route.ts.
+        // "อัปเดตนัดหมาย" (the old PUT handler's own subject), not the
+        // create flow's "คำเชิญเข้าร่วมประชุมใหม่" — see notify/route.ts.
         try {
           await api.post(`/api/meetings/${meeting.id}/notify`, { reason: "updated" });
         } catch (notifyErr) {
           console.error("notify failed for meeting", meeting.id, notifyErr);
           showToast(
-            notifyErr instanceof Error ? notifyErr.message : "à¸ªà¹ˆà¸‡à¸­à¸µà¹€à¸¡à¸¥à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™à¸œà¸¹à¹‰à¹€à¸‚à¹‰à¸²à¸£à¹ˆà¸§à¸¡à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ",
+            notifyErr instanceof Error ? notifyErr.message : "ส่งอีเมลแจ้งเตือนผู้เข้าร่วมไม่สำเร็จ",
             "error"
           );
         }
@@ -437,15 +437,15 @@ export function MeetingForm({
       } else {
         // Hybrid migration round 1 (Meeting resource): create goes straight
         // through create_meeting_with_participants() instead of
-        // POST /api/meetings (removed) â€” see
+        // POST /api/meetings (removed) — see
         // prisma/migrations/20260911170000_create_meeting_with_participants_function
-        // and docs/DESIGN_DECISIONS.md Â§5.5. p_organizer_id must be this
-        // browser's own signed-in user â€” the function itself re-checks that
+        // and docs/DESIGN_DECISIONS.md §5.5. p_organizer_id must be this
+        // browser's own signed-in user — the function itself re-checks that
         // server-side (auth.uid()) before writing anything, so getUser()
         // here is just what the RPC call needs, not the security boundary.
         const supabase = createClient();
         const { data: authData, error: authError } = await supabase.auth.getUser();
-        if (authError || !authData.user) throw new Error("à¸à¸£à¸¸à¸“à¸²à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆà¸£à¸°à¸šà¸šà¸à¹ˆà¸­à¸™à¹ƒà¸Šà¹‰à¸‡à¸²à¸™");
+        if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
 
         const { data: meeting, error: rpcError } = await supabase.rpc("create_meeting_with_participants", {
           p_organizer_id: authData.user.id,
@@ -463,15 +463,15 @@ export function MeetingForm({
           p_external_emails: externalEmails,
           p_reminder_offset_minutes: reminderOffsets,
         });
-        // supabase-js errors don't throw â€” translate to the same
+        // supabase-js errors don't throw — translate to the same
         // thrown-Error shape apiFetch() used to produce, so the catch
         // block below (and its `error` toast) keeps working unchanged.
         if (rpcError) throw new Error(rpcError.message);
 
-        showToast("à¸ªà¸£à¹‰à¸²à¸‡à¸à¸²à¸£à¸™à¸±à¸”à¸«à¸¡à¸²à¸¢à¸ªà¸³à¹€à¸£à¹‡à¸ˆ", "success");
+        showToast("สร้างการนัดหมายสำเร็จ", "success");
 
         // FR-09: separate, best-effort email step (POST /api/meetings/[id]/notify,
-        // step C of this migration) â€” a delivery hiccup here must not undo
+        // step C of this migration) — a delivery hiccup here must not undo
         // or block the meeting the RPC above already committed, so its
         // failure only shows a secondary toast instead of reaching the
         // outer catch (which would wrongly imply the whole save failed).
@@ -480,7 +480,7 @@ export function MeetingForm({
         } catch (notifyErr) {
           console.error("notify failed for meeting", meeting.id, notifyErr);
           showToast(
-            notifyErr instanceof Error ? notifyErr.message : "à¸ªà¹ˆà¸‡à¸­à¸µà¹€à¸¡à¸¥à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™à¸œà¸¹à¹‰à¹€à¸‚à¹‰à¸²à¸£à¹ˆà¸§à¸¡à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ",
+            notifyErr instanceof Error ? notifyErr.message : "ส่งอีเมลแจ้งเตือนผู้เข้าร่วมไม่สำเร็จ",
             "error"
           );
         }
@@ -489,7 +489,7 @@ export function MeetingForm({
       }
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "à¸šà¸±à¸™à¸—à¸¶à¸à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ");
+      setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
     } finally {
       setLoading(false);
     }
@@ -499,9 +499,9 @@ export function MeetingForm({
     <div className="pt-8 px-container-margin max-w-5xl mx-auto pb-16">
       <div className="mb-8">
         <h2 className="font-display-lg text-display-lg text-on-surface mb-2">
-          {isEdit ? "à¹à¸à¹‰à¹„à¸‚à¸à¸²à¸£à¸™à¸±à¸”à¸«à¸¡à¸²à¸¢" : "à¸ªà¸£à¹‰à¸²à¸‡à¸à¸²à¸£à¸™à¸±à¸”à¸«à¸¡à¸²à¸¢"}
+          {isEdit ? "แก้ไขการนัดหมาย" : "สร้างการนัดหมาย"}
         </h2>
-        <p className="font-body-lg text-body-lg text-on-surface-variant">à¸£à¸°à¸šà¸¸à¸£à¸²à¸¢à¸¥à¸°à¹€à¸­à¸µà¸¢à¸”à¸à¸²à¸£à¸›à¸£à¸°à¸Šà¸¸à¸¡à¹à¸¥à¸°à¹€à¸¥à¸·à¸­à¸à¸œà¸¹à¹‰à¹€à¸‚à¹‰à¸²à¸£à¹ˆà¸§à¸¡</p>
+        <p className="font-body-lg text-body-lg text-on-surface-variant">ระบุรายละเอียดการประชุมและเลือกผู้เข้าร่วม</p>
       </div>
 
       {error && (
@@ -514,49 +514,49 @@ export function MeetingForm({
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-surface-container-lowest rounded-xl p-card-padding shadow-sm border border-outline-variant">
             <h3 className="font-headline-md text-headline-md text-on-surface mb-4 pb-2 border-b border-outline-variant">
-              à¸£à¸²à¸¢à¸¥à¸°à¹€à¸­à¸µà¸¢à¸”à¸—à¸±à¹ˆà¸§à¹„à¸›
+              รายละเอียดทั่วไป
             </h3>
             <div className="space-y-4">
-              <FieldLabel label="à¸«à¸±à¸§à¸‚à¹‰à¸­à¸à¸²à¸£à¸›à¸£à¸°à¸Šà¸¸à¸¡">
+              <FieldLabel label="หัวข้อการประชุม">
                 <input
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="à¸£à¸°à¸šà¸¸à¸«à¸±à¸§à¸‚à¹‰à¸­à¸à¸²à¸£à¸›à¸£à¸°à¸Šà¸¸à¸¡..."
+                  placeholder="ระบุหัวข้อการประชุม..."
                   className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </FieldLabel>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FieldLabel label="à¸›à¸£à¸°à¹€à¸ à¸—à¸à¸²à¸£à¸›à¸£à¸°à¸Šà¸¸à¸¡">
+                <FieldLabel label="ประเภทการประชุม">
                   <select
                     value={type}
                     onChange={(e) => setType(e.target.value as "SINGLE" | "PROJECT")}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   >
-                    <option value="SINGLE">à¸à¸²à¸£à¸›à¸£à¸°à¸Šà¸¸à¸¡à¹€à¸”à¸µà¹ˆà¸¢à¸§ (Single)</option>
-                    <option value="PROJECT">à¹€à¸Šà¸·à¹ˆà¸­à¸¡à¹‚à¸¢à¸‡à¸à¸±à¸šà¹‚à¸›à¸£à¹€à¸ˆà¸à¸•à¹Œ (Project)</option>
+                    <option value="SINGLE">การประชุมเดี่ยว (Single)</option>
+                    <option value="PROJECT">เชื่อมโยงกับโปรเจกต์ (Project)</option>
                   </select>
                 </FieldLabel>
-                <FieldLabel label="à¸ªà¸–à¸²à¸™à¸°">
+                <FieldLabel label="สถานะ">
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value as Meeting["status"])}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   >
-                    <option value="PENDING">à¸£à¸­à¸”à¸³à¹€à¸™à¸´à¸™à¸à¸²à¸£</option>
-                    <option value="ACTIVE">à¸¢à¸·à¸™à¸¢à¸±à¸™à¹à¸¥à¹‰à¸§</option>
-                    {isEdit && <option value="COMPLETED">à¹€à¸ªà¸£à¹‡à¸ˆà¸ªà¸´à¹‰à¸™</option>}
+                    <option value="PENDING">รอดำเนินการ</option>
+                    <option value="ACTIVE">ยืนยันแล้ว</option>
+                    {isEdit && <option value="COMPLETED">เสร็จสิ้น</option>}
                   </select>
                 </FieldLabel>
               </div>
               {type === "PROJECT" && (
-                <FieldLabel label="à¹‚à¸›à¸£à¹€à¸ˆà¸à¸•à¹Œ">
+                <FieldLabel label="โปรเจกต์">
                   <select
                     value={projectId}
                     onChange={(e) => setProjectId(e.target.value)}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   >
-                    <option value="">-- à¹€à¸¥à¸·à¸­à¸à¹‚à¸›à¸£à¹€à¸ˆà¸à¸•à¹Œ --</option>
+                    <option value="">-- เลือกโปรเจกต์ --</option>
                     {projects.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
@@ -565,12 +565,12 @@ export function MeetingForm({
                   </select>
                 </FieldLabel>
               )}
-              <FieldLabel label="à¸£à¸²à¸¢à¸¥à¸°à¹€à¸­à¸µà¸¢à¸”">
+              <FieldLabel label="รายละเอียด">
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
-                  placeholder="à¹€à¸žà¸´à¹ˆà¸¡à¸£à¸²à¸¢à¸¥à¸°à¹€à¸­à¸µà¸¢à¸”, à¸§à¸²à¸£à¸°à¸à¸²à¸£à¸›à¸£à¸°à¸Šà¸¸à¸¡ à¸«à¸£à¸·à¸­à¸«à¸¡à¸²à¸¢à¹€à¸«à¸•à¸¸..."
+                  placeholder="เพิ่มรายละเอียด, วาระการประชุม หรือหมายเหตุ..."
                   className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest resize-none"
                 />
               </FieldLabel>
@@ -579,11 +579,11 @@ export function MeetingForm({
 
           <div className="bg-surface-container-lowest rounded-xl p-card-padding shadow-sm border border-outline-variant">
             <h3 className="font-headline-md text-headline-md text-on-surface mb-4 pb-2 border-b border-outline-variant">
-              à¹€à¸§à¸¥à¸²à¹à¸¥à¸°à¸ªà¸–à¸²à¸™à¸—à¸µà¹ˆ
+              เวลาและสถานที่
             </h3>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FieldLabel label="à¹€à¸£à¸´à¹ˆà¸¡">
+                <FieldLabel label="เริ่ม">
                   <input
                     type="datetime-local"
                     required
@@ -591,11 +591,8 @@ export function MeetingForm({
                     onChange={(e) => setStartTime(e.target.value)}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   />
-                  <p className="mt-1 text-body-md text-on-surface-variant">
-                    à¹€à¸¥à¸·à¸­à¸à¸§à¸±à¸™à¸—à¸µà¹ˆ à¹à¸¥à¹‰à¸§à¸•à¸±à¹‰à¸‡à¹€à¸§à¸¥à¸²à¹ƒà¸™à¸ªà¹ˆà¸§à¸™à¸Šà¸±à¹ˆà¸§à¹‚à¸¡à¸‡ (à¸Šà¸¡.) à¹à¸¥à¸°à¸™à¸²à¸—à¸µ (à¸™.)
-                  </p>
                 </FieldLabel>
-                <FieldLabel label="à¸ªà¸´à¹‰à¸™à¸ªà¸¸à¸”">
+                <FieldLabel label="สิ้นสุด">
                   <input
                     type="datetime-local"
                     required
@@ -603,12 +600,9 @@ export function MeetingForm({
                     onChange={(e) => setEndTime(e.target.value)}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   />
-                  <p className="mt-1 text-body-md text-on-surface-variant">
-                    à¹€à¸¥à¸·à¸­à¸à¸§à¸±à¸™à¸—à¸µà¹ˆ à¹à¸¥à¹‰à¸§à¸•à¸±à¹‰à¸‡à¹€à¸§à¸¥à¸²à¹ƒà¸™à¸ªà¹ˆà¸§à¸™à¸Šà¸±à¹ˆà¸§à¹‚à¸¡à¸‡ (à¸Šà¸¡.) à¹à¸¥à¸°à¸™à¸²à¸—à¸µ (à¸™.)
-                  </p>
                 </FieldLabel>
               </div>
-              <FieldLabel label="à¸ªà¸–à¸²à¸™à¸—à¸µà¹ˆ (à¸«à¹‰à¸­à¸‡à¸›à¸£à¸°à¸Šà¸¸à¸¡à¸ˆà¸£à¸´à¸‡)">
+              <FieldLabel label="สถานที่ (ห้องประชุมจริง)">
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
                     location_on
@@ -616,13 +610,13 @@ export function MeetingForm({
                   <input
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    placeholder="à¸£à¸°à¸šà¸¸à¸«à¹‰à¸­à¸‡à¸›à¸£à¸°à¸Šà¸¸à¸¡ (à¸–à¹‰à¸²à¸¡à¸µ)"
+                    placeholder="ระบุห้องประชุม (ถ้ามี)"
                     className="w-full pl-10 pr-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   />
                 </div>
               </FieldLabel>
 
-              <FieldLabel label="à¸¥à¸´à¸‡à¸à¹Œà¸›à¸£à¸°à¸Šà¸¸à¸¡à¸­à¸­à¸™à¹„à¸¥à¸™à¹Œ (à¹ƒà¸Šà¹‰à¸‹à¹‰à¸³à¹„à¸”à¹‰à¸à¸±à¸šà¸«à¸¥à¸²à¸¢à¸™à¸±à¸”à¸«à¸¡à¸²à¸¢)">
+              <FieldLabel label="ลิงก์ประชุมออนไลน์ (ใช้ซ้ำได้กับหลายนัดหมาย)">
                 <div className="space-y-2">
                   <select
                     value={showNewResourceForm ? "__new__" : onlineMeetingResourceId}
@@ -636,13 +630,13 @@ export function MeetingForm({
                     }}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                   >
-                    <option value="">-- à¹„à¸¡à¹ˆà¹ƒà¸Šà¹‰à¸¥à¸´à¸‡à¸à¹Œà¸—à¸µà¹ˆà¸šà¸±à¸™à¸—à¸¶à¸à¹„à¸§à¹‰ --</option>
+                    <option value="">-- ไม่ใช้ลิงก์ที่บันทึกไว้ --</option>
                     {onlineResources.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
                       </option>
                     ))}
-                    <option value="__new__">+ à¸ªà¸£à¹‰à¸²à¸‡à¸¥à¸´à¸‡à¸à¹Œà¹ƒà¸«à¸¡à¹ˆ...</option>
+                    <option value="__new__">+ สร้างลิงก์ใหม่...</option>
                   </select>
 
                   {!showNewResourceForm && onlineMeetingResourceId && (
@@ -656,7 +650,7 @@ export function MeetingForm({
                       <input
                         value={newResourceName}
                         onChange={(e) => setNewResourceName(e.target.value)}
-                        placeholder="à¸Šà¸·à¹ˆà¸­à¸¥à¸´à¸‡à¸à¹Œ à¹€à¸Šà¹ˆà¸™ Zoom Room B"
+                        placeholder="ชื่อลิงก์ เช่น Zoom Room B"
                         className="w-full px-3 py-1.5 rounded-lg border border-outline-variant bg-surface text-sm"
                       />
                       <input
@@ -675,7 +669,7 @@ export function MeetingForm({
                           }}
                           className="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-label-md"
                         >
-                          à¸¢à¸à¹€à¸¥à¸´à¸
+                          ยกเลิก
                         </button>
                         <button
                           type="button"
@@ -683,7 +677,7 @@ export function MeetingForm({
                           disabled={creatingResource || !newResourceName.trim() || !newResourceUrl.trim()}
                           className="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-label-md disabled:opacity-60"
                         >
-                          {creatingResource ? "à¸à¸³à¸¥à¸±à¸‡à¸ªà¸£à¹‰à¸²à¸‡..." : "à¸ªà¸£à¹‰à¸²à¸‡à¹à¸¥à¸°à¹ƒà¸Šà¹‰à¸¥à¸´à¸‡à¸à¹Œà¸™à¸µà¹‰"}
+                          {creatingResource ? "กำลังสร้าง..." : "สร้างและใช้ลิงก์นี้"}
                         </button>
                       </div>
                     </div>
@@ -695,7 +689,7 @@ export function MeetingForm({
 
           <div className="bg-surface-container-lowest rounded-xl p-card-padding shadow-sm border border-outline-variant">
             <h3 className="font-headline-md text-headline-md text-on-surface mb-4 pb-2 border-b border-outline-variant">
-              à¸à¸²à¸£à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™ (Reminders)
+              การแจ้งเตือน (Reminders)
             </h3>
             {!isEdit ? (
               <div className="space-y-3">
@@ -710,14 +704,14 @@ export function MeetingForm({
                         type="button"
                         onClick={() => removeReminderOffset(m)}
                         className="hover:text-error"
-                        aria-label="à¸¥à¸š"
+                        aria-label="ลบ"
                       >
                         <span className="material-symbols-outlined text-[14px]">close</span>
                       </button>
                     </span>
                   ))}
                   {reminderOffsets.length === 0 && (
-                    <p className="text-on-surface-variant font-body-md text-sm">à¸¢à¸±à¸‡à¹„à¸¡à¹ˆà¸¡à¸µà¸à¸²à¸£à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™ â€” à¹€à¸žà¸´à¹ˆà¸¡à¸”à¹‰à¸²à¸™à¸¥à¹ˆà¸²à¸‡</p>
+                    <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีการแจ้งเตือน — เพิ่มด้านล่าง</p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -738,7 +732,7 @@ export function MeetingForm({
                     min={1}
                     value={newOffsetInput}
                     onChange={(e) => setNewOffsetInput(e.target.value)}
-                    placeholder="à¸à¸³à¸«à¸™à¸”à¹€à¸­à¸‡ (à¸™à¸²à¸—à¸µ)"
+                    placeholder="กำหนดเอง (นาที)"
                     className="w-40 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm"
                   />
                   <button
@@ -755,7 +749,7 @@ export function MeetingForm({
               <div className="space-y-3">
                 <div className="space-y-2">
                   {existingReminders.length === 0 && (
-                    <p className="text-on-surface-variant font-body-md text-sm">à¸¢à¸±à¸‡à¹„à¸¡à¹ˆà¸¡à¸µà¸à¸²à¸£à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™</p>
+                    <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีการแจ้งเตือน</p>
                   )}
                   {existingReminders.map((r) => {
                     const badge = reminderStatusBadge(r.status);
@@ -772,7 +766,7 @@ export function MeetingForm({
                               type="button"
                               onClick={() => cancelExistingReminder(r.id)}
                               className="text-on-surface-variant hover:text-error"
-                              title="à¸¢à¸à¹€à¸¥à¸´à¸à¸à¸²à¸£à¹à¸ˆà¹‰à¸‡à¹€à¸•à¸·à¸­à¸™"
+                              title="ยกเลิกการแจ้งเตือน"
                             >
                               <span className="material-symbols-outlined text-[16px]">cancel</span>
                             </button>
@@ -801,7 +795,7 @@ export function MeetingForm({
                     min={1}
                     value={newOffsetInput}
                     onChange={(e) => setNewOffsetInput(e.target.value)}
-                    placeholder="à¸à¸³à¸«à¸™à¸”à¹€à¸­à¸‡ (à¸™à¸²à¸—à¸µ)"
+                    placeholder="กำหนดเอง (นาที)"
                     className="w-40 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm"
                   />
                   <button
@@ -821,14 +815,14 @@ export function MeetingForm({
         <div className="lg:col-span-1">
           <div className="bg-surface-container-lowest rounded-xl p-card-padding shadow-sm border border-outline-variant sticky top-24">
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-outline-variant">
-              <h3 className="font-headline-md text-headline-md text-on-surface">à¸œà¸¹à¹‰à¹€à¸‚à¹‰à¸²à¸£à¹ˆà¸§à¸¡</h3>
+              <h3 className="font-headline-md text-headline-md text-on-surface">ผู้เข้าร่วม</h3>
               <span className="bg-primary-container text-on-primary-container font-label-md text-label-md px-2 py-1 rounded-full">
-                {totalParticipantCount} à¸„à¸™
+                {totalParticipantCount} คน
               </span>
             </div>
 
             <div className="mb-4">
-              <label className="block font-label-md text-label-md text-on-surface-variant mb-2">à¸„à¹‰à¸™à¸«à¸²à¸šà¸¸à¸„à¸„à¸¥</label>
+              <label className="block font-label-md text-label-md text-on-surface-variant mb-2">ค้นหาบุคคล</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
                   search
@@ -836,7 +830,7 @@ export function MeetingForm({
                 <input
                   value={personQuery}
                   onChange={(e) => setPersonQuery(e.target.value)}
-                  placeholder="à¸„à¹‰à¸™à¸«à¸²à¸Šà¸·à¹ˆà¸­..."
+                  placeholder="ค้นหาชื่อ..."
                   className="w-full pl-10 pr-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
                 />
               </div>
@@ -858,7 +852,7 @@ export function MeetingForm({
             </div>
 
             <div className="mb-4">
-              <label className="block font-label-md text-label-md text-on-surface-variant mb-2">à¹€à¸žà¸´à¹ˆà¸¡à¸—à¸±à¹‰à¸‡à¸à¸¥à¸¸à¹ˆà¸¡</label>
+              <label className="block font-label-md text-label-md text-on-surface-variant mb-2">เพิ่มทั้งกลุ่ม</label>
               <select
                 onChange={(e) => {
                   addGroupById(e.target.value);
@@ -868,7 +862,7 @@ export function MeetingForm({
                 className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
               >
                 <option value="" disabled>
-                  -- à¹€à¸¥à¸·à¸­à¸à¸à¸¥à¸¸à¹ˆà¸¡à¹€à¸žà¸·à¹ˆà¸­à¹€à¸žà¸´à¹ˆà¸¡à¸ªà¸¡à¸²à¸Šà¸´à¸à¸—à¸±à¹‰à¸‡à¸«à¸¡à¸” --
+                  -- เลือกกลุ่มเพื่อเพิ่มสมาชิกทั้งหมด --
                 </option>
                 {groups
                   .filter((g) => !selectedGroups.some((sg) => sg.id === g.id))
@@ -886,14 +880,14 @@ export function MeetingForm({
                         <span className="font-label-md text-label-md font-semibold text-on-surface flex items-center gap-1.5 min-w-0">
                           <span className="material-symbols-outlined text-[16px] shrink-0">group</span>
                           <span className="truncate">
-                            {g.name} ({g.members.length} à¸„à¸™)
+                            {g.name} ({g.members.length} คน)
                           </span>
                         </span>
                         <button
                           type="button"
                           onClick={() => removeGroup(g.id)}
                           className="text-on-surface-variant hover:text-error shrink-0"
-                          aria-label={`à¸™à¸³à¸à¸¥à¸¸à¹ˆà¸¡ ${g.name} à¸­à¸­à¸`}
+                          aria-label={`นำกลุ่ม ${g.name} ออก`}
                         >
                           <span className="material-symbols-outlined text-[16px]">close</span>
                         </button>
@@ -910,7 +904,7 @@ export function MeetingForm({
             </div>
 
             <div className="mb-4">
-              <label className="block font-label-md text-label-md text-on-surface-variant mb-2">à¸­à¸µà¹€à¸¡à¸¥à¸ à¸²à¸¢à¸™à¸­à¸</label>
+              <label className="block font-label-md text-label-md text-on-surface-variant mb-2">อีเมลภายนอก</label>
               <div className="flex gap-2">
                 <input
                   value={externalEmail}
@@ -981,14 +975,14 @@ export function MeetingForm({
             onClick={() => router.back()}
             className="px-6 py-2 rounded-lg border border-outline text-on-surface font-label-md text-label-md hover:bg-surface-container-low transition-colors"
           >
-            à¸¢à¸à¹€à¸¥à¸´à¸
+            ยกเลิก
           </button>
           <button
             type="submit"
             disabled={loading}
             className="px-6 py-2 rounded-lg bg-primary text-on-primary font-label-md text-label-md shadow-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-60"
           >
-            {loading ? "à¸à¸³à¸¥à¸±à¸‡à¸šà¸±à¸™à¸—à¸¶à¸..." : "à¸šà¸±à¸™à¸—à¸¶à¸à¸à¸²à¸£à¸™à¸±à¸”à¸«à¸¡à¸²à¸¢"}
+            {loading ? "กำลังบันทึก..." : "บันทึกการนัดหมาย"}
             <span className="material-symbols-outlined text-[18px]">check</span>
           </button>
         </div>
@@ -1005,4 +999,3 @@ function FieldLabel({ label, children }: { label: string; children: React.ReactN
     </div>
   );
 }
-
