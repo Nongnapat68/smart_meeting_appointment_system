@@ -29,13 +29,16 @@ export async function apiFetch<T = unknown>(
   return data as T;
 }
 
+const jsonOrFormData = (body: unknown) =>
+  body instanceof FormData ? body : body ? JSON.stringify(body) : undefined;
+
 export const api = {
   get: <T = unknown>(url: string) => apiFetch<T>(url),
   post: <T = unknown>(url: string, body?: unknown) =>
-    apiFetch<T>(url, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+    apiFetch<T>(url, { method: "POST", body: jsonOrFormData(body) }),
   put: <T = unknown>(url: string, body?: unknown) =>
-    apiFetch<T>(url, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+    apiFetch<T>(url, { method: "PUT", body: jsonOrFormData(body) }),
   patch: <T = unknown>(url: string, body?: unknown) =>
-    apiFetch<T>(url, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
+    apiFetch<T>(url, { method: "PATCH", body: jsonOrFormData(body) }),
   delete: <T = unknown>(url: string) => apiFetch<T>(url, { method: "DELETE" }),
 };
