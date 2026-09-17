@@ -112,6 +112,7 @@ export function MeetingForm({
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const nowLocal = toDatetimeLocalValue(new Date());
 
   useEffect(() => {
     // Hybrid migration (Projects resource) — GET list -> supabase-js direct
@@ -377,6 +378,9 @@ export function MeetingForm({
     setError(null);
     setLoading(true);
     try {
+      if (!startTime || !endTime) throw new Error("กรุณากำหนดเวลาเริ่มและเวลาสิ้นสุด");
+      if (new Date(startTime) < new Date()) throw new Error("เวลาเริ่มต้องไม่เป็นอดีต (ย้อนหลัง)");
+      if (new Date(endTime) <= new Date(startTime)) throw new Error("เวลาสิ้นสุดต้องมาหลังเวลาเริ่ม");
       const startIso = new Date(startTime).toISOString();
       const endIso = new Date(endTime).toISOString();
       const participantPersonIds = selectedPeople.map((p) => p.id);
@@ -587,6 +591,7 @@ export function MeetingForm({
                   <input
                     type="datetime-local"
                     required
+                    min={nowLocal}
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
@@ -599,6 +604,7 @@ export function MeetingForm({
                   <input
                     type="datetime-local"
                     required
+                    min={nowLocal}
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
                     className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
