@@ -155,6 +155,7 @@ function EditPersonModal({
             <label className="font-label-md text-label-md text-on-surface-variant block">เบอร์โทรศัพท์</label>
             <input
               value={phone}
+              maxLength={10}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
             />
