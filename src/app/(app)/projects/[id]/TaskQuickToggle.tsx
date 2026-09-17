@@ -65,7 +65,7 @@ export function TaskQuickToggle({ task }: { task: Task }) {
       <div className="flex-1 min-w-0">
         <Link
           href={`/tasks/${task.id}`}
-          className={`font-body-md text-body-md font-medium text-on-background hover:text-primary transition-colors ${checked ? "line-through text-on-surface-variant" : ""}`}
+          className={`font-body-md text-body-md font-medium text-on-background hover:text-primary transition-colors ${checked ? "text-on-surface-variant" : ""}`}
         >
           {task.title}
         </Link>
