@@ -20,6 +20,8 @@ const REMINDER_PRESETS = [
   { label: "30 นาทีก่อน", minutes: 30 },
 ];
 
+const NEW_PROJECT_OPTION = "__new__";
+
 function offsetLabel(minutes: number): string {
   const preset = REMINDER_PRESETS.find((p) => p.minutes === minutes);
   if (preset) return preset.label;
@@ -73,6 +75,7 @@ export function MeetingForm({
   // JSX before narrowing the select, not guessed the way Groups' member
   // count was almost dropped incorrectly in that round.
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [newProjectName, setNewProjectName] = useState("");
 
   // FR-07/BR-09: reusable Online Meeting Resource — pick an existing one or
   // create a new one inline, instead of retyping the URL into `location`.
@@ -386,6 +389,32 @@ export function MeetingForm({
       const participantPersonIds = selectedPeople.map((p) => p.id);
       const groupIds = selectedGroups.map((g) => g.id);
 
+      let resolvedProjectId = projectId;
+      if (projectId === NEW_PROJECT_OPTION) {
+        const newName = newProjectName.trim();
+        if (!newName) throw new Error("กรุณาระบุชื่อโปรเจกต์ใหม่");
+        // Same direct-insert pattern as projects/page.tsx: Project.id and
+        // updatedAt have no DB default (Prisma @default(cuid())/@updatedAt
+        // are client-side-only), so both must be supplied explicitly.
+        const supabase = createClient();
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+        const { data: created, error: dbError } = await supabase
+          .from("Project")
+          .insert({
+            id: crypto.randomUUID(),
+            name: newName,
+            managerId: authData.user.id,
+            updatedAt: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        if (dbError) throw new Error(dbError.message);
+        resolvedProjectId = created.id;
+        setProjectId(resolvedProjectId);
+        setNewProjectName("");
+      }
+
       if (isEdit && initial) {
         // Hybrid migration (Meeting resource, edit round): edit goes
         // straight through update_meeting_with_participants() instead of
@@ -409,7 +438,7 @@ export function MeetingForm({
             p_type: type,
             p_status: status,
             p_location: location || null,
-            p_project_id: projectId || null,
+p_project_id: resolvedProjectId || null,
             p_online_meeting_resource_id: onlineMeetingResourceId || null,
             p_participant_person_ids: participantPersonIds,
             p_group_ids: groupIds,
@@ -460,7 +489,7 @@ export function MeetingForm({
           p_type: type,
           p_status: status,
           p_location: location || null,
-          p_project_id: projectId || null,
+          p_project_id: resolvedProjectId || null,
           p_online_meeting_resource_id: onlineMeetingResourceId || null,
           p_participant_person_ids: participantPersonIds,
           p_group_ids: groupIds,
@@ -555,18 +584,43 @@ export function MeetingForm({
               </div>
               {type === "PROJECT" && (
                 <FieldLabel label="โปรเจกต์">
-                  <select
-                    value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
-                  >
-                    <option value="">-- เลือกโปรเจกต์ --</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  {projectId === NEW_PROJECT_OPTION ? (
+                    <div className="space-y-1">
+                      <input
+                        value={newProjectName}
+                        onChange={(e) => setNewProjectName(e.target.value)}
+                        placeholder="พิมพ์ชื่อโปรเจกต์ใหม่..."
+                        className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProjectId("");
+                          setNewProjectName("");
+                        }}
+                        className="font-label-md text-label-md text-primary hover:underline"
+                      >
+                        ← กลับไปเลือกโปรเจกต์ที่มีอยู่
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      value={projectId}
+                      onChange={(e) => {
+                        setProjectId(e.target.value);
+                        if (e.target.value === NEW_PROJECT_OPTION) setNewProjectName("");
+                      }}
+                      className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
+                    >
+                      <option value="">-- เลือกโปรเจกต์ --</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                      <option value={NEW_PROJECT_OPTION}>+ สร้างโปรเจกต์ใหม่...</option>
+                    </select>
+                  )}
                 </FieldLabel>
               )}
               <FieldLabel label="รายละเอียด">
