@@ -200,6 +200,9 @@ function RescheduleModal({
             onChange={(e) => setStartTime(e.target.value)}
             className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
           />
+          <p className="mt-1 text-body-md text-on-surface-variant">
+            เลือกวันที่ แล้วตั้งเวลาในส่วนชั่วโมง (ชม.) และนาที (น.)
+          </p>
         </div>
         <div className="space-y-1">
           <label className="font-label-md text-label-md text-on-surface-variant block">เวลาสิ้นสุดใหม่</label>
@@ -210,6 +213,9 @@ function RescheduleModal({
             onChange={(e) => setEndTime(e.target.value)}
             className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
           />
+          <p className="mt-1 text-body-md text-on-surface-variant">
+            เลือกวันที่ แล้วตั้งเวลาในส่วนชั่วโมง (ชม.) และนาที (น.)
+          </p>
         </div>
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-outline-variant font-label-md">
