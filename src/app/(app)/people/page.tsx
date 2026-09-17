@@ -24,6 +24,7 @@ export default function PeoplePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [includeInactive, setIncludeInactive] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
   const load = useCallback(async () => {
@@ -37,6 +38,7 @@ export default function PeoplePage() {
         .select("*, groupMemberships:ContactGroupMember(*, group:ContactGroup(*))", { count: "exact" })
         .order("name", { ascending: true })
         .range(0, PAGE_SIZE - 1);
+      if (!includeInactive) query = query.eq("status", "ACTIVE");
       if (q) {
         // Same 3-field OR search GET /api/people used to do (name/email/department
         // "contains"). PostgREST's or() takes one filter-list string — wrapping
@@ -65,7 +67,7 @@ export default function PeoplePage() {
     } finally {
       setLoading(false);
     }
-  }, [q]);
+  }, [q, includeInactive]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -100,16 +102,36 @@ export default function PeoplePage() {
 
       <div className="bg-surface-container-lowest rounded-xl ambient-shadow border border-outline-variant/30 overflow-hidden">
         <div className="p-4 border-b border-outline-variant/30">
-          <div className="relative max-w-sm">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">
-              search
-            </span>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="ค้นหาชื่อ, อีเมล, แผนก..."
-              className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-            />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative max-w-sm">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">
+                search
+              </span>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="ค้นหาชื่อ, อีเมล, แผนก..."
+                className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+              />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none self-start sm:self-auto">
+              <span className="font-label-md text-label-md text-on-surface-variant">รวมคนที่ไม่ใช้งานแล้วด้วย</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={includeInactive}
+                onClick={() => setIncludeInactive((v) => !v)}
+                className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${
+                  includeInactive ? "bg-primary" : "bg-surface-container-high border border-outline-variant"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-surface-container-lowest shadow transition-transform ${
+                    includeInactive ? "translate-x-4" : ""
+                  }`}
+                />
+              </button>
+            </label>
           </div>
         </div>
 
