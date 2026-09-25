@@ -8,9 +8,6 @@ const VISIBLE_ROWS = 3;
 const CENTER_IDX = Math.floor(VISIBLE_ROWS / 2);
 const POPUP_WIDTH = 304;
 const POPUP_GAP = 8;
-// After a date is picked, the popup closes itself once the time wheels have
-// been left alone this long (so a pause between hour and minute won't).
-const AUTO_CLOSE_IDLE_MS = 1500;
 const WHEEL_ACTIVE_IDLE_MS = 700;
 
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -79,28 +76,16 @@ export function DateTimeField({
 }) {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement>("bottom");
+  // Edits stay in this draft until "ตกลง"; outside click / Esc discard them.
   const [draft, setDraft] = useState<Draft>(() => draftFrom(value));
-  const [pickedDateThisOpen, setPickedDateThisOpen] = useState(false);
-  const [timeTouchedThisOpen, setTimeTouchedThisOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const autoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const todayKey = dateKey(new Date());
   const effectiveMinKey = minDateKey && minDateKey > todayKey ? minDateKey : todayKey;
   const parsed = parseLocal(value);
 
-  const clearAutoClose = useCallback(() => {
-    if (autoCloseTimer.current) {
-      clearTimeout(autoCloseTimer.current);
-      autoCloseTimer.current = null;
-    }
-  }, []);
-
-  const close = useCallback(() => {
-    clearAutoClose();
-    setOpen(false);
-  }, [clearAutoClose]);
+  const close = useCallback(() => setOpen(false), []);
 
   function openPopup() {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -111,8 +96,6 @@ export function DateTimeField({
       else setPlacement("bottom");
     }
     setDraft(draftFrom(value));
-    setPickedDateThisOpen(false);
-    setTimeTouchedThisOpen(false);
     setOpen(true);
   }
 
@@ -135,25 +118,11 @@ export function DateTimeField({
     };
   }, [open, close]);
 
-  useEffect(() => clearAutoClose, [clearAutoClose]);
-
-  function commit(next: Draft) {
-    setDraft(next);
-    if (next.key) onChange(buildLocal(next.key, next.hour, next.minute));
-  }
-
-  function pickDate(key: string) {
-    commit({ ...draft, key });
-    setPickedDateThisOpen(true);
-    // Time already chosen in this session → date is the last step, so close.
-    if (timeTouchedThisOpen) close();
-  }
-
-  function changeTime(part: "hour" | "minute", v: number) {
-    commit({ ...draft, [part]: v });
-    setTimeTouchedThisOpen(true);
-    clearAutoClose();
-    if (pickedDateThisOpen) autoCloseTimer.current = setTimeout(close, AUTO_CLOSE_IDLE_MS);
+  function confirm() {
+    if (!draft.key) return;
+    onChange(buildLocal(draft.key, draft.hour, draft.minute));
+    close();
+    triggerRef.current?.focus();
   }
 
   const popupPosition =
@@ -201,16 +170,26 @@ export function DateTimeField({
             className={`absolute z-40 ${popupPosition} bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-4`}
             style={{ width: placement === "bottom" ? `min(${POPUP_WIDTH}px, 100%)` : POPUP_WIDTH, minWidth: 272 }}
           >
-            <MonthGrid selectedKey={draft.key} minKey={effectiveMinKey} todayKey={todayKey} onSelect={pickDate} />
+            <MonthGrid selectedKey={draft.key} minKey={effectiveMinKey} todayKey={todayKey} onSelect={(key) => setDraft((d) => ({ ...d, key }))}
+            />
 
             <div className="border-t border-outline-variant my-3" />
 
             <span className="block font-label-md text-label-md text-on-surface-variant">เวลา</span>
             <div className="flex items-center justify-center gap-1 mt-1">
-              <WheelPicker label="ชั่วโมง" value={draft.hour} min={0} max={23} onChange={(v) => changeTime("hour", v)} />
+              <WheelPicker label="ชั่วโมง" value={draft.hour} min={0} max={23} onChange={(hour) => setDraft((d) => ({ ...d, hour }))} />
               <span className="font-headline-lg text-headline-lg font-bold text-on-surface leading-none pb-1">:</span>
-              <WheelPicker label="นาที" value={draft.minute} min={0} max={59} onChange={(v) => changeTime("minute", v)} />
+              <WheelPicker label="นาที" value={draft.minute} min={0} max={59} onChange={(minute) => setDraft((d) => ({ ...d, minute }))} />
             </div>
+
+            <button
+              type="button"
+              onClick={confirm}
+              disabled={!draft.key}
+              className="mt-4 w-full py-2.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {draft.key ? "ตกลง" : "เลือกวันที่ก่อน"}
+            </button>
           </div>
         )}
       </div>

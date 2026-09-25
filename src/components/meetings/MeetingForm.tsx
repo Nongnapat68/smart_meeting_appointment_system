@@ -76,6 +76,9 @@ export function MeetingForm({
   // Create mode starts empty so each DateTimeField shows its "เลือกวันที่และเวลา" state.
   const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.startTime) : "");
   const [endTime, setEndTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.endTime) : "");
+  // Once the user sets the end themselves (or it came from a saved meeting),
+  // picking a new start never overwrites it again.
+  const [endSetByUser, setEndSetByUser] = useState(Boolean(initial));
   const [location, setLocation] = useState(initial?.meeting.location ?? "");
   const [projectId, setProjectId] = useState(initial?.meeting.projectId ?? "");
   // Hybrid migration (Projects resource) — only `id`/`name` are ever read
@@ -385,11 +388,12 @@ export function MeetingForm({
 
   function handleStartChange(v: string) {
     setStartTime(v);
-    setEndTime((prev) => {
-      if (!prev) return prev;
-      if (new Date(prev) <= new Date(v)) return defaultEndValue(v);
-      return prev;
-    });
+    if (!endSetByUser) setEndTime(defaultEndValue(v));
+  }
+
+  function handleEndChange(v: string) {
+    setEndTime(v);
+    setEndSetByUser(true);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -650,7 +654,7 @@ p_project_id: resolvedProjectId || null,
                 <DateTimeField
                   label="สิ้นสุด"
                   value={endTime}
-                  onChange={setEndTime}
+                  onChange={handleEndChange}
                   minDateKey={datePartOf(startTime)}
                 />
               </div>
