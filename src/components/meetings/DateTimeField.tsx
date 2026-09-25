@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { formatDate } from "@/lib/format";
 
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 32;
 const VISIBLE_ROWS = 3;
 const CENTER_IDX = Math.floor(VISIBLE_ROWS / 2);
 const POPUP_WIDTH = 304;
@@ -136,14 +136,14 @@ export function DateTimeField({
     <div>
       <span className="block font-label-md text-label-md text-on-surface-variant mb-2">{label}</span>
 
-      <div ref={wrapperRef} className="relative">
+      <div ref={wrapperRef} className="relative w-fit max-w-full">
         <button
           ref={triggerRef}
           type="button"
           onClick={() => (open ? close() : openPopup())}
           aria-haspopup="dialog"
           aria-expanded={open}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-colors ${
+          className={`w-fit max-w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-colors ${
             parsed
               ? "border border-outline-variant bg-surface-container-lowest text-on-surface hover:border-primary"
               : "border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-primary"
@@ -154,7 +154,7 @@ export function DateTimeField({
           </span>
           {parsed ? (
             <span className="font-body-md text-body-md font-semibold whitespace-nowrap truncate">
-              {formatDate(keyToDate(parsed.key))} | {pad(parsed.hour)}:{pad(parsed.minute)}
+              {formatDate(keyToDate(parsed.key))} | {pad(parsed.hour)}:{pad(parsed.minute)} น.
             </span>
           ) : (
             <span className="font-body-md text-body-md opacity-60 whitespace-nowrap truncate">เลือกวันที่และเวลา</span>
@@ -166,12 +166,12 @@ export function DateTimeField({
             role="dialog"
             aria-label={`เลือกวันที่และเวลา${label}`}
             className={`absolute z-40 ${popupPosition} bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-4`}
-            style={{ width: placement === "bottom" ? `min(${POPUP_WIDTH}px, 100%)` : POPUP_WIDTH, minWidth: 272 }}
+            style={{ width: POPUP_WIDTH, maxWidth: "calc(100vw - 32px)" }}
           >
             <MonthGrid selectedKey={draft.key} minKey={effectiveMinKey} todayKey={todayKey} onSelect={(key) => setDraft((d) => ({ ...d, key }))}
             />
 
-            <div className="border-t border-outline-variant my-3" />
+            <div className="border-t border-outline-variant my-2" />
 
             <span className="block font-label-md text-label-md text-on-surface-variant">เวลา</span>
             <div className="flex items-center justify-center gap-1 mt-1">
@@ -184,7 +184,7 @@ export function DateTimeField({
               type="button"
               onClick={confirm}
               disabled={!draft.key}
-              className="mt-4 w-full py-2.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              className="mt-3 w-full py-2.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-semibold hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {draft.key ? "ตกลง" : "เลือกวันที่ก่อน"}
             </button>
