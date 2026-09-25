@@ -143,23 +143,21 @@ export function DateTimeField({
           onClick={() => (open ? close() : openPopup())}
           aria-haspopup="dialog"
           aria-expanded={open}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
+          className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-colors ${
             parsed
               ? "border border-outline-variant bg-surface-container-lowest text-on-surface hover:border-primary"
-              : "border-2 border-dashed border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-primary"
+              : "border border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-primary"
           } ${open ? "border-primary ring-2 ring-primary/20" : ""}`}
         >
-          <span className={`material-symbols-outlined text-[22px] ${parsed ? "text-primary" : "opacity-60"}`}>
+          <span className={`material-symbols-outlined shrink-0 text-[20px] ${parsed ? "text-primary" : "opacity-60"}`}>
             calendar_month
           </span>
           {parsed ? (
-            <span className="font-body-md text-body-md font-semibold">
-              {formatDate(keyToDate(parsed.key))}
-              {" • "}
-              {pad(parsed.hour)}:{pad(parsed.minute)}
+            <span className="font-body-md text-body-md font-semibold whitespace-nowrap truncate">
+              {formatDate(keyToDate(parsed.key))} | {pad(parsed.hour)}:{pad(parsed.minute)}
             </span>
           ) : (
-            <span className="font-body-md text-body-md opacity-60">เลือกวันที่และเวลา</span>
+            <span className="font-body-md text-body-md opacity-60 whitespace-nowrap truncate">เลือกวันที่และเวลา</span>
           )}
         </button>
 

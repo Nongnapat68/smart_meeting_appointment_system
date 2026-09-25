@@ -31,10 +31,6 @@ function offsetLabel(minutes: number): string {
   return `${minutes} นาทีก่อน`;
 }
 
-function defaultEndValue(startLocal: string): string {
-  return toDatetimeLocalValue(new Date(new Date(startLocal).getTime() + 60 * 60 * 1000));
-}
-
 function datePartOf(local: string): string {
   return local.slice(0, 10);
 }
@@ -75,11 +71,7 @@ export function MeetingForm({
   const [status] = useState<Meeting["status"]>(initial?.meeting.status ?? "PENDING");
   // Create mode starts empty so each DateTimeField shows its "เลือกวันที่และเวลา" state.
   const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.startTime) : "");
-  const [endTime, setEndTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.endTime) : "");
-  // Once the user sets the end themselves (or it came from a saved meeting),
-  // picking a new start never overwrites it again.
-  const [endSetByUser, setEndSetByUser] = useState(Boolean(initial));
-  const [location, setLocation] = useState(initial?.meeting.location ?? "");
+  const [endTime, setEndTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.endTime) : "");  const [location, setLocation] = useState(initial?.meeting.location ?? "");
   const [projectId, setProjectId] = useState(initial?.meeting.projectId ?? "");
   // Hybrid migration (Projects resource) — only `id`/`name` are ever read
   // from this list (see the <option> below), confirmed against the actual
@@ -386,16 +378,6 @@ export function MeetingForm({
     }
   }
 
-  function handleStartChange(v: string) {
-    setStartTime(v);
-    if (!endSetByUser) setEndTime(defaultEndValue(v));
-  }
-
-  function handleEndChange(v: string) {
-    setEndTime(v);
-    setEndSetByUser(true);
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -649,12 +631,12 @@ p_project_id: resolvedProjectId || null,
               เวลาและสถานที่
             </h3>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <DateTimeField label="เริ่ม" value={startTime} onChange={handleStartChange} />
+              <div className="flex flex-col gap-4">
+                <DateTimeField label="เริ่ม" value={startTime} onChange={setStartTime} />
                 <DateTimeField
                   label="สิ้นสุด"
                   value={endTime}
-                  onChange={handleEndChange}
+                  onChange={setEndTime}
                   minDateKey={datePartOf(startTime)}
                 />
               </div>
