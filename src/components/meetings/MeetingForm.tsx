@@ -31,13 +31,6 @@ function offsetLabel(minutes: number): string {
   return `${minutes} นาทีก่อน`;
 }
 
-function defaultStartValue(): string {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return toDatetimeLocalValue(d);
-}
-
 function defaultEndValue(startLocal: string): string {
   return toDatetimeLocalValue(new Date(new Date(startLocal).getTime() + 60 * 60 * 1000));
 }
@@ -80,10 +73,9 @@ export function MeetingForm({
   const [description, setDescription] = useState(initial?.meeting.description ?? "");
   const [type, setType] = useState<"SINGLE" | "PROJECT">(initial?.meeting.type ?? "SINGLE");
   const [status] = useState<Meeting["status"]>(initial?.meeting.status ?? "PENDING");
-  const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.startTime) : defaultStartValue());
-  const [endTime, setEndTime] = useState(
-    initial ? toDatetimeLocalValue(initial.meeting.endTime) : defaultEndValue(defaultStartValue())
-  );
+  // Create mode starts empty so each DateTimeField shows its "เลือกวันที่และเวลา" state.
+  const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.startTime) : "");
+  const [endTime, setEndTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.endTime) : "");
   const [location, setLocation] = useState(initial?.meeting.location ?? "");
   const [projectId, setProjectId] = useState(initial?.meeting.projectId ?? "");
   // Hybrid migration (Projects resource) — only `id`/`name` are ever read
