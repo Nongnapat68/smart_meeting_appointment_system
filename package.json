@@ -14,7 +14,8 @@
     "db:studio": "prisma studio",
     "test:authz": "tsx scripts/test-authorization.ts",
     "test:rls": "tsx scripts/test-rls.ts",
-    "test:otp": "tsx scripts/test-otp.ts"
+    "test:otp": "tsx scripts/test-otp.ts",
+    "test:reminders": "tsx scripts/test-reminders.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

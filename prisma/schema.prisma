@@ -453,7 +453,10 @@ model TaskAttachment {
 
 enum ReminderStatus {
   PENDING
-  SENT
+  SENT // an email was actually delivered
+  // Due and processed, but only logged — no email transport configured
+  // (sendEmail() returned "simulated"). Never claims a real delivery.
+  SIMULATED
   FAILED
   CANCELLED
 }

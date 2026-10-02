@@ -194,7 +194,7 @@ export const taskCommentSchema = z.object({
 // --- Reminders --------------------------------------------------------
 
 export const reminderQuerySchema = z.object({
-  status: z.enum(["PENDING", "SENT", "FAILED", "CANCELLED"]).optional(),
+  status: z.enum(["PENDING", "SENT", "SIMULATED", "FAILED", "CANCELLED"]).optional(),
 });
 
 // Add one more reminder to an already-created meeting (FR-10/BR-11) — the
