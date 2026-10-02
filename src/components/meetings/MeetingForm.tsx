@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
+import { orContainsAny } from "@/lib/search";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner } from "@/components/ui/Feedback";
@@ -223,12 +224,12 @@ export function MeetingForm({
         // Same 3-field OR search GET /api/people used to do (name/email/
         // department "contains") — see people/page.tsx's load() for the
         // same pattern.
-        const pattern = `%${personQuery}%`;
         const { data: items, error } = await createClient()
           .from("Person")
           .select("*")
-          .or(`name.ilike."${pattern}",email.ilike."${pattern}",department.ilike."${pattern}"`)
-          .limit(8);
+          .or(orContainsAny(["name", "email", "department"], personQuery))
+          .limit(8)
+          .retry(false);
         if (error) throw error;
         setPersonResults((items ?? []).filter((p: Person) => !selectedPeople.some((sp) => sp.id === p.id)));
       } catch {
