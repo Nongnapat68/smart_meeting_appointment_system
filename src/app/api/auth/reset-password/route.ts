@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyOtpForEmail } from "@/lib/auth";
+import { OTP_INVALID_MESSAGE, verifyOtpForEmail } from "@/lib/otp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resetPasswordSchema } from "@/lib/validations";
 import { ApiError, parseBody, withApiErrors } from "@/lib/api-helpers";
@@ -10,7 +10,7 @@ export const POST = withApiErrors(async (request: Request) => {
   const result = await verifyOtpForEmail(body.email, body.otp);
 
   if (!result.valid || !result.userId || !result.otpRecordId) {
-    throw new ApiError(400, "รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว");
+    throw new ApiError(400, OTP_INVALID_MESSAGE);
   }
 
   const admin = createAdminClient();
