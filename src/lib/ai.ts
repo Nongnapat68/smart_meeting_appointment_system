@@ -1,21 +1,58 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { ApiError } from "@/lib/api-helpers";
 
 const MODEL = "claude-opus-5";
 
 let client: Anthropic | null = null;
 
+export const AI_NOT_CONFIGURED_MESSAGE =
+  "ยังไม่ได้ตั้งค่า AI API Key (ANTHROPIC_API_KEY) ในระบบ จึงยังใช้ฟีเจอร์ AI ไม่ได้ — กรุณาติดต่อผู้ดูแลระบบให้ตั้งค่าในไฟล์ .env";
+
+export function isAiConfigured(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+/**
+ * Call at the top of every AI route, before gathering context: without a key
+ * the request can never succeed, so the user gets a clear 503 explaining
+ * why instead of a generic failure.
+ */
+export function assertAiConfigured(): void {
+  if (!isAiConfigured()) throw new ApiError(503, AI_NOT_CONFIGURED_MESSAGE);
+}
+
 function getClient(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error(
-      "ANTHROPIC_API_KEY is not set. Add it to .env to use the AI features."
-    );
-  }
+  assertAiConfigured();
   if (!client) client = new Anthropic();
   return client;
 }
 
-export function isAiConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+/**
+ * Turns whatever an AI call threw into an ApiError with a Thai message the
+ * page can show as-is — the SDK's own messages are English and technical.
+ * Most specific class first (APIConnectionTimeoutError extends
+ * APIConnectionError; every status error extends APIError). The original
+ * error is logged server-side for debugging.
+ */
+export function aiErrorToApiError(err: unknown, action: string): ApiError {
+  if (err instanceof ApiError) return err;
+  console.error(`AI ${action} failed`, err);
+  if (err instanceof Anthropic.APIConnectionTimeoutError) {
+    return new ApiError(504, `บริการ AI ตอบกลับช้าเกินไป ไม่สามารถ${action}ได้ กรุณาลองใหม่อีกครั้ง`);
+  }
+  if (err instanceof Anthropic.APIConnectionError) {
+    return new ApiError(503, `ไม่สามารถเชื่อมต่อบริการ AI ได้ จึงไม่สามารถ${action}ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่อีกครั้ง`);
+  }
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+    return new ApiError(503, "AI API Key ที่ตั้งค่าไว้ไม่ถูกต้องหรือไม่มีสิทธิ์ใช้งาน กรุณาติดต่อผู้ดูแลระบบ");
+  }
+  if (err instanceof Anthropic.RateLimitError) {
+    return new ApiError(503, "บริการ AI มีผู้ใช้งานหนาแน่นในขณะนี้ กรุณารอสักครู่แล้วลองใหม่อีกครั้ง");
+  }
+  if (err instanceof Anthropic.APIError) {
+    return new ApiError(502, `บริการ AI ตอบกลับผิดพลาด ไม่สามารถ${action}ได้ กรุณาลองใหม่อีกครั้ง`);
+  }
+  return new ApiError(502, `ไม่สามารถ${action}ด้วย AI ได้ กรุณาลองใหม่อีกครั้ง`);
 }
 
 function textFrom(response: Anthropic.Message): string {

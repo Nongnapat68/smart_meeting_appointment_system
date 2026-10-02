@@ -2,15 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
+import { ConfirmDialog } from "@/components/ui/Modal";
 import { formatDate, relativeTime } from "@/lib/format";
-import { taskStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { ATTACHMENT_ACCEPT } from "@/lib/upload-validation";
+import { dbWriteErrorMessage } from "@/lib/db-errors";
+import { canDeleteTask, canEditTask, TASK_DELETE_RULE, TASK_EDIT_RULE } from "@/lib/tasks";
+import { useCurrentUser } from "@/lib/use-current-user";
+import { TaskStatusSelect } from "@/components/tasks/TaskStatusSelect";
+import { TaskFormModal } from "@/components/tasks/TaskFormModal";
 import type { Task, TaskAttachment, TaskComment, User, Project, Meeting, Person } from "@prisma/client";
 
 type TaskDetail = Task & {
@@ -27,7 +32,12 @@ const PRIORITY_LABEL: Record<string, string> = { LOW: "ต่ำ", MEDIUM: "ป�
 
 export default function TaskDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { showToast } = useToast();
+  const currentUser = useCurrentUser();
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,32 +93,22 @@ export default function TaskDetailPage() {
     load();
   }, [load]);
 
-  async function markComplete() {
+  // FR-12 AC5: delete goes straight through RLS (delete_creator_only_or_admin)
+  // — a blocked DELETE matches 0 rows silently, so .select() + length check.
+  async function deleteTask() {
     if (!task) return;
+    setDeleting(true);
     try {
-      // update_assignee_or_creator_or_admin RLS policy replaces
-      // assertOwner() — same 0-row silent-block subtlety as every other
-      // resource in this migration, so .select().maybeSingle() + null-
-      // check turns it into a thrown error. This button only renders when
-      // task.status !== "COMPLETED" (see JSX below), so it's always a
-      // fresh transition into COMPLETED — completedAt is set unconditionally
-      // (mirrors the old PATCH route's own logic; dropping it would
-      // silently break dashboard/page.tsx's "recently completed" feed,
-      // which reads Task.completedAt directly via Prisma). updatedAt has
-      // no DB default (Prisma's @updatedAt is client-side-only) so it's
-      // set by hand too.
-      const { data, error: dbError } = await createClient()
-        .from("Task")
-        .update({ status: "COMPLETED", completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
-        .eq("id", task.id)
-        .select()
-        .maybeSingle();
-      if (dbError) throw new Error(dbError.message);
-      if (!data) throw new Error("เฉพาะผู้รับผิดชอบ ผู้สร้างงาน หรือผู้ดูแลระบบเท่านั้นที่แก้ไขงานนี้ได้ หรือไม่พบงานนี้");
-      showToast("บันทึกงานเสร็จสิ้นแล้ว", "success");
-      load();
+      const { data, error: dbError } = await createClient().from("Task").delete().eq("id", task.id).select("id");
+      if (dbError) throw new Error(dbWriteErrorMessage(dbError, "ลบงาน", TASK_DELETE_RULE));
+      if (!data || data.length === 0) throw new Error(`คุณไม่มีสิทธิ์ลบงานนี้ — ${TASK_DELETE_RULE}`);
+      showToast("ลบงานแล้ว", "success");
+      router.push("/tasks");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "อัปเดตไม่สำเร็จ", "error");
+      showToast(err instanceof Error ? err.message : "ลบงานไม่สำเร็จ", "error");
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -142,7 +142,7 @@ export default function TaskDetailPage() {
         authorId: authData.user.id,
         content: comment,
       });
-      if (dbError) throw new Error(dbError.message);
+      if (dbError) throw new Error(dbWriteErrorMessage(dbError, "แสดงความคิดเห็นในงานนี้", TASK_EDIT_RULE));
       setComment("");
       load();
     } catch (err) {
@@ -178,7 +178,8 @@ export default function TaskDetailPage() {
       </div>
     );
 
-  const badge = taskStatusBadge(task.status);
+  const canEdit = canEditTask(task, currentUser);
+  const canDelete = canDeleteTask(task, currentUser);
 
   return (
     <div className="p-container-margin max-w-5xl mx-auto space-y-6">
@@ -192,21 +193,48 @@ export default function TaskDetailPage() {
 
       <div className="bg-surface-container-lowest rounded-xl p-6 ambient-shadow border border-outline-variant/30 flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div className="flex flex-col gap-3 flex-1">
-          <StatusBadge {...badge} />
+          <div>
+            <TaskStatusSelect key={`${task.id}-${task.status}`} taskId={task.id} status={task.status} canEdit={canEdit} onChanged={() => load()} />
+          </div>
           <h1 className="font-headline-lg text-headline-lg text-on-surface">{task.title}</h1>
+          {currentUser && !canEdit && (
+            <p className="text-xs text-on-surface-variant">ดูได้อย่างเดียว — แก้ไข เปลี่ยนสถานะ หรือแสดงความคิดเห็นได้{TASK_EDIT_RULE}</p>
+          )}
         </div>
         <div className="flex items-center gap-3 mt-4 md:mt-0">
-          {task.status !== "COMPLETED" && (
+          {canEdit && (
             <button
-              onClick={markComplete}
-              className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors flex items-center gap-2 ambient-shadow"
+              onClick={() => setEditing(true)}
+              className="px-4 py-2 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-2"
             >
-              <span className="material-symbols-outlined text-[18px]">check_circle</span>
-              บันทึกเสร็จสิ้น
+              <span className="material-symbols-outlined text-[18px]">edit</span>
+              แก้ไขงาน
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="px-4 py-2 border border-error/40 text-error rounded-lg font-label-md text-label-md hover:bg-error-container/30 transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+              ลบงาน
             </button>
           )}
         </div>
       </div>
+
+      <TaskFormModal open={editing} onClose={() => setEditing(false)} onSaved={() => load()} task={task} />
+      <ConfirmDialog
+        open={confirmDelete}
+        title="ลบงานนี้?"
+        description={`"${task.title}" และความคิดเห็นของงานนี้จะถูกลบถาวร`}
+        confirmLabel="ลบงาน"
+        destructive
+        icon="delete"
+        loading={deleting}
+        onConfirm={deleteTask}
+        onCancel={() => setConfirmDelete(false)}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -236,6 +264,11 @@ export default function TaskDetailPage() {
                 </div>
               ))}
             </div>
+            {currentUser && !canEdit ? (
+              <p className="text-sm text-on-surface-variant bg-surface-container-low rounded-lg p-3">
+                แสดงความคิดเห็นได้{TASK_EDIT_RULE}
+              </p>
+            ) : (
             <form onSubmit={submitComment} className="flex gap-4 items-start">
               <div className="flex-1 relative">
                 <textarea
@@ -256,6 +289,7 @@ export default function TaskDetailPage() {
                 </div>
               </div>
             </form>
+            )}
           </div>
         </div>
 
@@ -281,6 +315,22 @@ export default function TaskDetailPage() {
                 <span className="text-xs text-outline mb-1 block">ระดับความสำคัญ</span>
                 <p className="font-body-md text-body-md font-medium text-on-surface">{PRIORITY_LABEL[task.priority]}</p>
               </div>
+              <hr className="border-outline-variant/50" />
+              <div>
+                <span className="text-xs text-outline mb-1 block">ผู้สร้างงาน</span>
+                <p className="font-body-md text-body-md font-medium text-on-surface">{task.createdBy?.name ?? "-"}</p>
+              </div>
+              {task.project && (
+                <>
+                  <hr className="border-outline-variant/50" />
+                  <div>
+                    <span className="text-xs text-outline mb-1 block">โปรเจกต์</span>
+                    <Link href={`/projects/${task.project.id}`} className="font-body-md text-body-md font-medium text-primary hover:underline">
+                      {task.project.name}
+                    </Link>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

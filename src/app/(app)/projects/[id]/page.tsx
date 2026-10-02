@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { projectStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { TaskQuickToggle } from "./TaskQuickToggle";
+import { CreateTaskButton } from "@/components/tasks/CreateTaskButton";
+import { getCurrentUser } from "@/lib/auth";
+import { canEditTask } from "@/lib/tasks";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,6 +21,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     },
   });
   if (!project) notFound();
+  const user = await getCurrentUser();
 
   const now = new Date();
   const taskTotal = project.tasks.length;
@@ -137,16 +141,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 <span className="material-symbols-outlined text-tertiary-fixed-dim">checklist</span>
                 งานของโปรเจกต์
               </h3>
-              <Link href="/tasks" className="text-primary font-label-md text-label-md hover:underline">
-                ดูทั้งหมด
-              </Link>
+              {/* FR-12 AC2: create a task already linked to this project */}
+              <CreateTaskButton defaultProjectId={project.id} />
             </div>
             {project.tasks.length === 0 ? (
               <p className="text-on-surface-variant font-body-md text-body-md">ยังไม่มีงานในโปรเจกต์นี้</p>
             ) : (
-              <div className="space-y-3">
-                {project.tasks.slice(0, 8).map((t) => (
-                  <TaskQuickToggle key={t.id} task={t} />
+              <div className="space-y-3 max-h-[480px] overflow-y-auto">
+                {project.tasks.map((t) => (
+                  <TaskQuickToggle key={`${t.id}-${t.status}`} task={t} canEdit={canEditTask(t, user)} />
                 ))}
               </div>
             )}

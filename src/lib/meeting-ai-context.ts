@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api-helpers";
+import { parseDbTimestamp } from "@/lib/format";
 import type { Meeting } from "@prisma/client";
 
 /**
@@ -25,96 +26,38 @@ export interface MeetingAiContext {
   pastResources: { id: string; title: string; url: string; meetingTitle: string }[];
 }
 
+// Row shapes inside the JSON get_meeting_context() returns. Timestamps come
+// back as zone-less strings (columns are `timestamp`, stored in UTC).
+interface ContextJson {
+  relatedTasks: { id: string; title: string; status: string; priority: string; dueDate: string | null }[];
+  pastMeetings: { id: string; title: string; startTime: string }[];
+  pastDecisions: { id: string; content: string; meetingTitle: string; decidedAt: string }[];
+  pastNotes: { id: string; content: string; meetingTitle: string; createdAt: string }[];
+  pastResources: { id: string; title: string; url: string; meetingTitle: string }[];
+}
+
 /**
  * Gathers everything the AI features (FR-15 pre-meeting summary, FR-16
  * pending-issues analysis, FR-17 agenda suggestion) can draw on for a given
- * meeting: related tasks, and — from past meetings in the same project —
- * decisions, notes, and related resources. Centralized here (instead of
- * duplicated per route) so all three features see the exact same context
- * and stay in sync as more entities are added.
+ * meeting: related tasks, and — from up to 5 earlier meetings in the same
+ * project — decisions, notes, and related resources.
  *
- * Falls back to the meeting's own tasks (and no past-meeting history) when
- * it isn't linked to a project, same as the original FR-15 behavior.
+ * FR-13 AC1: the gathering itself is done by the database function
+ * public.get_meeting_context() (prisma/migrations/20260911150000_get_meeting_context_function),
+ * so all three features see exactly the context the DB layer defines.
+ * One-shot meetings (no project) get just their own tasks and no history.
  */
-export async function gatherMeetingAiContext(
-  meeting: Pick<Meeting, "id" | "projectId" | "startTime">
-): Promise<MeetingAiContext> {
-  const [relatedTasksRaw, pastMeetingsRaw] = await Promise.all([
-    meeting.projectId
-      ? prisma.task.findMany({
-          where: { projectId: meeting.projectId },
-          orderBy: { dueDate: "asc" },
-          take: 20,
-        })
-      : prisma.task.findMany({ where: { meetingId: meeting.id }, take: 20 }),
-    meeting.projectId
-      ? prisma.meeting.findMany({
-          where: { projectId: meeting.projectId, id: { not: meeting.id }, startTime: { lt: meeting.startTime } },
-          orderBy: { startTime: "desc" },
-          take: 5,
-        })
-      : Promise.resolve([]),
-  ]);
-
-  const pastMeetingIds = pastMeetingsRaw.map((m) => m.id);
-  const [pastDecisionsRaw, pastNotesRaw, pastResourcesRaw] = await Promise.all([
-    pastMeetingIds.length
-      ? prisma.decision.findMany({
-          where: { meetingId: { in: pastMeetingIds } },
-          include: { meeting: { select: { title: true } } },
-          orderBy: { decidedAt: "desc" },
-          take: 10,
-        })
-      : Promise.resolve([]),
-    pastMeetingIds.length
-      ? prisma.meetingNote.findMany({
-          where: { meetingId: { in: pastMeetingIds } },
-          include: { meeting: { select: { title: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        })
-      : Promise.resolve([]),
-    // FR-15/16: RelatedResource is the one entity of the three (Notes/
-    // Decisions/RelatedResource) the pre-meeting summary previously left out
-    // of "context from past meetings" — it only ever looked at *this*
-    // meeting's own resources.
-    pastMeetingIds.length
-      ? prisma.relatedResource.findMany({
-          where: { meetingId: { in: pastMeetingIds } },
-          include: { meeting: { select: { title: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        })
-      : Promise.resolve([]),
-  ]);
+export async function gatherMeetingAiContext(meeting: Pick<Meeting, "id">): Promise<MeetingAiContext> {
+  const rows = await prisma.$queryRaw<{ ctx: ContextJson | null }[]>`SELECT public.get_meeting_context(${meeting.id}) AS ctx`;
+  const ctx = rows[0]?.ctx;
+  if (!ctx) throw new ApiError(404, "ไม่พบการประชุมนี้");
 
   return {
-    relatedTasks: relatedTasksRaw.map((t) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      priority: t.priority,
-      dueDate: t.dueDate,
-    })),
-    pastMeetings: pastMeetingsRaw.map((m) => ({ id: m.id, title: m.title, startTime: m.startTime })),
-    pastDecisions: pastDecisionsRaw.map((d) => ({
-      id: d.id,
-      content: d.content,
-      meetingTitle: d.meeting.title,
-      decidedAt: d.decidedAt,
-    })),
-    pastNotes: pastNotesRaw.map((n) => ({
-      id: n.id,
-      content: n.content,
-      meetingTitle: n.meeting.title,
-      createdAt: n.createdAt,
-    })),
-    pastResources: pastResourcesRaw.map((r) => ({
-      id: r.id,
-      title: r.title,
-      url: r.url,
-      meetingTitle: r.meeting.title,
-    })),
+    relatedTasks: ctx.relatedTasks.map((t) => ({ ...t, dueDate: t.dueDate ? parseDbTimestamp(t.dueDate) : null })),
+    pastMeetings: ctx.pastMeetings.map((m) => ({ ...m, startTime: parseDbTimestamp(m.startTime) })),
+    pastDecisions: ctx.pastDecisions.map((d) => ({ ...d, decidedAt: parseDbTimestamp(d.decidedAt) })),
+    pastNotes: ctx.pastNotes.map((n) => ({ ...n, createdAt: parseDbTimestamp(n.createdAt) })),
+    pastResources: ctx.pastResources.map((r) => ({ id: r.id, title: r.title, url: r.url, meetingTitle: r.meetingTitle })),
   };
 }
 

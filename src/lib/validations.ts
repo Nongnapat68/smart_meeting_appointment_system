@@ -73,12 +73,33 @@ export const personSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
 });
 
-export const updatePersonSchema = personSchema.partial();
+// Spelled out rather than personSchema.partial() — same Zod 4 trap as
+// updateTaskSchema below: .partial() keeps .default(), so a PUT that only
+// sent `phone` came back with type "EXTERNAL" / status "ACTIVE" filled in,
+// turning an internal contact external and reactivating an inactive one.
+export const updatePersonSchema = z.object({
+  name: nonEmpty("กรุณากรอกชื่อ").optional(),
+  email: email().optional(),
+  phone: z.string().trim().optional().nullable(),
+  title: z.string().trim().optional().nullable(),
+  department: z.string().trim().optional().nullable(),
+  type: z.enum(["INTERNAL", "EXTERNAL"]).optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+});
 
 // --- Contact Groups -------------------------------------------------------
 
 export const groupSchema = z.object({
   name: nonEmpty("กรุณากรอกชื่อกลุ่ม"),
+  description: z.string().trim().optional().nullable(),
+  icon: z.string().trim().optional(),
+});
+
+// Explicit rather than groupSchema.partial(): groupSchema has no defaults
+// today, but .partial() would silently start filling one in on every edit
+// the moment one is added (the bug updateTaskSchema/updatePersonSchema had).
+export const updateGroupSchema = z.object({
+  name: nonEmpty("กรุณากรอกชื่อกลุ่ม").optional(),
   description: z.string().trim().optional().nullable(),
   icon: z.string().trim().optional(),
 });
@@ -99,7 +120,19 @@ export const projectSchema = z.object({
   memberIds: z.array(z.string()).optional().default([]),
 });
 
-export const updateProjectSchema = projectSchema.partial();
+// Spelled out rather than projectSchema.partial() — same Zod 4 trap as
+// updateTaskSchema below. Here it was destructive: a PUT that only renamed a
+// project came back with status "ACTIVE" and memberIds [] filled in, and
+// PUT /api/projects/[id] treats any memberIds array as "replace the member
+// list" — so a rename reset the status and deleted every member.
+export const updateProjectSchema = z.object({
+  name: nonEmpty("กรุณากรอกชื่อโปรเจกต์").optional(),
+  description: z.string().trim().optional().nullable(),
+  status: z.enum(["ACTIVE", "PENDING", "DELAYED", "COMPLETED"]).optional(),
+  startDate: z.string().trim().optional().nullable(),
+  endDate: z.string().trim().optional().nullable(),
+  memberIds: z.array(z.string()).optional(),
+});
 
 // --- Reminder offsets (FR-10/BR-11) -------------------------------------
 
@@ -217,7 +250,19 @@ export const taskSchema = z.object({
   meetingId: z.string().trim().optional().nullable(),
 });
 
-export const updateTaskSchema = taskSchema.partial();
+// Spelled out rather than taskSchema.partial(): in Zod 4 .partial() keeps each
+// field's .default(), so a PATCH that only sent `title` came back with
+// status "NOT_STARTED" / priority "MEDIUM" filled in and silently reset them.
+export const updateTaskSchema = z.object({
+  title: nonEmpty("กรุณากรอกชื่องาน").optional(),
+  description: z.string().trim().optional().nullable(),
+  status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  dueDate: z.string().trim().optional().nullable(),
+  assigneePersonId: z.string().trim().optional().nullable(),
+  projectId: z.string().trim().optional().nullable(),
+  meetingId: z.string().trim().optional().nullable(),
+});
 
 export const taskCommentSchema = z.object({
   content: nonEmpty("กรุณากรอกข้อความ"),

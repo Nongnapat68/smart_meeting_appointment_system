@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateTaskSchedule } from "@/lib/ai";
+import { aiErrorToApiError, assertAiConfigured, generateTaskSchedule } from "@/lib/ai";
 import { ApiError, requireUser, withApiErrors } from "@/lib/api-helpers";
 
 export const POST = withApiErrors(async () => {
@@ -11,6 +11,8 @@ export const POST = withApiErrors(async () => {
     include: { project: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
   });
+
+  assertAiConfigured();
 
   if (tasks.length === 0) {
     throw new ApiError(400, "ไม่มีงานที่ต้องจัดตารางในขณะนี้");
@@ -29,8 +31,7 @@ export const POST = withApiErrors(async () => {
       }))
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "ไม่สามารถสร้างตารางงานด้วย AI ได้";
-    throw new ApiError(502, message);
+    throw aiErrorToApiError(err, "สร้างตารางการทำงาน");
   }
 
   return NextResponse.json({ schedule });

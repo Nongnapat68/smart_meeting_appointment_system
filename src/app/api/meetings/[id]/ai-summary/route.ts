@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateMeetingSummary } from "@/lib/ai";
+import { aiErrorToApiError, assertAiConfigured, generateMeetingSummary } from "@/lib/ai";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { assertMeetingAllowsAi, gatherMeetingAiContext } from "@/lib/meeting-ai-context";
 import { z } from "zod";
@@ -37,6 +37,7 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
   // FR-18: One-shot meeting ไม่มีบริบทสะสมจากการประชุมอื่นให้ AI อ้างอิง จึงไม่จำเป็นต้อง
   // (และไม่ควร) เรียกใช้ AI — เฉพาะ meeting ที่เชื่อมกับ project เท่านั้นที่สร้างสรุปได้
   assertMeetingAllowsAi(meeting);
+  assertAiConfigured();
 
   const ctx = await gatherMeetingAiContext(meeting);
 
@@ -59,8 +60,7 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
       pastResources: ctx.pastResources.map((r) => ({ title: r.title, url: r.url, meetingTitle: r.meetingTitle })),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "ไม่สามารถสร้างสรุปด้วย AI ได้";
-    throw new ApiError(502, message);
+    throw aiErrorToApiError(err, "สร้างสรุปก่อนการประชุม");
   }
 
   const sources = [
