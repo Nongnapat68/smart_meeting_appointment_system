@@ -101,6 +101,38 @@ export const projectSchema = z.object({
 
 export const updateProjectSchema = projectSchema.partial();
 
+// --- Reminder offsets (FR-10/BR-11) -------------------------------------
+
+// Upper bound for "remind me N minutes before the meeting". The largest
+// preset in MeetingForm is 7 days; 30 days leaves room for a custom
+// "2 weeks / 1 month before" while rejecting values like 99999999 that put
+// scheduledAt centuries in the past (already "due", so process-due would send
+// it at once). create_meeting_with_participants() enforces the same bound in
+// SQL (migration 20261003090000_reminder_offset_bounds) — keep them in sync.
+export const REMINDER_OFFSET_MAX_MINUTES = 30 * 24 * 60;
+
+const REMINDER_OFFSET_INT_MESSAGE = "จำนวนนาทีต้องเป็นจำนวนเต็ม";
+
+export const reminderOffsetMinutes = z
+  .number(REMINDER_OFFSET_INT_MESSAGE)
+  .int(REMINDER_OFFSET_INT_MESSAGE)
+  .min(1, "จำนวนนาทีต้องมากกว่า 0")
+  .max(REMINDER_OFFSET_MAX_MINUTES, `แจ้งเตือนล่วงหน้าได้ไม่เกิน ${REMINDER_OFFSET_MAX_MINUTES} นาที (30 วัน)`);
+
+/**
+ * Client-side check for the custom-minutes input in MeetingForm: the parsed
+ * value, or the message to show. Strict on the raw text so "1.5" or "10abc"
+ * aren't silently truncated by parseInt into something the user didn't type.
+ */
+export function parseReminderOffsetInput(raw: string): { minutes: number } | { error: string } {
+  const text = raw.trim();
+  if (!text) return { error: "กรุณากรอกจำนวนนาที" };
+  if (!/^[+-]?\d+$/.test(text)) return { error: REMINDER_OFFSET_INT_MESSAGE };
+  const result = reminderOffsetMinutes.safeParse(Number(text));
+  if (!result.success) return { error: result.error.issues[0].message };
+  return { minutes: result.data };
+}
+
 // --- Meetings ---------------------------------------------------------
 
 export const meetingSchema = z
@@ -120,7 +152,7 @@ export const meetingSchema = z
     // FR-10/BR-11: minutes-before-start for each reminder to create. Defaults
     // to the single "30 minutes before" reminder the app always created
     // before this was configurable, so existing callers keep working unchanged.
-    reminderOffsetMinutes: z.array(z.number().int().positive()).optional().default([30]),
+    reminderOffsetMinutes: z.array(reminderOffsetMinutes).optional().default([30]),
   })
   .refine((d) => new Date(d.endTime) > new Date(d.startTime), {
     message: "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม",
@@ -201,5 +233,5 @@ export const reminderQuerySchema = z.object({
 // initial batch is created inline via meetingSchema.reminderOffsetMinutes.
 export const createReminderSchema = z.object({
   meetingId: nonEmpty("ต้องระบุการประชุม"),
-  offsetMinutes: z.number().int().positive("ต้องเป็นจำนวนนาทีก่อนเริ่มประชุมที่มากกว่า 0"),
+  offsetMinutes: reminderOffsetMinutes,
 });

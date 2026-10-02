@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDateTime } from "@/lib/format";
+import type { ProcessDueResult } from "@/lib/reminders";
 import type { Meeting, MeetingParticipant, Person, Reminder, ReminderStatus } from "@prisma/client";
 
 type ReminderRow = Reminder & {
@@ -33,6 +34,17 @@ export default function RemindersPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reasonModal, setReasonModal] = useState<ReminderRow | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  // Only decides whether to show the process-due button — the route itself
+  // still rejects non-admins with 403, so this is not the security boundary.
+  useEffect(() => {
+    api
+      .get<{ user: { role: string } | null }>("/api/auth/me")
+      .then((res) => setIsAdmin(res.user?.role === "ADMIN"))
+      .catch(() => setIsAdmin(false));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,6 +155,34 @@ export default function RemindersPage() {
     }
   }
 
+  // BR-13: there is no cron (the app only runs under `npm run dev`), so an
+  // admin triggers POST /api/reminders/process-due from here on demand.
+  async function processDue() {
+    setProcessing(true);
+    try {
+      const { processed, results } = await api.post<{ processed: number; results: ProcessDueResult[] }>(
+        "/api/reminders/process-due"
+      );
+      if (processed === 0) {
+        showToast("ไม่มีการแจ้งเตือนที่ถึงเวลาส่ง", "info");
+      } else {
+        const count = (s: ProcessDueResult["status"]) => results.filter((r) => r.status === s).length;
+        const parts = [
+          count("SENT") && `ส่งแล้ว ${count("SENT")}`,
+          count("SIMULATED") && `จำลองการส่ง ${count("SIMULATED")}`,
+          count("FAILED") && `ส่งไม่สำเร็จ ${count("FAILED")}`,
+          count("SKIPPED") && `ข้าม ${count("SKIPPED")} (ถูกประมวลผลไปแล้ว)`,
+        ].filter(Boolean);
+        showToast(`ประมวลผลการแจ้งเตือน ${processed} รายการ — ${parts.join(", ")}`, count("FAILED") ? "error" : "success");
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "ประมวลผลการแจ้งเตือนไม่สำเร็จ", "error");
+    } finally {
+      setProcessing(false);
+      load();
+    }
+  }
+
   const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
   return (
@@ -152,6 +192,16 @@ export default function RemindersPage() {
           <h2 className="font-headline-lg text-headline-lg text-on-surface">จัดการการแจ้งเตือน (Reminders)</h2>
           <p className="text-on-surface-variant mt-1">ตรวจสอบสถานะการส่งการแจ้งเตือนการประชุมทั้งหมด</p>
         </div>
+        {isAdmin && (
+          <button
+            onClick={processDue}
+            disabled={processing}
+            className="self-start md:self-auto px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md text-label-md flex items-center gap-2 hover:opacity-90 transition-colors disabled:opacity-60"
+          >
+            <span className="material-symbols-outlined text-[18px]">{processing ? "hourglass_top" : "send"}</span>
+            {processing ? "กำลังประมวลผล..." : "ประมวลผล reminder ที่ถึงเวลา"}
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-stack-gap">
