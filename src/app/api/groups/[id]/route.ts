@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { groupSchema } from "@/lib/validations";
+import { updateGroupSchema } from "@/lib/validations";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 
 type Params = { params: Promise<{ id: string }> };
@@ -24,7 +24,7 @@ export const GET = withApiErrors(async (_request: Request, { params }: Params) =
 export const PUT = withApiErrors(async (request: Request, { params }: Params) => {
   const user = await requireUser();
   const { id } = await params;
-  const body = parseBody(groupSchema.partial(), await request.json());
+  const body = parseBody(updateGroupSchema, await request.json());
 
   const existing = await prisma.contactGroup.findUnique({ where: { id } });
   if (!existing) throw new ApiError(404, "ไม่พบกลุ่มนี้");

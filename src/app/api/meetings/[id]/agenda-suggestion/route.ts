@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { generateAgendaSuggestion } from "@/lib/ai";
+import { aiErrorToApiError, assertAiConfigured, generateAgendaSuggestion } from "@/lib/ai";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { assertMeetingAllowsAi, gatherMeetingAiContext, splitOverdueTasks } from "@/lib/meeting-ai-context";
 
@@ -33,6 +33,7 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
     "เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่แนะนำ agenda ของการประชุมนี้ได้"
   );
   assertMeetingAllowsAi(meeting);
+  assertAiConfigured();
 
   const ctx = await gatherMeetingAiContext(meeting);
   const { overdue, open } = splitOverdueTasks(ctx.relatedTasks);
@@ -48,8 +49,7 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
       notes: ctx.pastNotes.map((n) => ({ content: n.content, meetingTitle: n.meetingTitle })),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "ไม่สามารถแนะนำ agenda ด้วย AI ได้";
-    throw new ApiError(502, message);
+    throw aiErrorToApiError(err, "แนะนำวาระการประชุม");
   }
 
   const sources = [

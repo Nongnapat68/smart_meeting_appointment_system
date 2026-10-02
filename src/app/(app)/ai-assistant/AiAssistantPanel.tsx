@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Feedback";
+import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import { formatDateTime } from "@/lib/format";
 import type { AISummary, MeetingStatus, MeetingType } from "@prisma/client";
 
@@ -289,10 +290,7 @@ export function AiAssistantPanel({
               )}
             </div>
 
-            <div className="p-3 bg-surface-container-low border-t border-outline-variant flex items-center justify-center gap-2 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[16px]">info</span>
-              <span className="font-label-md text-label-md">สร้างโดย AI — โปรดตรวจสอบความถูกต้องก่อนใช้งาน</span>
-            </div>
+            <AiDisclaimer className="p-3 bg-surface-container-low border-t border-outline-variant" />
           </div>
 
           {/* FR-16: Pending Issues Analysis — separate capability/result from
@@ -349,6 +347,7 @@ export function AiAssistantPanel({
                 </div>
               )}
             </div>
+            <AiDisclaimer className="p-3 bg-surface-container-low border-t border-outline-variant" />
           </div>
 
           {/* FR-17: New Agenda Context — user types the next meeting's topic,
@@ -408,6 +407,7 @@ export function AiAssistantPanel({
                 </>
               )}
             </div>
+            <AiDisclaimer className="p-3 bg-surface-container-low border-t border-outline-variant" />
           </div>
           </>
         )}

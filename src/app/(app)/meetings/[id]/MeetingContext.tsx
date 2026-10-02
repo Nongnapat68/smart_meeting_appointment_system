@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { relativeTime } from "@/lib/format";
+import { dbWriteErrorMessage, isHttpUrl } from "@/lib/db-errors";
 import type { ResourceType } from "@prisma/client";
 import type { NoteWithAuthor, DecisionWithUser, ResourceWithUser } from "./types";
 
@@ -16,6 +17,10 @@ import type { NoteWithAuthor, DecisionWithUser, ResourceWithUser } from "./types
 // page's own nested select back in Meeting round 1 — see ./types.ts). The
 // old GET /api/meetings/[id]/{notes,decisions,resources} routes still exist
 // but nothing here calls them anymore.
+
+// FR-11 AC3/AC4: who RLS lets add notes / decisions / resources — shown in
+// the toast when a save is rejected, instead of the raw English RLS error.
+const MEETING_CONTRIBUTOR_RULE = "เฉพาะผู้จัดประชุม ผู้เข้าร่วมประชุมนี้ หรือผู้ดูแลระบบเท่านั้น";
 
 const RESOURCE_TYPE_LABEL: Record<ResourceType, string> = {
   LINK: "ลิงก์",
@@ -74,7 +79,7 @@ export function MeetingNotesCard({
         })
         .select("*, author:User(name)")
         .single();
-      if (dbError) throw new Error(dbError.message);
+      if (dbError) throw new Error(dbWriteErrorMessage(dbError, "เพิ่มบันทึกการประชุม", MEETING_CONTRIBUTOR_RULE));
 
       setNotes((prev) => [data as NoteWithAuthor, ...prev]);
       setContent("");
@@ -158,7 +163,7 @@ export function MeetingDecisionsCard({
         })
         .select("*, decidedBy:User(name)")
         .single();
-      if (dbError) throw new Error(dbError.message);
+      if (dbError) throw new Error(dbWriteErrorMessage(dbError, "บันทึกมติที่ประชุม", MEETING_CONTRIBUTOR_RULE));
 
       setDecisions((prev) => [data as DecisionWithUser, ...prev]);
       setContent("");
@@ -223,6 +228,10 @@ export function MeetingResourcesCard({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !url.trim()) return;
+    if (!isHttpUrl(url)) {
+      showToast("URL ต้องขึ้นต้นด้วย http:// หรือ https://", "error");
+      return;
+    }
     setPosting(true);
     try {
       const supabase = createClient();
@@ -247,12 +256,12 @@ export function MeetingResourcesCard({
           meetingId,
           addedById: authData.user.id,
           title,
-          url,
+          url: url.trim(),
           type,
         })
         .select("*, addedBy:User(name)")
         .single();
-      if (dbError) throw new Error(dbError.message);
+      if (dbError) throw new Error(dbWriteErrorMessage(dbError, "เพิ่มเอกสารอ้างอิง", MEETING_CONTRIBUTOR_RULE));
 
       setResources((prev) => [data as ResourceWithUser, ...prev]);
       setTitle("");

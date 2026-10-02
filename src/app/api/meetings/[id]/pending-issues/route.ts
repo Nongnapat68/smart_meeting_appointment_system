@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generatePendingIssuesAnalysis } from "@/lib/ai";
+import { aiErrorToApiError, assertAiConfigured, generatePendingIssuesAnalysis } from "@/lib/ai";
 import { ApiError, assertOwner, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { assertMeetingAllowsAi, gatherMeetingAiContext, splitOverdueTasks } from "@/lib/meeting-ai-context";
 
@@ -28,6 +28,7 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
     "เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่วิเคราะห์ประเด็นค้างของการประชุมนี้ได้"
   );
   assertMeetingAllowsAi(meeting);
+  assertAiConfigured();
 
   const ctx = await gatherMeetingAiContext(meeting);
   const { overdue, open } = splitOverdueTasks(ctx.relatedTasks);
@@ -42,8 +43,7 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
       notes: ctx.pastNotes.map((n) => ({ content: n.content, meetingTitle: n.meetingTitle })),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "ไม่สามารถวิเคราะห์ประเด็นค้างด้วย AI ได้";
-    throw new ApiError(502, message);
+    throw aiErrorToApiError(err, "วิเคราะห์ประเด็นค้าง");
   }
 
   const sources = [
