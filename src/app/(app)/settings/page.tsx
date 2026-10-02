@@ -6,6 +6,7 @@ import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
+import { AVATAR_ACCEPT } from "@/lib/upload-validation";
 
 interface MeUser {
   id: string;
@@ -131,7 +132,7 @@ export default function SettingsPage() {
               >
                 <span className="material-symbols-outlined text-white">photo_camera</span>
               </button>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              <input ref={fileInputRef} type="file" accept={AVATAR_ACCEPT} className="hidden" onChange={handleAvatarChange} />
             </div>
             <button
               type="button"
