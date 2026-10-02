@@ -14,15 +14,20 @@ type ReminderRow = Reminder & {
   meeting: Meeting & { participants: (MeetingParticipant & { person: Person })[] };
 };
 
+// One entry per ReminderStatus — `satisfies` makes the compiler flag a status
+// added to the enum but missing here (the old `as Record<...>` cast hid that).
+const emptyCounts = {
+  PENDING: 0,
+  SENT: 0,
+  SIMULATED: 0,
+  FAILED: 0,
+  CANCELLED: 0,
+} satisfies Record<ReminderStatus, number>;
+
 export default function RemindersPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<ReminderRow[]>([]);
-  const [counts, setCounts] = useState<Record<ReminderStatus, number>>({
-    PENDING: 0,
-    SENT: 0,
-    FAILED: 0,
-    CANCELLED: 0,
-  });
+  const [counts, setCounts] = useState<Record<ReminderStatus, number>>(emptyCounts);
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,13 +71,13 @@ export default function RemindersPage() {
       // the same 100-row `.limit(100)` the old `take: 100` had — a system
       // with >100 reminders would undercount. So counts still need their
       // own separate, wholly unfiltered query, same as before — just as
-      // four count-only (`head: true`) requests instead of one groupBy,
-      // since PostgREST has no groupBy equivalent over REST.
-      const statuses: ReminderStatus[] = ["PENDING", "SENT", "FAILED", "CANCELLED"];
+      // one count-only (`head: true`) request per status instead of one
+      // groupBy, since PostgREST has no groupBy equivalent over REST.
+      const statuses = Object.keys(emptyCounts) as ReminderStatus[];
       const countResults = await Promise.all(
         statuses.map((s) => supabase.from("Reminder").select("*", { count: "exact", head: true }).eq("status", s))
       );
-      const counts = { PENDING: 0, SENT: 0, FAILED: 0, CANCELLED: 0 } as Record<ReminderStatus, number>;
+      const counts = { ...emptyCounts };
       countResults.forEach((res, i) => {
         if (res.error) throw new Error(res.error.message);
         counts[statuses[i]] = res.count ?? 0;
@@ -96,8 +101,13 @@ export default function RemindersPage() {
   async function retry(id: string) {
     setBusyId(id);
     try {
-      await api.post(`/api/reminders/${id}/retry`);
-      showToast("ส่งการแจ้งเตือนใหม่สำเร็จ", "success");
+      const { reminder } = await api.post<{ reminder: Reminder }>(`/api/reminders/${id}/retry`);
+      showToast(
+        reminder.status === "SIMULATED"
+          ? "ประมวลผลใหม่แล้ว (จำลองการส่ง — ระบบยังไม่ได้ส่งอีเมลจริง)"
+          : "ส่งการแจ้งเตือนใหม่สำเร็จ",
+        "success"
+      );
     } catch (err) {
       showToast(err instanceof Error ? err.message : "ส่งไม่สำเร็จ", "error");
     } finally {
@@ -133,7 +143,7 @@ export default function RemindersPage() {
     }
   }
 
-  const total = counts.PENDING + counts.SENT + counts.FAILED + counts.CANCELLED;
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
 
   return (
     <div className="max-w-7xl mx-auto p-container-margin space-y-container-margin">
@@ -144,10 +154,17 @@ export default function RemindersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-stack-gap">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-stack-gap">
         <StatCard label="ทั้งหมด" value={total} icon="mark_email_read" onClick={() => setStatusFilter("")} active={!statusFilter} />
         <StatCard label="รอส่ง" value={counts.PENDING} icon="schedule" onClick={() => setStatusFilter("PENDING")} active={statusFilter === "PENDING"} />
         <StatCard label="ส่งแล้ว" value={counts.SENT} icon="check_circle" onClick={() => setStatusFilter("SENT")} active={statusFilter === "SENT"} />
+        <StatCard
+          label="จำลองการส่ง"
+          value={counts.SIMULATED}
+          icon="science"
+          onClick={() => setStatusFilter("SIMULATED")}
+          active={statusFilter === "SIMULATED"}
+        />
         <StatCard
           label="ส่งไม่สำเร็จ"
           value={counts.FAILED}
@@ -227,7 +244,7 @@ export default function RemindersPage() {
                               <span className="material-symbols-outlined text-[18px]">cancel</span>
                             </button>
                           )}
-                          {r.status === "SENT" && (
+                          {(r.status === "SENT" || r.status === "SIMULATED") && (
                             <button
                               onClick={() => setReasonModal(r)}
                               className="text-on-surface-variant hover:text-primary transition-colors"
@@ -296,6 +313,9 @@ function ReasonModal({ reminder, onClose }: { reminder: ReminderRow; onClose: ()
         <div className="space-y-2 font-body-md text-body-md text-on-surface-variant">
           <p>เวลาที่กำหนดส่ง: {formatDateTime(reminder.scheduledAt)}</p>
           {reminder.sentAt && <p>ส่งเมื่อ: {formatDateTime(reminder.sentAt)}</p>}
+          {reminder.status === "SIMULATED" && (
+            <p>ประมวลผลแล้วแต่ไม่ได้ส่งอีเมลจริง เพราะระบบยังไม่ได้เชื่อมต่อบริการส่งอีเมล (โหมดจำลอง)</p>
+          )}
           <p>จำนวนครั้งที่ลองส่ง: {reminder.retryCount}</p>
           {reminder.failureReason && (
             <p className="text-error">สาเหตุที่ล้มเหลว: {reminder.failureReason}</p>
