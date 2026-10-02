@@ -63,9 +63,13 @@ model PasswordResetOtp {
   otpHash   String
   expiresAt DateTime
   usedAt    DateTime?
+  // Wrong guesses against this code; locked out at OTP_MAX_FAILED_ATTEMPTS (src/lib/otp.ts).
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
 
-  @@index([userId])
+  // (userId, createdAt) serves both the per-user request-rate count and the
+  // "newest code for this user" lookup; it also covers plain userId lookups.
+  @@index([userId, createdAt])
 }
 
 // ---------------------------------------------------------------------------

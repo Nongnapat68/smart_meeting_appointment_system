@@ -13,7 +13,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "test:authz": "tsx scripts/test-authorization.ts",
-    "test:rls": "tsx scripts/test-rls.ts"
+    "test:rls": "tsx scripts/test-rls.ts",
+    "test:otp": "tsx scripts/test-otp.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -1,3 +1,5 @@
+import { randomInt } from "node:crypto";
+
 /**
  * Minimal email delivery abstraction.
  *
@@ -49,6 +51,10 @@ export async function sendEmail({ to, subject, text, attachments }: SendEmailInp
   console.log(`[email] would send to ${to}: ${subject}${attachments?.length ? ` (+${attachments.length} attachment(s))` : ""}`);
 }
 
+// randomInt draws from the OS CSPRNG (with rejection sampling, so no modulo
+// bias). Math.random() is a non-cryptographic PRNG whose output can be
+// predicted from earlier values, which would let an attacker guess codes.
+// Still 6 digits; leading zeros are kept so all 10^6 codes are possible.
 export function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
