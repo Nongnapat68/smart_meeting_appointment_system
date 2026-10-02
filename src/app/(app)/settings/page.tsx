@@ -149,7 +149,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <SettingField label="ชื่อ - นามสกุล" value={name} onChange={setName} />
                 <SettingField label="อีเมล" value={user.email} onChange={() => {}} disabled type="email" />
-                <SettingField label="เบอร์โทรศัพท์" value={phone} onChange={setPhone} />
+                <SettingField label="เบอร์โทรศัพท์" value={phone} onChange={setPhone} maxLength={10} />
                 <SettingField label="ตำแหน่ง" value={title} onChange={setTitle} />
                 <div className="md:col-span-2">
                   <SettingField label="แผนก" value={department} onChange={setDepartment} />
@@ -239,6 +239,7 @@ function SettingField({
   type = "text",
   disabled = false,
   placeholder,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -246,6 +247,7 @@ function SettingField({
   type?: string;
   disabled?: boolean;
   placeholder?: string;
+  maxLength?: number;
 }) {
   return (
     <div className="space-y-1">
@@ -255,6 +257,7 @@ function SettingField({
         value={value}
         disabled={disabled}
         placeholder={placeholder}
+        maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-4 py-2.5 bg-surface-container-low border border-outline-variant/30 rounded-lg font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none disabled:opacity-60"
       />
