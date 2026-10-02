@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { orContainsAny } from "@/lib/search";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
@@ -27,7 +28,7 @@ export default function PeoplePage() {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
@@ -37,18 +38,24 @@ export default function PeoplePage() {
         .from("Person")
         .select("*, groupMemberships:ContactGroupMember(*, group:ContactGroup(*))", { count: "exact" })
         .order("name", { ascending: true })
-        .range(0, PAGE_SIZE - 1);
+        .range(0, PAGE_SIZE - 1)
+        // No 1s/2s/4s auto-retry on a failed fetch — see meetings/page.tsx:
+        // a search the Supabase edge firewall blocks fails identically each time.
+        .retry(false);
+      if (signal) query = query.abortSignal(signal);
       if (!includeInactive) query = query.eq("status", "ACTIVE");
       if (q) {
         // Same 3-field OR search GET /api/people used to do (name/email/department
-        // "contains"). PostgREST's or() takes one filter-list string — wrapping
-        // each ilike pattern in double quotes keeps a comma typed into the
-        // search box from being misread as another filter.
-        const pattern = `%${q}%`;
-        query = query.or(`name.ilike."${pattern}",email.ilike."${pattern}",department.ilike."${pattern}"`);
+        // "contains"). orContainsAny() quotes the pattern (so a typed comma
+        // isn't read as another filter) and escapes % _ \ * " so they match literally.
+        query = query.or(orContainsAny(["name", "email", "department"], q));
       }
       const { data: items, count, error: dbError } = await query;
-      if (dbError) throw new Error(dbError.message);
+      if (signal?.aborted) return; // a newer search replaced this one
+      if (dbError) {
+        console.error("people search failed", dbError);
+        throw new Error(q ? "ค้นหาไม่สำเร็จ กรุณาลองคำค้นหาอื่น" : "โหลดข้อมูลผู้ติดต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      }
 
       // Stats are always unfiltered (independent of `q`), same as the old route.
       const [{ count: totalActive }, { count: totalExternal }, { count: totalAll }] = await Promise.all([
@@ -63,15 +70,19 @@ export default function PeoplePage() {
         stats: { totalAll: totalAll ?? 0, totalActive: totalActive ?? 0, totalExternal: totalExternal ?? 0 },
       });
     } catch (err) {
+      if (signal?.aborted) return;
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
-    } finally {
-      setLoading(false);
     }
+    if (!signal?.aborted) setLoading(false);
   }, [q, includeInactive]);
 
   useEffect(() => {
-    const t = setTimeout(load, 250);
-    return () => clearTimeout(t);
+    const controller = new AbortController();
+    const t = setTimeout(() => load(controller.signal), 250);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
   }, [load]);
 
   return (
@@ -195,7 +206,7 @@ export default function PeoplePage() {
             </table>
           </div>
         )}
-        {data && (
+        {!loading && !error && data && (
           <div className="p-4 border-t border-outline-variant/30 text-body-md text-on-surface-variant bg-surface-bright">
             แสดง {data.items.length} จาก {data.total} รายการ
           </div>

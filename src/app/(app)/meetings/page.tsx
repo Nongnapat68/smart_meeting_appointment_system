@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { containsFilter } from "@/lib/search";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { meetingStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
@@ -26,10 +27,10 @@ export default function MeetingsPage() {
   const [type, setType] = useState("");
   const [page, setPage] = useState(1);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const load = useCallback(
+    async (signal: AbortSignal) => {
+      setLoading(true);
+      setError(null);
       const supabase = createClient();
       let query = supabase
         .from("Meeting")
@@ -38,27 +39,46 @@ export default function MeetingsPage() {
           { count: "exact" }
         )
         .order("startTime", { ascending: false })
-        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-      if (q) query = query.ilike("title", `%${q}%`);
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+        .abortSignal(signal)
+        // postgrest-js retries a GET whose fetch fails 3 more times (1s/2s/4s
+        // backoff). A request Supabase's edge firewall blocks — e.g. a search
+        // for "x' OR 1=1 --" — fails the same way every time, so the retries
+        // only kept the spinner going for 7+ seconds per keystroke.
+        .retry(false);
+      // % _ \ * typed by the user are matched literally, not as wildcards.
+      if (q) {
+        const f = containsFilter(q);
+        query = query.filter("title", f.operator, f.value);
+      }
       if (status) query = query.eq("status", status);
       if (type) query = query.eq("type", type);
 
+      // supabase-js doesn't throw; failures (including a network-level
+      // "TypeError: Failed to fetch") come back as `error`.
       const { data: items, count, error: dbError } = await query;
-      // supabase-js errors don't throw — they come back as `error` on the
-      // result, so translate to the same thrown-Error shape apiFetch() used
-      // to produce, keeping every existing catch block below unchanged.
-      if (dbError) throw new Error(dbError.message);
-      setData({ items: (items ?? []) as MeetingRow[], total: count ?? 0 });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
-    } finally {
+      if (signal.aborted) return; // a newer search replaced this one
+      if (dbError) {
+        console.error("meeting search failed", dbError);
+        // Drop the previous results so the "แสดง x ถึง y จาก z" footer can't
+        // keep showing numbers from an earlier search.
+        setData(null);
+        setError(q ? "ค้นหาไม่สำเร็จ กรุณาลองคำค้นหาอื่น" : "โหลดข้อมูลการประชุมไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      } else {
+        setData({ items: (items ?? []) as MeetingRow[], total: count ?? 0 });
+      }
       setLoading(false);
-    }
-  }, [q, status, type, page]);
+    },
+    [q, status, type, page]
+  );
 
   useEffect(() => {
-    const t = setTimeout(load, 250);
-    return () => clearTimeout(t);
+    const controller = new AbortController();
+    const t = setTimeout(() => load(controller.signal), 250);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
   }, [load]);
 
   useEffect(() => {
@@ -191,7 +211,7 @@ export default function MeetingsPage() {
             </table>
           </div>
         )}
-        {data && data.total > 0 && (
+        {!loading && !error && data && data.total > 0 && (
           <div className="px-6 py-4 border-t border-outline-variant bg-surface flex items-center justify-between flex-wrap gap-2">
             <p className="font-label-md text-label-md text-on-surface-variant">
               แสดง {(page - 1) * PAGE_SIZE + 1} ถึง {Math.min(page * PAGE_SIZE, data.total)} จาก {data.total} รายการ

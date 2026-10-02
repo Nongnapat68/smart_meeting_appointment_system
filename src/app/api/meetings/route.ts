@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parsePagination, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { escapeLikePattern } from "@/lib/search";
 import { MeetingStatus, MeetingType, type Prisma } from "@prisma/client";
 
 export const GET = withApiErrors(async (request: Request) => {
   await requireUser();
   const { searchParams } = new URL(request.url);
   const { page, pageSize, skip, take } = parsePagination(searchParams);
+  // Prisma passes `contains` into LIKE unescaped — % _ \ would act as wildcards.
   const q = searchParams.get("q")?.trim();
+  const like = q ? escapeLikePattern(q) : "";
   const status = searchParams.get("status");
   const type = searchParams.get("type");
 
   const where: Prisma.MeetingWhereInput = {
-    ...(q ? { title: { contains: q } } : {}),
+    ...(q ? { title: { contains: like } } : {}),
     ...(status && status in MeetingStatus ? { status: status as MeetingStatus } : {}),
     ...(type && type in MeetingType ? { type: type as MeetingType } : {}),
   };
