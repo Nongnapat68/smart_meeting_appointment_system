@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatTime } from "@/lib/format";
 import { meetingStatusBadge, participantSourceBadge, StatusBadge, taskStatusBadge } from "@/components/ui/StatusBadge";
 import { MeetingActions } from "./MeetingActions";
 import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./MeetingContext";
@@ -76,7 +76,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                 <div>
                   <p className="text-xs text-outline">วันที่และเวลา</p>
                   <p className="font-medium text-on-surface">
-                    {formatDateTime(meeting.startTime)} - {new Date(meeting.endTime).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                    {formatDateTime(meeting.startTime)} - {formatTime(meeting.endTime)}
                   </p>
                 </div>
               </div>

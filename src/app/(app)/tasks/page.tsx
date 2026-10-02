@@ -6,7 +6,7 @@ import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState, ErrorBanner, FullPageSpinner, Spinner } from "@/components/ui/Feedback";
-import { formatDate } from "@/lib/format";
+import { formatDate, parseDbTimestamp } from "@/lib/format";
 import type { Task, TaskStatus } from "@prisma/client";
 
 type TaskRow = Task & {
@@ -145,7 +145,7 @@ export default function TasksPage() {
   }
 
   const now = new Date();
-  const overdueTasks = items.filter((t) => t.status !== "COMPLETED" && t.dueDate && new Date(t.dueDate) < now);
+  const overdueTasks = items.filter((t) => t.status !== "COMPLETED" && t.dueDate && parseDbTimestamp(t.dueDate) < now);
   const otherTasks = items.filter((t) => !overdueTasks.includes(t));
   const total = statusCounts.NOT_STARTED + statusCounts.IN_PROGRESS + statusCounts.COMPLETED;
 
