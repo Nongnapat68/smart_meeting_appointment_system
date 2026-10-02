@@ -104,17 +104,21 @@ export function DateTimeField({
     function onPointerDown(e: PointerEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) close();
     }
+    // Capture phase + stopPropagation: Esc closes only this popup, not an
+    // enclosing Modal that also listens for Esc on document (e.g. the
+    // reschedule dialog in MeetingActions.tsx).
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        e.stopPropagation();
         close();
         triggerRef.current?.focus();
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
     };
   }, [open, close]);
 

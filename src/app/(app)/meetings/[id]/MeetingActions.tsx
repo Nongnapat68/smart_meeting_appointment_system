@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { ErrorBanner } from "@/components/ui/Feedback";
+import { DateTimeField } from "@/components/meetings/DateTimeField";
 import { toDatetimeLocalValue } from "@/lib/format";
 import type { MeetingWithStringDates } from "./types";
 
@@ -103,16 +104,20 @@ export function MeetingActions({ meeting }: { meeting: MeetingWithStringDates })
         )}
       </div>
 
-      <RescheduleModal
-        meeting={meeting}
-        open={showReschedule}
-        onClose={() => setShowReschedule(false)}
-        onDone={() => {
-          setShowReschedule(false);
-          showToast("เลื่อนเวลาการประชุมสำเร็จ", "success");
-          router.refresh();
-        }}
-      />
+      {/* Mounted only while open, so every open starts from the meeting's
+          current times (after router.refresh()) instead of the times it had
+          when this component first rendered. */}
+      {showReschedule && (
+        <RescheduleModal
+          meeting={meeting}
+          onClose={() => setShowReschedule(false)}
+          onDone={() => {
+            setShowReschedule(false);
+            showToast("เลื่อนเวลาการประชุมสำเร็จ", "success");
+            router.refresh();
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={showCancel}
@@ -131,12 +136,10 @@ export function MeetingActions({ meeting }: { meeting: MeetingWithStringDates })
 
 function RescheduleModal({
   meeting,
-  open,
   onClose,
   onDone,
 }: {
   meeting: MeetingWithStringDates;
-  open: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -150,33 +153,20 @@ function RescheduleModal({
     setError(null);
     setLoading(true);
     try {
-      // Same reasoning as handleCancel above — reschedule never sent
-      // email/notification either, so it's two plain-table writes
-      // straight through supabase-js instead of POST /api/meetings/[id]/reschedule.
-      const startIso = new Date(startTime).toISOString();
-      const endIso = new Date(endTime).toISOString();
-      if (new Date(endIso) <= new Date(startIso)) {
-        throw new Error("เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม");
-      }
+      // Same checks as MeetingForm.tsx's handleSubmit (the RPC repeats them).
+      if (!startTime || !endTime) throw new Error("กรุณากำหนดเวลาเริ่มและเวลาสิ้นสุด");
+      if (new Date(startTime) < new Date()) throw new Error("เวลาเริ่มต้องไม่เป็นอดีต (ย้อนหลัง)");
+      if (new Date(endTime) <= new Date(startTime)) throw new Error("เวลาสิ้นสุดต้องมาหลังเวลาเริ่ม");
 
-      const supabase = createClient();
-      const { data, error: updateError } = await supabase
-        .from("Meeting")
-        .update({ startTime: startIso, endTime: endIso, status: "POSTPONED" })
-        .eq("id", meeting.id)
-        .select()
-        .maybeSingle();
-      if (updateError) throw new Error(updateError.message);
-      if (!data) throw new Error("เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่เลื่อนเวลาการประชุมนี้ได้");
-
-      // Keep the still-PENDING reminder(s) in sync with the new time —
-      // same 30-minutes-before rule the old route used.
-      const { error: reminderError } = await supabase
-        .from("Reminder")
-        .update({ scheduledAt: new Date(new Date(startIso).getTime() - 30 * 60 * 1000).toISOString() })
-        .eq("meetingId", meeting.id)
-        .eq("status", "PENDING");
-      if (reminderError) throw new Error(reminderError.message);
+      // One atomic RPC moves the meeting and shifts every PENDING reminder by
+      // the same delta, so each keeps its original offset (e.g. "1 day
+      // before") — see prisma/migrations/20261002100000_reschedule_meeting_function.
+      const { error: rpcError } = await createClient().rpc("reschedule_meeting", {
+        p_meeting_id: meeting.id,
+        p_start_time: new Date(startTime).toISOString(),
+        p_end_time: new Date(endTime).toISOString(),
+      });
+      if (rpcError) throw new Error(rpcError.message);
 
       onDone();
     } catch (err) {
@@ -187,36 +177,18 @@ function RescheduleModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="max-w-md">
+    <Modal open onClose={onClose} maxWidth="max-w-md">
       <h2 className="font-headline-md text-headline-md text-on-surface">เลื่อนเวลาการประชุม</h2>
       {error && <ErrorBanner message={error} />}
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="space-y-1">
-          <label className="font-label-md text-label-md text-on-surface-variant block">เวลาเริ่มใหม่</label>
-          <input
-            type="datetime-local"
-            required
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
-          />
-          <p className="mt-1 text-body-md text-on-surface-variant">
-            เลือกวันที่ แล้วตั้งเวลาในส่วนชั่วโมง (ชม.) และนาที (น.)
-          </p>
-        </div>
-        <div className="space-y-1">
-          <label className="font-label-md text-label-md text-on-surface-variant block">เวลาสิ้นสุดใหม่</label>
-          <input
-            type="datetime-local"
-            required
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
-          />
-          <p className="mt-1 text-body-md text-on-surface-variant">
-            เลือกวันที่ แล้วตั้งเวลาในส่วนชั่วโมง (ชม.) และนาที (น.)
-          </p>
-        </div>
+        {/* Same pair of pickers as MeetingForm.tsx's "เวลาและสถานที่" section. */}
+        <DateTimeField label="เวลาเริ่มใหม่" value={startTime} onChange={setStartTime} />
+        <DateTimeField
+          label="เวลาสิ้นสุดใหม่"
+          value={endTime}
+          onChange={setEndTime}
+          minDateKey={startTime.slice(0, 10)}
+        />
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-outline-variant font-label-md">
             ยกเลิก
