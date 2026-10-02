@@ -10,6 +10,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { formatDate, relativeTime } from "@/lib/format";
 import { taskStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
+import { ATTACHMENT_ACCEPT } from "@/lib/upload-validation";
 import type { Task, TaskAttachment, TaskComment, User, Project, Meeting, Person } from "@prisma/client";
 
 type TaskDetail = Task & {
@@ -304,7 +305,7 @@ export default function TaskDetailPage() {
               >
                 <span className="material-symbols-outlined text-[18px]">{uploading ? "hourglass_empty" : "add"}</span>
               </button>
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
+              <input ref={fileInputRef} type="file" accept={ATTACHMENT_ACCEPT} className="hidden" onChange={handleFileChange} />
             </div>
             <div className="space-y-2">
               {task.attachments.length === 0 && (
