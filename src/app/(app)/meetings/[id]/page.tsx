@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatTime } from "@/lib/format";
 import { meetingStatusBadge, participantSourceBadge, StatusBadge, taskStatusBadge } from "@/components/ui/StatusBadge";
 import { MeetingActions } from "./MeetingActions";
 import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./MeetingContext";
+import { CreateTaskButton } from "@/components/tasks/CreateTaskButton";
+import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
+import { SAMPLE_MODE_MODEL } from "@/lib/ai-sample-mode";
 import type { MeetingDetail } from "./types";
 
 export default async function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -41,6 +44,12 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
   if (!meeting) notFound();
 
   const badge = meetingStatusBadge(meeting.status);
+  // PostgREST embeds AISummary as an array here ([] or [row]) despite the
+  // unique meetingId, so `meeting.aiSummary` was always truthy and `.content`
+  // undefined: the card said "ดู / แก้ไข" with no summary, and a real summary
+  // never showed. Normalize to the single row (or null).
+  const rawSummary = meeting.aiSummary as unknown;
+  const aiSummary = (Array.isArray(rawSummary) ? (rawSummary[0] ?? null) : rawSummary) as MeetingDetail["aiSummary"];
   const isLink = meeting.location?.startsWith("http");
 
   return (
@@ -76,7 +85,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                 <div>
                   <p className="text-xs text-outline">วันที่และเวลา</p>
                   <p className="font-medium text-on-surface">
-                    {formatDateTime(meeting.startTime)} - {new Date(meeting.endTime).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
+                    {formatDateTime(meeting.startTime)} - {formatTime(meeting.endTime)}
                   </p>
                 </div>
               </div>
@@ -142,7 +151,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
               {/* FR-18: one-shot meeting ไม่มีบริบทสะสมให้ AI อ้างอิง — ถ้ายังไม่เคยมีสรุป
                   (เคสปกติ เพราะฝั่ง API ปิดการสร้างไว้แล้ว) ปิดปุ่มพร้อม tooltip แทนการซ่อนไปเลย
                   ยังปล่อยให้กด "ดู / แก้ไข" ได้ถ้ามีสรุปเก่าอยู่แล้ว (เช่น สร้างไว้ก่อนเปลี่ยนประเภท) */}
-              {meeting.type === "SINGLE" && !meeting.aiSummary ? (
+              {meeting.type === "SINGLE" && !aiSummary ? (
                 <span
                   title="การประชุมเดี่ยว (One-shot) ไม่จำเป็นต้องใช้ AI เพราะไม่มีบริบทสะสมจากการประชุมก่อนหน้า"
                   className="text-on-surface-variant/60 font-label-md text-label-md cursor-not-allowed"
@@ -151,14 +160,17 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                 </span>
               ) : (
                 <Link href={`/ai-assistant?meetingId=${meeting.id}`} className="text-primary font-label-md text-label-md hover:underline">
-                  {meeting.aiSummary ? "ดู / แก้ไข" : "สร้างสรุป"}
+                  {aiSummary ? "ดู / แก้ไข" : "สร้างสรุป"}
                 </Link>
               )}
             </div>
-            {meeting.aiSummary ? (
-              <p className="font-body-md text-body-md text-on-surface-variant whitespace-pre-line line-clamp-6">
-                {meeting.aiSummary.content}
-              </p>
+            {aiSummary ? (
+              <>
+                <p className="font-body-md text-body-md text-on-surface-variant whitespace-pre-line line-clamp-6">
+                  {aiSummary.content}
+                </p>
+                <AiDisclaimer sample={aiSummary.model === SAMPLE_MODE_MODEL} className="mt-3 justify-start" />
+              </>
             ) : meeting.type === "SINGLE" ? (
               <p className="font-body-md text-body-md text-on-surface-variant">
                 การประชุมเดี่ยว (One-shot) ไม่รองรับ AI สรุปข้อมูล เนื่องจากไม่มีบริบทสะสมจากการประชุมอื่น
@@ -170,9 +182,15 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
             )}
           </div>
 
-          {meeting.tasks.length > 0 && (
-            <div className="bg-surface-container-lowest rounded-xl p-card-padding border border-outline-variant/30">
-              <h3 className="font-headline-md text-headline-md text-on-surface mb-3">งานที่เกี่ยวข้อง</h3>
+          {/* FR-12 AC2: tasks (action items) can be created right from the meeting they came out of. */}
+          <div className="bg-surface-container-lowest rounded-xl p-card-padding border border-outline-variant/30">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-headline-md text-headline-md text-on-surface">งานที่เกี่ยวข้อง ({meeting.tasks.length})</h3>
+              <CreateTaskButton defaultMeetingId={meeting.id} defaultProjectId={meeting.project?.id ?? null} />
+            </div>
+            {meeting.tasks.length === 0 ? (
+              <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีงานจากการประชุมนี้</p>
+            ) : (
               <div className="divide-y divide-outline-variant/20">
                 {meeting.tasks.map((t) => {
                   const tbadge = taskStatusBadge(t.status);
@@ -184,8 +202,8 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                   );
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* FR-11/12/13: Notes / Decisions / Related Resources — each backed
               by its own entity, each supporting multiple rows per meeting. */}

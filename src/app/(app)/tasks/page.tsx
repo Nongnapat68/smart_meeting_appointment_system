@@ -6,7 +6,10 @@ import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState, ErrorBanner, FullPageSpinner, Spinner } from "@/components/ui/Feedback";
-import { formatDate } from "@/lib/format";
+import { formatDate, parseDbTimestamp } from "@/lib/format";
+import { TaskStatusSelect } from "@/components/tasks/TaskStatusSelect";
+import { TaskFormModal } from "@/components/tasks/TaskFormModal";
+import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import type { Task, TaskStatus } from "@prisma/client";
 
 type TaskRow = Task & {
@@ -36,6 +39,7 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSchedule, setAiSchedule] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,7 +74,9 @@ export default function TasksPage() {
           assignee:User!Task_assigneeId_fkey(name),
           assigneePerson:Person(name)`
         )
-        .eq("assigneeId", authData.user.id)
+        // FR-12: "my" tasks = assigned to me OR created by me, so a task I
+        // just created for someone else doesn't vanish from the page.
+        .or(`assigneeId.eq.${authData.user.id},createdById.eq.${authData.user.id}`)
         .order("status", { ascending: true })
         .order("dueDate", { ascending: true });
       if (dbError) throw new Error(dbError.message);
@@ -97,40 +103,6 @@ export default function TasksPage() {
     load();
   }, [load]);
 
-  async function toggleComplete(task: TaskRow) {
-    const nextStatus = task.status === "COMPLETED" ? "NOT_STARTED" : "COMPLETED";
-    setItems((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t)));
-    try {
-      // update_assignee_or_creator_or_admin RLS policy replaces
-      // assertOwner() — a blocked update matches 0 rows silently, so
-      // .select().maybeSingle() + null-check turns that into a thrown
-      // error, same pattern as every other resource in this migration.
-      // completedAt/updatedAt aren't in the request's literal `{status}`
-      // example, but both need setting by hand here: completedAt mirrors
-      // the old PATCH route's own logic (set on the COMPLETED transition,
-      // cleared otherwise) and dropping it would silently break
-      // dashboard/page.tsx's "recently completed" feed, which reads
-      // Task.completedAt directly via Prisma; updatedAt has no DB default
-      // (Prisma's @updatedAt is client-side-only) so it goes stale forever
-      // if nothing sets it once Prisma is out of the write path.
-      const { data, error: dbError } = await createClient()
-        .from("Task")
-        .update({
-          status: nextStatus,
-          completedAt: nextStatus === "COMPLETED" ? new Date().toISOString() : null,
-          updatedAt: new Date().toISOString(),
-        })
-        .eq("id", task.id)
-        .select()
-        .maybeSingle();
-      if (dbError) throw new Error(dbError.message);
-      if (!data) throw new Error("เฉพาะผู้รับผิดชอบ ผู้สร้างงาน หรือผู้ดูแลระบบเท่านั้นที่แก้ไขงานนี้ได้ หรือไม่พบงานนี้");
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "อัปเดตสถานะไม่สำเร็จ", "error");
-      load();
-    }
-  }
-
   async function runAiSchedule() {
     setAiLoading(true);
     setAiSchedule(null);
@@ -145,7 +117,7 @@ export default function TasksPage() {
   }
 
   const now = new Date();
-  const overdueTasks = items.filter((t) => t.status !== "COMPLETED" && t.dueDate && new Date(t.dueDate) < now);
+  const overdueTasks = items.filter((t) => t.status !== "COMPLETED" && t.dueDate && parseDbTimestamp(t.dueDate) < now);
   const otherTasks = items.filter((t) => !overdueTasks.includes(t));
   const total = statusCounts.NOT_STARTED + statusCounts.IN_PROGRESS + statusCounts.COMPLETED;
 
@@ -154,8 +126,15 @@ export default function TasksPage() {
       <div className="flex justify-between items-end mb-8 flex-wrap gap-4">
         <div>
           <h2 className="font-display-lg text-display-lg text-on-surface mb-2">งานของฉัน (Action Items)</h2>
-          <p className="font-body-lg text-body-lg text-on-surface-variant">จัดการและติดตามงานที่ได้รับมอบหมายจากการประชุม</p>
+          <p className="font-body-lg text-body-lg text-on-surface-variant">งานที่ได้รับมอบหมายหรือที่คุณสร้าง จากการประชุมและโปรเจกต์</p>
         </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors flex items-center gap-2 ambient-shadow"
+        >
+          <span className="material-symbols-outlined text-[18px]">add_task</span>
+          สร้างงาน
+        </button>
         <div className="flex bg-surface-container-lowest rounded-lg p-1 ambient-shadow border border-outline-variant/30 flex-wrap">
           {(["ALL", "NOT_STARTED", "IN_PROGRESS", "COMPLETED"] as FilterTab[]).map((t) => (
             <button
@@ -185,9 +164,8 @@ export default function TasksPage() {
                 </div>
                 <div className="flex flex-col gap-3">
                   {overdueTasks.map((t) => (
-                    <Link
+                    <div
                       key={t.id}
-                      href={`/tasks/${t.id}`}
                       className="bg-surface-container-lowest p-4 rounded-lg border border-error/10 hover:border-error/30 transition-colors shadow-sm block"
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -201,9 +179,14 @@ export default function TasksPage() {
                           </span>
                         )}
                       </div>
-                      <h4 className="font-body-lg text-body-lg font-semibold text-on-surface mb-1">{t.title}</h4>
+                      <Link href={`/tasks/${t.id}`} className="font-body-lg text-body-lg font-semibold text-on-surface mb-1 hover:text-primary block">
+                        {t.title}
+                      </Link>
                       {t.meeting && <p className="font-body-md text-body-md text-on-surface-variant line-clamp-1">จาก: {t.meeting.title}</p>}
-                    </Link>
+                      <div className="mt-2">
+                        <TaskStatusSelect key={`${t.id}-${t.status}`} taskId={t.id} status={t.status} canEdit onChanged={load} size="sm" />
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -215,9 +198,12 @@ export default function TasksPage() {
                 <h3 className="font-headline-md text-headline-md text-on-surface">AI ผู้ช่วย</h3>
               </div>
               {aiSchedule ? (
-                <p className="font-body-md text-body-md text-on-surface-variant mb-4 leading-relaxed whitespace-pre-line">
-                  {aiSchedule}
-                </p>
+                <>
+                  <p className="font-body-md text-body-md text-on-surface-variant mb-2 leading-relaxed whitespace-pre-line">
+                    {aiSchedule}
+                  </p>
+                  <AiDisclaimer className="mb-4" />
+                </>
               ) : (
                 <p className="font-body-md text-body-md text-on-surface-variant mb-4 leading-relaxed">
                   ให้ AI ช่วยวิเคราะห์งานที่ค้างอยู่ของคุณ แล้วแนะนำลำดับการทำงานที่เหมาะสม
@@ -246,12 +232,6 @@ export default function TasksPage() {
                   {otherTasks.map((t) => (
                     <div key={t.id} className="p-6 hover:bg-surface-container-lowest transition-colors group relative">
                       <div className="flex items-start gap-4">
-                        <input
-                          type="checkbox"
-                          checked={t.status === "COMPLETED"}
-                          onChange={() => toggleComplete(t)}
-                          className="mt-1 w-5 h-5 rounded border-2 border-outline text-primary focus:ring-primary"
-                        />
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-start mb-1 gap-2">
                             <Link
@@ -260,7 +240,8 @@ export default function TasksPage() {
                             >
                               {t.title}
                             </Link>
-                            <StatusPill status={t.status} />
+                            {/* every task listed here is assigned to or created by me, so I may change it */}
+                            <TaskStatusSelect key={`${t.id}-${t.status}`} taskId={t.id} status={t.status} canEdit onChanged={load} />
                           </div>
                           {t.description && (
                             <p className="font-body-md text-body-md text-on-surface-variant mb-3 line-clamp-2">{t.description}</p>
@@ -295,21 +276,8 @@ export default function TasksPage() {
           </div>
         </div>
       )}
+
+      <TaskFormModal open={showCreate} onClose={() => setShowCreate(false)} onSaved={() => load()} />
     </div>
-  );
-}
-
-function StatusPill({ status }: { status: TaskStatus }) {
-  const config = {
-    NOT_STARTED: { label: "Not Started", icon: "hourglass_empty", cls: "bg-surface-variant text-on-surface-variant" },
-    IN_PROGRESS: { label: "In Progress", icon: "progress_activity", cls: "bg-tertiary-fixed/30 text-on-tertiary-fixed-variant" },
-    COMPLETED: { label: "Completed", icon: "check_circle", cls: "bg-secondary-container/40 text-on-secondary-container" },
-  }[status];
-
-  return (
-    <span className={`px-3 py-1 rounded-full font-label-md text-label-md flex items-center gap-1 whitespace-nowrap ${config.cls}`}>
-      <span className="material-symbols-outlined text-[14px]">{config.icon}</span>
-      {config.label}
-    </span>
   );
 }

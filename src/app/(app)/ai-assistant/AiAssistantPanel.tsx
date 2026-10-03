@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Feedback";
-import { formatDateTime } from "@/lib/format";
+import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
+import { formatDate, formatDateTime } from "@/lib/format";
+import { SAMPLE_MODE_MODEL, type AiResultMode } from "@/lib/ai-sample-mode";
 import type { AISummary, MeetingStatus, MeetingType } from "@prisma/client";
 
 interface MeetingOption {
@@ -41,7 +43,6 @@ export function AiAssistantPanel({
   );
   const [summary, setSummary] = useState<AISummary | null>(null);
   const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,8 @@ export function AiAssistantPanel({
   // not persisted, recomputed on demand each time it's asked for.
   const [pendingIssues, setPendingIssues] = useState<string | null>(null);
   const [pendingIssuesSources, setPendingIssuesSources] = useState<AiSource[]>([]);
+  const [pendingIssuesMode, setPendingIssuesMode] = useState<AiResultMode>("ai");
+  const [pendingIssuesAt, setPendingIssuesAt] = useState<Date | null>(null);
   const [pendingIssuesLoading, setPendingIssuesLoading] = useState(false);
   const [pendingIssuesError, setPendingIssuesError] = useState<string | null>(null);
 
@@ -58,31 +61,28 @@ export function AiAssistantPanel({
   const [agendaTopic, setAgendaTopic] = useState("");
   const [agendaResult, setAgendaResult] = useState<string | null>(null);
   const [agendaSources, setAgendaSources] = useState<AiSource[]>([]);
+  const [agendaMode, setAgendaMode] = useState<AiResultMode>("ai");
+  const [agendaAt, setAgendaAt] = useState<Date | null>(null);
   const [agendaLoading, setAgendaLoading] = useState(false);
   const [agendaError, setAgendaError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedId) return;
-    // Fetch-on-mount pattern deemed safe by design (see eslint.config.mjs).
+    // Every load / meeting switch starts all three cards in their "not yet
+    // generated" state — results only appear after the user presses a button.
+    // The saved summary isn't fetched here (POST still persists it, and the
+    // meeting detail page still shows it).
+    // Resetting state on meeting switch — deemed safe by design (see eslint.config.mjs).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
+    setSummary(null);
+    setContent("");
     setError(null);
-    api
-      .get<{ summary: AISummary | null }>(`/api/meetings/${selectedId}/ai-summary`)
-      .then((res) => {
-        setSummary(res.summary);
-        setContent(res.summary?.content ?? "");
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ"))
-      .finally(() => setLoading(false));
-
-    // FR-16/17 results aren't persisted per meeting, so switching meetings
-    // clears them instead of showing stale results from a different one.
     setPendingIssues(null);
     setPendingIssuesSources([]);
     setPendingIssuesError(null);
+    setPendingIssuesAt(null);
     setAgendaTopic("");
     setAgendaResult(null);
+    setAgendaAt(null);
     setAgendaSources([]);
     setAgendaError(null);
   }, [selectedId]);
@@ -97,10 +97,10 @@ export function AiAssistantPanel({
     setGenerating(true);
     setError(null);
     try {
-      const res = await api.post<{ summary: AISummary }>(`/api/meetings/${selectedId}/ai-summary`);
+      const res = await api.post<{ summary: AISummary; mode: AiResultMode }>(`/api/meetings/${selectedId}/ai-summary`);
       setSummary(res.summary);
       setContent(res.summary.content);
-      showToast("สร้างสรุปด้วย AI สำเร็จ", "success");
+      showToast(res.mode === "sample" ? "สร้างสรุปสำเร็จ" : "สร้างสรุปด้วย AI สำเร็จ", "success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "ไม่สามารถสร้างสรุปด้วย AI ได้");
     } finally {
@@ -126,11 +126,14 @@ export function AiAssistantPanel({
     setPendingIssuesLoading(true);
     setPendingIssuesError(null);
     try {
-      const res = await api.post<{ analysis: string; sources: AiSource[] }>(
+      const res = await api.post<{ analysis: string; sources: AiSource[]; mode: AiResultMode }>(
         `/api/meetings/${selectedId}/pending-issues`
       );
       setPendingIssues(res.analysis);
       setPendingIssuesSources(res.sources);
+      setPendingIssuesMode(res.mode);
+      setPendingIssuesAt(new Date());
+      showToast("วิเคราะห์ประเด็นค้างสำเร็จ", "success");
     } catch (err) {
       setPendingIssuesError(err instanceof Error ? err.message : "ไม่สามารถวิเคราะห์ประเด็นค้างได้");
     } finally {
@@ -143,12 +146,15 @@ export function AiAssistantPanel({
     setAgendaLoading(true);
     setAgendaError(null);
     try {
-      const res = await api.post<{ agenda: string; sources: AiSource[] }>(
+      const res = await api.post<{ agenda: string; sources: AiSource[]; mode: AiResultMode }>(
         `/api/meetings/${selectedId}/agenda-suggestion`,
         { topic: agendaTopic.trim() }
       );
       setAgendaResult(res.agenda);
       setAgendaSources(res.sources);
+      setAgendaMode(res.mode);
+      setAgendaAt(new Date());
+      showToast("แนะนำ agenda สำเร็จ", "success");
     } catch (err) {
       setAgendaError(err instanceof Error ? err.message : "ไม่สามารถแนะนำ agenda ได้");
     } finally {
@@ -216,14 +222,12 @@ export function AiAssistantPanel({
                   </p>
                 </div>
               </div>
-              <button
+              <RegenerateButton
                 onClick={generate}
-                disabled={generating || aiDisabled}
+                loading={generating}
+                disabled={aiDisabled}
                 title={aiDisabled ? AI_DISABLED_REASON : "สร้าง/รีเฟรชสรุปใหม่"}
-                className="text-on-surface-variant hover:text-primary transition-colors p-1 disabled:opacity-50 disabled:hover:text-on-surface-variant"
-              >
-                {generating ? <Spinner /> : <span className="material-symbols-outlined text-sm">refresh</span>}
-              </button>
+              />
             </div>
 
             <div className="flex-1 p-card-padding">
@@ -245,14 +249,11 @@ export function AiAssistantPanel({
                     สร้างสรุปด้วย AI
                   </button>
                 </div>
-              ) : loading ? (
-                <div className="flex justify-center py-12">
-                  <Spinner className="w-8 h-8" />
-                </div>
               ) : error ? (
                 <p className="text-error font-body-md text-body-md">{error}</p>
               ) : summary ? (
                 <>
+                  <LastUpdated at={summary.generatedAt} />
                   <div className="bg-surface-container-lowest border border-outline-variant rounded-lg focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary transition-all">
                     <textarea
                       value={content}
@@ -289,10 +290,10 @@ export function AiAssistantPanel({
               )}
             </div>
 
-            <div className="p-3 bg-surface-container-low border-t border-outline-variant flex items-center justify-center gap-2 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[16px]">info</span>
-              <span className="font-label-md text-label-md">สร้างโดย AI — โปรดตรวจสอบความถูกต้องก่อนใช้งาน</span>
-            </div>
+            <AiDisclaimer
+              sample={summary?.model === SAMPLE_MODE_MODEL}
+              className="p-3 bg-surface-container-low border-t border-outline-variant"
+            />
           </div>
 
           {/* FR-16: Pending Issues Analysis — separate capability/result from
@@ -310,14 +311,12 @@ export function AiAssistantPanel({
                   </p>
                 </div>
               </div>
-              <button
+              <RegenerateButton
                 onClick={analyzePendingIssues}
-                disabled={pendingIssuesLoading || aiDisabled}
-                title={aiDisabled ? AI_DISABLED_REASON : "วิเคราะห์ประเด็นค้าง"}
-                className="text-on-surface-variant hover:text-primary transition-colors p-1 disabled:opacity-50 disabled:hover:text-on-surface-variant"
-              >
-                {pendingIssuesLoading ? <Spinner /> : <span className="material-symbols-outlined text-sm">refresh</span>}
-              </button>
+                loading={pendingIssuesLoading}
+                disabled={aiDisabled}
+                title={aiDisabled ? AI_DISABLED_REASON : "วิเคราะห์ประเด็นค้างใหม่"}
+              />
             </div>
             <div className="p-card-padding">
               {aiDisabled ? (
@@ -328,6 +327,7 @@ export function AiAssistantPanel({
                 <p className="text-error font-body-md text-body-md">{pendingIssuesError}</p>
               ) : pendingIssues ? (
                 <>
+                  <LastUpdated at={pendingIssuesAt} />
                   <p className="font-body-md text-body-md text-on-surface whitespace-pre-line leading-relaxed">
                     {pendingIssues}
                   </p>
@@ -349,6 +349,10 @@ export function AiAssistantPanel({
                 </div>
               )}
             </div>
+            <AiDisclaimer
+              sample={Boolean(pendingIssues) && pendingIssuesMode === "sample"}
+              className="p-3 bg-surface-container-low border-t border-outline-variant"
+            />
           </div>
 
           {/* FR-17: New Agenda Context — user types the next meeting's topic,
@@ -399,6 +403,7 @@ export function AiAssistantPanel({
                     <p className="text-error font-body-md text-body-md mt-4">{agendaError}</p>
                   ) : agendaResult ? (
                     <div className="mt-4">
+                      <LastUpdated at={agendaAt} />
                       <p className="font-body-md text-body-md text-on-surface whitespace-pre-line leading-relaxed">
                         {agendaResult}
                       </p>
@@ -408,12 +413,51 @@ export function AiAssistantPanel({
                 </>
               )}
             </div>
+            <AiDisclaimer
+              sample={Boolean(agendaResult) && agendaMode === "sample"}
+              className="p-3 bg-surface-container-low border-t border-outline-variant"
+            />
           </div>
           </>
         )}
       </div>
     </div>
   );
+}
+
+// Labeled, always-clickable regenerate control. The old bare 14px refresh icon
+// gave almost no feedback, and since regenerating from unchanged data returns
+// the same text, a successful re-run looked like nothing happened.
+function RegenerateButton({
+  onClick,
+  loading,
+  disabled,
+  title,
+}: {
+  onClick: () => void;
+  loading: boolean;
+  disabled: boolean;
+  title: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading || disabled}
+      title={title}
+      className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors font-label-md text-label-md inline-flex items-center gap-1.5 shrink-0 disabled:opacity-50 disabled:hover:text-on-surface-variant disabled:hover:border-outline-variant"
+    >
+      {loading ? <Spinner /> : <span className="material-symbols-outlined text-[16px]">refresh</span>}
+      {loading ? "กำลังสร้าง..." : "สร้างใหม่"}
+    </button>
+  );
+}
+
+/** Shows when a result was produced, so each re-run is visibly confirmed even when the text is unchanged. */
+function LastUpdated({ at }: { at: Date | string | null }) {
+  if (!at) return null;
+  const d = new Date(at);
+  const time = d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return <p className="font-label-md text-label-md text-on-surface-variant mb-2">อัปเดตล่าสุด {formatDate(d)} {time}</p>;
 }
 
 function AiSourceList({ sources }: { sources: AiSource[] }) {

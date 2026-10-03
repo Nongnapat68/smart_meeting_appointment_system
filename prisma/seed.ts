@@ -705,12 +705,15 @@ async function main() {
       status: "PENDING",
     },
   });
+  // SIMULATED, not SENT: the app has no email transport, so a processed
+  // reminder is never actually delivered (see src/lib/reminders.ts) — seeding
+  // SENT would put a false "delivered" record back on every db:seed. No sentAt
+  // for the same reason.
   await prisma.reminder.create({
     data: {
       meetingId: pastMeeting.id,
       scheduledAt: hours(days(-30), -0.5),
-      status: "SENT",
-      sentAt: hours(days(-30), -0.5),
+      status: "SIMULATED",
       retryCount: 1,
     },
   });

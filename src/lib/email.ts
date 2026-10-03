@@ -1,3 +1,5 @@
+import { randomInt } from "node:crypto";
+
 /**
  * Minimal email delivery abstraction.
  *
@@ -24,7 +26,14 @@ interface SendEmailInput {
   attachments?: EmailAttachment[];
 }
 
-export async function sendEmail({ to, subject, text, attachments }: SendEmailInput): Promise<void> {
+/**
+ * What sendEmail actually did with the message. "simulated" means nothing left
+ * this machine (it was only logged). Anything that records delivery — e.g. a
+ * Reminder's status — must only claim it was sent on "delivered".
+ */
+export type EmailDelivery = "delivered" | "simulated";
+
+export async function sendEmail({ to, subject, text, attachments }: SendEmailInput): Promise<EmailDelivery> {
   const configured = Boolean(process.env.SMTP_HOST);
 
   if (!configured) {
@@ -41,14 +50,21 @@ export async function sendEmail({ to, subject, text, attachments }: SendEmailInp
         .filter((line) => line !== null)
         .join("\n")
     );
-    return;
+    return "simulated";
   }
 
   // TODO: wire up a real SMTP/API transport here using SMTP_HOST/SMTP_PORT/
-  // SMTP_USER/SMTP_PASSWORD/SMTP_FROM once those are set in the environment.
+  // SMTP_USER/SMTP_PASSWORD/SMTP_FROM once those are set in the environment —
+  // and return "delivered" only once that transport has accepted the message.
+  // Until then this branch doesn't send anything either.
   console.log(`[email] would send to ${to}: ${subject}${attachments?.length ? ` (+${attachments.length} attachment(s))` : ""}`);
+  return "simulated";
 }
 
+// randomInt draws from the OS CSPRNG (with rejection sampling, so no modulo
+// bias). Math.random() is a non-cryptographic PRNG whose output can be
+// predicted from earlier values, which would let an attacker guess codes.
+// Still 6 digits; leading zeros are kept so all 10^6 codes are possible.
 export function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }

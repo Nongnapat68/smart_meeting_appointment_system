@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateMeetingSummary } from "@/lib/ai";
+import { aiErrorToApiError, generateMeetingSummary, isAiConfigured } from "@/lib/ai";
+import { buildSampleMeetingSummary, SAMPLE_MODE_MODEL } from "@/lib/ai-sample-mode";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { assertMeetingAllowsAi, gatherMeetingAiContext } from "@/lib/meeting-ai-context";
 import { z } from "zod";
@@ -37,11 +38,21 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
   // FR-18: One-shot meeting ไม่มีบริบทสะสมจากการประชุมอื่นให้ AI อ้างอิง จึงไม่จำเป็นต้อง
   // (และไม่ควร) เรียกใช้ AI — เฉพาะ meeting ที่เชื่อมกับ project เท่านั้นที่สร้างสรุปได้
   assertMeetingAllowsAi(meeting);
+  // No API key: sample mode — same context, assembled with plain templates
+  // instead of an LLM call (see src/lib/ai-sample-mode.ts).
+  const sampleMode = !isAiConfigured();
 
   const ctx = await gatherMeetingAiContext(meeting);
 
   let content: string;
-  try {
+  if (sampleMode) {
+    content = buildSampleMeetingSummary({
+      projectName: meeting.project?.name ?? null,
+      relatedTasks: ctx.relatedTasks,
+      pastNotes: ctx.pastNotes,
+      pastDecisions: ctx.pastDecisions,
+    });
+  } else try {
     content = await generateMeetingSummary({
       title: meeting.title,
       description: meeting.description,
@@ -59,8 +70,7 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
       pastResources: ctx.pastResources.map((r) => ({ title: r.title, url: r.url, meetingTitle: r.meetingTitle })),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "ไม่สามารถสร้างสรุปด้วย AI ได้";
-    throw new ApiError(502, message);
+    throw aiErrorToApiError(err, "สร้างสรุปก่อนการประชุม");
   }
 
   const sources = [
@@ -72,19 +82,21 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
     ...ctx.pastResources.map((r) => ({ label: r.title, refType: "resource", refId: r.id })),
   ];
 
+  const model = sampleMode ? SAMPLE_MODE_MODEL : "claude-opus-5";
   const summary = await prisma.aISummary.upsert({
     where: { meetingId: id },
-    update: { content, sources: JSON.stringify(sources), model: "claude-opus-5", isEdited: false, generatedAt: new Date() },
+    update: { content, sources: JSON.stringify(sources), model, isEdited: false, generatedAt: new Date() },
     create: {
       meetingId: id,
       content,
       sources: JSON.stringify(sources),
-      model: "claude-opus-5",
+      model,
     },
   });
 
   // Let the organizer see it show up in the dashboard activity feed / notifications.
-  if (meeting.organizerId) {
+  // Skipped in sample mode — this notification announces an AI result.
+  if (meeting.organizerId && !sampleMode) {
     await prisma.notification.create({
       data: {
         userId: meeting.organizerId,
@@ -96,7 +108,7 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
     });
   }
 
-  return NextResponse.json({ summary });
+  return NextResponse.json({ summary, mode: sampleMode ? "sample" : "ai" });
 });
 
 const editSummarySchema = z.object({ content: z.string().min(1) });

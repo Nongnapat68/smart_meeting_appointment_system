@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
+import { orContainsAny } from "@/lib/search";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner } from "@/components/ui/Feedback";
 import { DateTimeField } from "@/components/meetings/DateTimeField";
 import { toDatetimeLocalValue, formatDateTime } from "@/lib/format";
 import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
+import { parseReminderOffsetInput, REMINDER_OFFSET_MAX_MINUTES } from "@/lib/validations";
 import type { ContactGroup, Meeting, MeetingParticipant, OnlineMeetingResource, Person, Reminder } from "@prisma/client";
 
 // FR-10 example offsets straight from the requirements doc (7d/2d/1d/1h before).
@@ -80,7 +82,7 @@ export function MeetingForm({
   const [description, setDescription] = useState(initial?.meeting.description ?? "");
   const [type, setType] = useState<"SINGLE" | "PROJECT">(initial?.meeting.type ?? "SINGLE");
   const [status] = useState<Meeting["status"]>(initial?.meeting.status ?? "PENDING");
-  const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.startTime) : defaultStartValue());
+const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initial.meeting.startTime) : defaultStartValue());
   const [endTime, setEndTime] = useState(
     initial ? toDatetimeLocalValue(initial.meeting.endTime) : defaultEndValue(defaultStartValue())
   );
@@ -109,6 +111,7 @@ export function MeetingForm({
   // live via /api/reminders since the meeting already exists.
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([30]);
   const [newOffsetInput, setNewOffsetInput] = useState("");
+  const [offsetError, setOffsetError] = useState<string | null>(null);
   const [existingReminders, setExistingReminders] = useState<Reminder[]>([]);
   const [addingReminder, setAddingReminder] = useState(false);
 
@@ -234,12 +237,12 @@ export function MeetingForm({
         // Same 3-field OR search GET /api/people used to do (name/email/
         // department "contains") — see people/page.tsx's load() for the
         // same pattern.
-        const pattern = `%${personQuery}%`;
         const { data: items, error } = await createClient()
           .from("Person")
           .select("*")
-          .or(`name.ilike."${pattern}",email.ilike."${pattern}",department.ilike."${pattern}"`)
-          .limit(8);
+          .or(orContainsAny(["name", "email", "department"], personQuery))
+          .limit(8)
+          .retry(false);
         if (error) throw error;
         setPersonResults((items ?? []).filter((p: Person) => !selectedPeople.some((sp) => sp.id === p.id)));
       } catch {
@@ -358,9 +361,36 @@ export function MeetingForm({
   }
 
   function addReminderOffset(minutes: number) {
-    if (!Number.isFinite(minutes) || minutes <= 0) return;
-    setReminderOffsets((prev) => (prev.includes(minutes) ? prev : [...prev, minutes].sort((a, b) => a - b)));
+    if (reminderOffsets.includes(minutes)) {
+      setOffsetError(`มีการแจ้งเตือน "${offsetLabel(minutes)}" อยู่แล้ว`);
+      return;
+    }
+    setReminderOffsets((prev) => [...prev, minutes].sort((a, b) => a - b));
     setNewOffsetInput("");
+    setOffsetError(null);
+  }
+
+  // Validates as the user types so a bad value (0, negative, over the 30-day
+  // cap, non-integer) is explained right away instead of + silently doing
+  // nothing. The server re-checks the same bounds (Zod + the create RPC).
+  function changeOffsetInput(value: string) {
+    setNewOffsetInput(value);
+    if (!value.trim()) {
+      setOffsetError(null);
+      return;
+    }
+    const parsed = parseReminderOffsetInput(value);
+    setOffsetError("error" in parsed ? parsed.error : null);
+  }
+
+  function addCustomOffset() {
+    const parsed = parseReminderOffsetInput(newOffsetInput);
+    if ("error" in parsed) {
+      setOffsetError(parsed.error);
+      return;
+    }
+    if (isEdit) addExistingMeetingReminder(parsed.minutes);
+    else addReminderOffset(parsed.minutes);
   }
 
   function removeReminderOffset(minutes: number) {
@@ -368,11 +398,12 @@ export function MeetingForm({
   }
 
   async function addExistingMeetingReminder(minutes: number) {
-    if (!initial || !Number.isFinite(minutes) || minutes <= 0) return;
+    if (!initial) return;
     setAddingReminder(true);
     try {
       await api.post("/api/reminders", { meetingId: initial.meeting.id, offsetMinutes: minutes });
       setNewOffsetInput("");
+      setOffsetError(null);
       await loadReminders();
       showToast("เพิ่มการแจ้งเตือนสำเร็จ", "success");
     } catch (err) {
@@ -413,8 +444,11 @@ export function MeetingForm({
       const participantPersonIds = selectedPeople.map((p) => p.id);
       const groupIds = selectedGroups.map((g) => g.id);
 
-      let resolvedProjectId = projectId;
-      if (projectId === NEW_PROJECT_OPTION) {
+// The project picker only exists for type PROJECT; switching the type
+      // to SINGLE hides it but used to keep sending the old projectId, so a
+      // "one-shot" meeting stayed linked to the project.
+      let resolvedProjectId = type === "PROJECT" ? projectId : "";
+      if (resolvedProjectId === NEW_PROJECT_OPTION) {
         const newName = newProjectName.trim();
         if (!newName) throw new Error("กรุณาระบุชื่อโปรเจกต์ใหม่");
         // Same direct-insert pattern as projects/page.tsx: Project.id and
@@ -552,6 +586,51 @@ p_project_id: resolvedProjectId || null,
     }
   }
 
+  // Same "custom minutes" input in create and edit mode; only what + does differs.
+  const customOffsetField = (
+    <div className="space-y-1">
+      <div className="flex gap-2 items-center">
+        <input
+          type="number"
+          min={1}
+          max={REMINDER_OFFSET_MAX_MINUTES}
+          step={1}
+          value={newOffsetInput}
+          onChange={(e) => changeOffsetInput(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter would submit the whole meeting form; treat it as + instead.
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCustomOffset();
+            }
+          }}
+          placeholder="กำหนดเอง (นาที)"
+          aria-invalid={offsetError ? true : undefined}
+          aria-describedby="reminder-offset-hint"
+          className={`w-40 px-3 py-2 rounded-lg border bg-surface-container-lowest text-sm ${
+            offsetError ? "border-error" : "border-outline-variant"
+          }`}
+        />
+        <button
+          type="button"
+          onClick={addCustomOffset}
+          disabled={addingReminder || !newOffsetInput.trim()}
+          className="px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+          aria-label="เพิ่มการแจ้งเตือน"
+        >
+          <span className="material-symbols-outlined text-[18px]">add</span>
+        </button>
+      </div>
+      <p
+        id="reminder-offset-hint"
+        role={offsetError ? "alert" : undefined}
+        className={`text-xs ${offsetError ? "text-error" : "text-on-surface-variant"}`}
+      >
+        {offsetError ?? `1–${REMINDER_OFFSET_MAX_MINUTES} นาที (สูงสุด 30 วันก่อนเริ่มประชุม)`}
+      </p>
+    </div>
+  );
+
   return (
     <div className="pt-8 px-container-margin max-w-5xl mx-auto pb-16">
       <div className="mb-8">
@@ -653,7 +732,7 @@ p_project_id: resolvedProjectId || null,
               เวลาและสถานที่
             </h3>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <DateTimeField label="เริ่ม" value={startTime} onChange={handleStartChange} />
                 <DateTimeField
                   label="สิ้นสุด"
@@ -786,24 +865,7 @@ p_project_id: resolvedProjectId || null,
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="number"
-                    min={1}
-                    value={newOffsetInput}
-                    onChange={(e) => setNewOffsetInput(e.target.value)}
-                    placeholder="กำหนดเอง (นาที)"
-                    className="w-40 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addReminderOffset(parseInt(newOffsetInput, 10))}
-                    disabled={!newOffsetInput.trim()}
-                    className="px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">add</span>
-                  </button>
-                </div>
+                {customOffsetField}
               </div>
             ) : (
               <div className="space-y-3">
@@ -849,24 +911,7 @@ p_project_id: resolvedProjectId || null,
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="number"
-                    min={1}
-                    value={newOffsetInput}
-                    onChange={(e) => setNewOffsetInput(e.target.value)}
-                    placeholder="กำหนดเอง (นาที)"
-                    className="w-40 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm"
-                  />
-                  <button
-                    type="button"
-                    disabled={addingReminder || !newOffsetInput.trim()}
-                    onClick={() => addExistingMeetingReminder(parseInt(newOffsetInput, 10))}
-                    className="px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">add</span>
-                  </button>
-                </div>
+                {customOffsetField}
               </div>
             )}
           </div>

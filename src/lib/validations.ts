@@ -73,12 +73,33 @@ export const personSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
 });
 
-export const updatePersonSchema = personSchema.partial();
+// Spelled out rather than personSchema.partial() — same Zod 4 trap as
+// updateTaskSchema below: .partial() keeps .default(), so a PUT that only
+// sent `phone` came back with type "EXTERNAL" / status "ACTIVE" filled in,
+// turning an internal contact external and reactivating an inactive one.
+export const updatePersonSchema = z.object({
+  name: nonEmpty("กรุณากรอกชื่อ").optional(),
+  email: email().optional(),
+  phone: z.string().trim().optional().nullable(),
+  title: z.string().trim().optional().nullable(),
+  department: z.string().trim().optional().nullable(),
+  type: z.enum(["INTERNAL", "EXTERNAL"]).optional(),
+  status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+});
 
 // --- Contact Groups -------------------------------------------------------
 
 export const groupSchema = z.object({
   name: nonEmpty("กรุณากรอกชื่อกลุ่ม"),
+  description: z.string().trim().optional().nullable(),
+  icon: z.string().trim().optional(),
+});
+
+// Explicit rather than groupSchema.partial(): groupSchema has no defaults
+// today, but .partial() would silently start filling one in on every edit
+// the moment one is added (the bug updateTaskSchema/updatePersonSchema had).
+export const updateGroupSchema = z.object({
+  name: nonEmpty("กรุณากรอกชื่อกลุ่ม").optional(),
   description: z.string().trim().optional().nullable(),
   icon: z.string().trim().optional(),
 });
@@ -99,7 +120,51 @@ export const projectSchema = z.object({
   memberIds: z.array(z.string()).optional().default([]),
 });
 
-export const updateProjectSchema = projectSchema.partial();
+// Spelled out rather than projectSchema.partial() — same Zod 4 trap as
+// updateTaskSchema below. Here it was destructive: a PUT that only renamed a
+// project came back with status "ACTIVE" and memberIds [] filled in, and
+// PUT /api/projects/[id] treats any memberIds array as "replace the member
+// list" — so a rename reset the status and deleted every member.
+export const updateProjectSchema = z.object({
+  name: nonEmpty("กรุณากรอกชื่อโปรเจกต์").optional(),
+  description: z.string().trim().optional().nullable(),
+  status: z.enum(["ACTIVE", "PENDING", "DELAYED", "COMPLETED"]).optional(),
+  startDate: z.string().trim().optional().nullable(),
+  endDate: z.string().trim().optional().nullable(),
+  memberIds: z.array(z.string()).optional(),
+});
+
+// --- Reminder offsets (FR-10/BR-11) -------------------------------------
+
+// Upper bound for "remind me N minutes before the meeting". The largest
+// preset in MeetingForm is 7 days; 30 days leaves room for a custom
+// "2 weeks / 1 month before" while rejecting values like 99999999 that put
+// scheduledAt centuries in the past (already "due", so process-due would send
+// it at once). create_meeting_with_participants() enforces the same bound in
+// SQL (migration 20261003090000_reminder_offset_bounds) — keep them in sync.
+export const REMINDER_OFFSET_MAX_MINUTES = 30 * 24 * 60;
+
+const REMINDER_OFFSET_INT_MESSAGE = "จำนวนนาทีต้องเป็นจำนวนเต็ม";
+
+export const reminderOffsetMinutes = z
+  .number(REMINDER_OFFSET_INT_MESSAGE)
+  .int(REMINDER_OFFSET_INT_MESSAGE)
+  .min(1, "จำนวนนาทีต้องมากกว่า 0")
+  .max(REMINDER_OFFSET_MAX_MINUTES, `แจ้งเตือนล่วงหน้าได้ไม่เกิน ${REMINDER_OFFSET_MAX_MINUTES} นาที (30 วัน)`);
+
+/**
+ * Client-side check for the custom-minutes input in MeetingForm: the parsed
+ * value, or the message to show. Strict on the raw text so "1.5" or "10abc"
+ * aren't silently truncated by parseInt into something the user didn't type.
+ */
+export function parseReminderOffsetInput(raw: string): { minutes: number } | { error: string } {
+  const text = raw.trim();
+  if (!text) return { error: "กรุณากรอกจำนวนนาที" };
+  if (!/^[+-]?\d+$/.test(text)) return { error: REMINDER_OFFSET_INT_MESSAGE };
+  const result = reminderOffsetMinutes.safeParse(Number(text));
+  if (!result.success) return { error: result.error.issues[0].message };
+  return { minutes: result.data };
+}
 
 // --- Meetings ---------------------------------------------------------
 
@@ -120,7 +185,7 @@ export const meetingSchema = z
     // FR-10/BR-11: minutes-before-start for each reminder to create. Defaults
     // to the single "30 minutes before" reminder the app always created
     // before this was configurable, so existing callers keep working unchanged.
-    reminderOffsetMinutes: z.array(z.number().int().positive()).optional().default([30]),
+    reminderOffsetMinutes: z.array(reminderOffsetMinutes).optional().default([30]),
   })
   .refine((d) => new Date(d.endTime) > new Date(d.startTime), {
     message: "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม",
@@ -185,7 +250,19 @@ export const taskSchema = z.object({
   meetingId: z.string().trim().optional().nullable(),
 });
 
-export const updateTaskSchema = taskSchema.partial();
+// Spelled out rather than taskSchema.partial(): in Zod 4 .partial() keeps each
+// field's .default(), so a PATCH that only sent `title` came back with
+// status "NOT_STARTED" / priority "MEDIUM" filled in and silently reset them.
+export const updateTaskSchema = z.object({
+  title: nonEmpty("กรุณากรอกชื่องาน").optional(),
+  description: z.string().trim().optional().nullable(),
+  status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  dueDate: z.string().trim().optional().nullable(),
+  assigneePersonId: z.string().trim().optional().nullable(),
+  projectId: z.string().trim().optional().nullable(),
+  meetingId: z.string().trim().optional().nullable(),
+});
 
 export const taskCommentSchema = z.object({
   content: nonEmpty("กรุณากรอกข้อความ"),
@@ -194,12 +271,12 @@ export const taskCommentSchema = z.object({
 // --- Reminders --------------------------------------------------------
 
 export const reminderQuerySchema = z.object({
-  status: z.enum(["PENDING", "SENT", "FAILED", "CANCELLED"]).optional(),
+  status: z.enum(["PENDING", "SENT", "SIMULATED", "FAILED", "CANCELLED"]).optional(),
 });
 
 // Add one more reminder to an already-created meeting (FR-10/BR-11) — the
 // initial batch is created inline via meetingSchema.reminderOffsetMinutes.
 export const createReminderSchema = z.object({
   meetingId: nonEmpty("ต้องระบุการประชุม"),
-  offsetMinutes: z.number().int().positive("ต้องเป็นจำนวนนาทีก่อนเริ่มประชุมที่มากกว่า 0"),
+  offsetMinutes: reminderOffsetMinutes,
 });

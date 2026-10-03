@@ -2,13 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { personSchema } from "@/lib/validations";
 import { ApiError, parseBody, parsePagination, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { escapeLikePattern } from "@/lib/search";
 import { PersonStatus, PersonType, type Prisma } from "@prisma/client";
 
 export const GET = withApiErrors(async (request: Request) => {
   await requireUser();
   const { searchParams } = new URL(request.url);
   const { page, pageSize, skip, take } = parsePagination(searchParams);
+  // Prisma passes `contains` into LIKE unescaped — % _ \ would act as wildcards.
   const q = searchParams.get("q")?.trim();
+  const like = q ? escapeLikePattern(q) : "";
   const type = searchParams.get("type");
   const status = searchParams.get("status");
 
@@ -16,9 +19,9 @@ export const GET = withApiErrors(async (request: Request) => {
     ...(q
       ? {
           OR: [
-            { name: { contains: q } },
-            { email: { contains: q } },
-            { department: { contains: q } },
+            { name: { contains: like } },
+            { email: { contains: like } },
+            { department: { contains: like } },
           ],
         }
       : {}),

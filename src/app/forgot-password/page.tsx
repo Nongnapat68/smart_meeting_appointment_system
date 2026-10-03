@@ -16,6 +16,11 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [countdown, setCountdown] = useState(59);
+  // How many OTP requests this page has sent. The server answers every request
+  // the same way (even when it is over the rate limit and sends nothing), so
+  // the page can't know whether a code went out — after a repeat request it
+  // just shows a neutral hint that never reveals whether the email exists.
+  const [requestCount, setRequestCount] = useState(0);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -30,6 +35,7 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     try {
       await api.post("/api/auth/forgot-password", { email });
+      setRequestCount((n) => n + 1);
       setStep("otp");
       setCountdown(59);
       setTimeout(() => inputsRef.current[0]?.focus(), 0);
@@ -44,6 +50,7 @@ export default function ForgotPasswordPage() {
     setError(null);
     try {
       await api.post("/api/auth/forgot-password", { email });
+      setRequestCount((n) => n + 1);
       setCountdown(59);
     } catch (err) {
       setError(err instanceof Error ? err.message : "ส่งรหัสยืนยันไม่สำเร็จ");
@@ -204,6 +211,11 @@ export default function ForgotPasswordPage() {
               >
                 ส่งรหัสอีกครั้ง
               </button>
+            )}
+            {requestCount > 1 && (
+              <p className="mt-2 font-label-md text-label-md text-on-surface-variant">
+                หากไม่ได้รับอีเมล กรุณารอสักครู่ก่อนขอรหัสใหม่
+              </p>
             )}
           </div>
           <div className="flex flex-col gap-3">

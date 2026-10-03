@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { ApiError, assertOwner, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { checkAttachmentUpload } from "@/lib/upload-validation";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -26,12 +27,19 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
   if (!(file instanceof File)) throw new ApiError(400, "กรุณาแนบไฟล์");
   if (file.size > MAX_FILE_SIZE) throw new ApiError(400, "ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 10MB)");
 
+  // Type check before anything touches disk — see src/lib/upload-validation.ts.
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const checked = checkAttachmentUpload(file, buffer);
+  if (!checked.ok) throw new ApiError(400, checked.message);
+
   const uploadDir = path.join(process.cwd(), "public", "uploads", "tasks", taskId);
   await mkdir(uploadDir, { recursive: true });
 
-  const safeName = file.name.replace(/[^a-zA-Z0-9.\-_ก-๙]/g, "_");
-  const storedName = `${randomUUID()}-${safeName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
+  // Stored under the validated extension (lower-cased) as the only dot in the
+  // name, so "evil.html.png" can't become a double extension and the static
+  // server's Content-Type always follows the checked type.
+  const baseName = file.name.slice(0, file.name.lastIndexOf(".")).replace(/[^a-zA-Z0-9\-_ก-๙]/g, "_");
+  const storedName = `${randomUUID()}-${baseName}.${checked.ext}`;
   await writeFile(path.join(uploadDir, storedName), buffer);
 
   const attachment = await prisma.taskAttachment.create({
@@ -40,7 +48,7 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
       fileName: file.name,
       fileUrl: `/uploads/tasks/${taskId}/${storedName}`,
       fileSize: file.size,
-      mimeType: file.type || "application/octet-stream",
+      mimeType: checked.mime,
     },
   });
 
