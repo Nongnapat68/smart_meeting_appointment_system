@@ -8,6 +8,7 @@ import { MeetingActions } from "./MeetingActions";
 import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./MeetingContext";
 import { CreateTaskButton } from "@/components/tasks/CreateTaskButton";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
+import { SAMPLE_MODE_MODEL } from "@/lib/ai-sample-mode";
 import type { MeetingDetail } from "./types";
 
 export default async function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -168,7 +169,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                 <p className="font-body-md text-body-md text-on-surface-variant whitespace-pre-line line-clamp-6">
                   {aiSummary.content}
                 </p>
-                <AiDisclaimer className="mt-3 justify-start" />
+                <AiDisclaimer sample={aiSummary.model === SAMPLE_MODE_MODEL} className="mt-3 justify-start" />
               </>
             ) : meeting.type === "SINGLE" ? (
               <p className="font-body-md text-body-md text-on-surface-variant">

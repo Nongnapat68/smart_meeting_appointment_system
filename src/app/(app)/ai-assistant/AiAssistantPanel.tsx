@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Spinner } from "@/components/ui/Feedback";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import { formatDateTime } from "@/lib/format";
+import { SAMPLE_MODE_MODEL, type AiResultMode } from "@/lib/ai-sample-mode";
 import type { AISummary, MeetingStatus, MeetingType } from "@prisma/client";
 
 interface MeetingOption {
@@ -51,6 +52,7 @@ export function AiAssistantPanel({
   // not persisted, recomputed on demand each time it's asked for.
   const [pendingIssues, setPendingIssues] = useState<string | null>(null);
   const [pendingIssuesSources, setPendingIssuesSources] = useState<AiSource[]>([]);
+  const [pendingIssuesMode, setPendingIssuesMode] = useState<AiResultMode>("ai");
   const [pendingIssuesLoading, setPendingIssuesLoading] = useState(false);
   const [pendingIssuesError, setPendingIssuesError] = useState<string | null>(null);
 
@@ -59,6 +61,7 @@ export function AiAssistantPanel({
   const [agendaTopic, setAgendaTopic] = useState("");
   const [agendaResult, setAgendaResult] = useState<string | null>(null);
   const [agendaSources, setAgendaSources] = useState<AiSource[]>([]);
+  const [agendaMode, setAgendaMode] = useState<AiResultMode>("ai");
   const [agendaLoading, setAgendaLoading] = useState(false);
   const [agendaError, setAgendaError] = useState<string | null>(null);
 
@@ -98,10 +101,10 @@ export function AiAssistantPanel({
     setGenerating(true);
     setError(null);
     try {
-      const res = await api.post<{ summary: AISummary }>(`/api/meetings/${selectedId}/ai-summary`);
+      const res = await api.post<{ summary: AISummary; mode: AiResultMode }>(`/api/meetings/${selectedId}/ai-summary`);
       setSummary(res.summary);
       setContent(res.summary.content);
-      showToast("สร้างสรุปด้วย AI สำเร็จ", "success");
+      showToast(res.mode === "sample" ? "สร้างสรุปสำเร็จ" : "สร้างสรุปด้วย AI สำเร็จ", "success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "ไม่สามารถสร้างสรุปด้วย AI ได้");
     } finally {
@@ -127,11 +130,12 @@ export function AiAssistantPanel({
     setPendingIssuesLoading(true);
     setPendingIssuesError(null);
     try {
-      const res = await api.post<{ analysis: string; sources: AiSource[] }>(
+      const res = await api.post<{ analysis: string; sources: AiSource[]; mode: AiResultMode }>(
         `/api/meetings/${selectedId}/pending-issues`
       );
       setPendingIssues(res.analysis);
       setPendingIssuesSources(res.sources);
+      setPendingIssuesMode(res.mode);
     } catch (err) {
       setPendingIssuesError(err instanceof Error ? err.message : "ไม่สามารถวิเคราะห์ประเด็นค้างได้");
     } finally {
@@ -144,12 +148,13 @@ export function AiAssistantPanel({
     setAgendaLoading(true);
     setAgendaError(null);
     try {
-      const res = await api.post<{ agenda: string; sources: AiSource[] }>(
+      const res = await api.post<{ agenda: string; sources: AiSource[]; mode: AiResultMode }>(
         `/api/meetings/${selectedId}/agenda-suggestion`,
         { topic: agendaTopic.trim() }
       );
       setAgendaResult(res.agenda);
       setAgendaSources(res.sources);
+      setAgendaMode(res.mode);
     } catch (err) {
       setAgendaError(err instanceof Error ? err.message : "ไม่สามารถแนะนำ agenda ได้");
     } finally {
@@ -290,7 +295,10 @@ export function AiAssistantPanel({
               )}
             </div>
 
-            <AiDisclaimer className="p-3 bg-surface-container-low border-t border-outline-variant" />
+            <AiDisclaimer
+              sample={summary?.model === SAMPLE_MODE_MODEL}
+              className="p-3 bg-surface-container-low border-t border-outline-variant"
+            />
           </div>
 
           {/* FR-16: Pending Issues Analysis — separate capability/result from
@@ -347,7 +355,10 @@ export function AiAssistantPanel({
                 </div>
               )}
             </div>
-            <AiDisclaimer className="p-3 bg-surface-container-low border-t border-outline-variant" />
+            <AiDisclaimer
+              sample={Boolean(pendingIssues) && pendingIssuesMode === "sample"}
+              className="p-3 bg-surface-container-low border-t border-outline-variant"
+            />
           </div>
 
           {/* FR-17: New Agenda Context — user types the next meeting's topic,
@@ -407,7 +418,10 @@ export function AiAssistantPanel({
                 </>
               )}
             </div>
-            <AiDisclaimer className="p-3 bg-surface-container-low border-t border-outline-variant" />
+            <AiDisclaimer
+              sample={Boolean(agendaResult) && agendaMode === "sample"}
+              className="p-3 bg-surface-container-low border-t border-outline-variant"
+            />
           </div>
           </>
         )}
