@@ -101,14 +101,11 @@ export const PUT = withApiErrors(async (request: Request, { params }: Params) =>
   return NextResponse.json({ meeting });
 });
 
-export const DELETE = withApiErrors(async (_request: Request, { params }: Params) => {
-  const user = await requireUser();
-  const { id } = await params;
-
-  const existing = await prisma.meeting.findUnique({ where: { id } });
-  if (!existing) throw new ApiError(404, "ไม่พบการประชุมนี้");
-  assertOwner(user, existing.organizerId === user.id, "เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่ลบการประชุมนี้ได้");
-
-  await prisma.meeting.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
-});
+// N11: there is deliberately no DELETE here. Nothing in the app ever called
+// it — a meeting is taken out of schedule with POST /api/meetings/:id/cancel
+// (which keeps the row, its notes, decisions, resources and AI summary as
+// history and cancels its reminders via trg_cancel_meeting_reminders), and a
+// hard delete would silently destroy exactly the history that
+// get_meeting_context() feeds the AI. The method was previously exported but
+// unreachable from any page, so it was a second, undocumented way to destroy
+// a meeting. scripts/test-authorization.ts asserts the method is now absent.

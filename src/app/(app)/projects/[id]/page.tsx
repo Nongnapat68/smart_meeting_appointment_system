@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, isPastDue } from "@/lib/format";
 import { projectStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { TaskQuickToggle } from "./TaskQuickToggle";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
@@ -24,10 +24,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (!project) notFound();
   const user = await getCurrentUser();
 
-  const now = new Date();
   const taskTotal = project.tasks.length;
   const taskCompleted = project.tasks.filter((t) => t.status === "COMPLETED").length;
-  const taskOverdue = project.tasks.filter((t) => t.status !== "COMPLETED" && t.dueDate && t.dueDate < now).length;
+  // N5: same fix as tasks/page.tsx - dueDate is a date held as midnight UTC, so
+  // comparing it against `now()` flagged everything due today as overdue from
+  // 07:00. isPastDue() compares Bangkok calendar dates.
+  const taskOverdue = project.tasks.filter((t) => t.status !== "COMPLETED" && isPastDue(t.dueDate)).length;
   const taskPending = taskTotal - taskCompleted - taskOverdue;
   const progress = taskTotal > 0 ? Math.round((taskCompleted / taskTotal) * 100) : 0;
   const badge = projectStatusBadge(project.status);

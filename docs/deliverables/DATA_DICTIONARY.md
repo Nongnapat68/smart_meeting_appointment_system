@@ -92,6 +92,9 @@ OTP สำหรับ flow "ลืมรหัสผ่าน" — 1 ผู้�
 | `expiresAt` | TIMESTAMP(3) | ❌ | — | | เวลาหมดอายุ |
 | `usedAt` | TIMESTAMP(3) | ✅ | `null` | | เวลาที่ถูกใช้ไปแล้ว (ป้องกันใช้ซ้ำ) |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
+| `attempts` | INTEGER | ❌ | `0` | | จำนวนครั้งที่เดารหัสผิดของรหัสนี้ (`20261002130000_password_reset_otp_attempt_limits`) — แอปขอสิทธิ์เดาด้วย `UPDATE ... WHERE attempts < 5` และคืนค่าเมื่อเดาถูก เมื่อครบ 5 ครั้งรหัสนี้จะยืนยันไม่ได้อีก ต้องขอใหม่ |
+
+**Index ที่เกี่ยวข้อง**: `(userId, createdAt)` — ใช้นับจำนวนคำขอ OTP ต่อผู้ใช้ต่อช่วงเวลา (3 ครั้ง / 15 นาที, 10 ครั้ง / วัน) และใช้หา "รหัสล่าสุดที่ยังไม่ถูกใช้" แทน index เดิม `PasswordResetOtp_userId_idx` ที่ถูก drop
 
 **RLS**: deny-all — no policies of any kind on this table (zero policies = every row blocked for every non-bypassing role). Server-only, via Prisma (which always bypasses RLS).
 
@@ -363,7 +366,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `id` | TEXT (cuid) | ❌ | — | PK | |
 | `meetingId` | TEXT | ❌ | — | **FK** → `Meeting.id`, `onDelete: Cascade`, indexed | ลบ meeting → ลบ reminder ที่ผูกอยู่ทั้งหมด |
 | `scheduledAt` | TIMESTAMP(3) | ❌ | — | | เวลาที่ควรส่ง (คำนวณจาก `meeting.startTime - offset` ตอนสร้าง) |
-| `status` | `"ReminderStatus"` (enum) | ❌ | `'PENDING'` | indexed | ค่าที่เป็นไปได้: `PENDING`, `SENT`, `FAILED`, `CANCELLED` — ครบตามที่ FR-10 กำหนด |
+| `status` | `"ReminderStatus"` (enum) | ❌ | `'PENDING'` | indexed | ค่าที่เป็นไปได้: `PENDING`, `SENT`, `SIMULATED`, `FAILED`, `CANCELLED` — `SIMULATED` เพิ่มใน `20261002140000_reminder_status_simulated` ใช้เมื่อ `sendEmail()` คืนค่า `"simulated"` (ยังไม่ได้ตั้งค่า SMTP จริง) เพื่อไม่ให้ระบบอ้างว่าส่งจริง |
 | `failureReason` | TEXT | ✅ | `null` | | ข้อความ error เมื่อส่งไม่สำเร็จ |
 | `sentAt` | TIMESTAMP(3) | ✅ | `null` | | เวลาที่ส่งจริง |
 | `retryCount` | INTEGER | ❌ | `0` | | จำนวนครั้งที่เคย retry |
@@ -442,7 +445,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `ResourceType` | `LINK`, `DOCUMENT`, `FILE` | `RelatedResource.type` |
 | `TaskStatus` | `NOT_STARTED`, `IN_PROGRESS`, `COMPLETED` | `Task.status` |
 | `TaskPriority` | `LOW`, `MEDIUM`, `HIGH` | `Task.priority` |
-| `ReminderStatus` | `PENDING`, `SENT`, `FAILED`, `CANCELLED` | `Reminder.status` |
+| `ReminderStatus` | `PENDING`, `SENT`, `SIMULATED`, `FAILED`, `CANCELLED` | `Reminder.status` |
 | `NotificationType` | `MEETING_INVITE`, `MEETING_UPDATED`, `MEETING_CANCELLED`, `TASK_ASSIGNED`, `AI_SUMMARY_READY`, `REMINDER` | `Notification.type` |
 
 Verified live via `SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortorder) FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid ... GROUP BY t.typname` — exactly these 15 rows, exact same value lists as above.

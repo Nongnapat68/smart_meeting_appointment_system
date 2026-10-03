@@ -1,4 +1,5 @@
 const THAI_LOCALE = "th-TH";
+const THAI_TIMEZONE = "Asia/Bangkok";
 
 // Every timestamp column is Prisma's TIMESTAMP(3) (no time zone) holding a UTC
 // wall-clock value. Prisma hands those back as real UTC Dates, but PostgREST
@@ -13,6 +14,46 @@ const NAIVE_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 export function parseDbTimestamp(value: Date | string): Date {
   if (typeof value !== "string") return value;
   return new Date(NAIVE_DATETIME.test(value) ? `${value.replace(" ", "T")}Z` : value);
+}
+
+/**
+ * Task.dueDate is a *date*, not an instant, but it's stored in the same
+ * TIMESTAMP (no time zone) column as everything else, so the app writes
+ * midnight UTC for it (`dueDate: "2026-10-05"` -> `2026-10-05T00:00:00`).
+ *
+ * Comparing that value against `now()` directly makes a task due on the 5th
+ * look overdue from 07:00 on the 5th (midnight UTC + 7h) instead of at the end
+ * of the 5th. So overdue-ness is decided by *calendar date*, read in
+ * Asia/Bangkok on both sides: the stored value's own UTC date is the intended
+ * due date, and the current date comes from Bangkok local time.
+ *
+ * Returns false for a null/empty due date (no deadline, never overdue).
+ */
+export function isPastDue(dueDate: Date | string | null | undefined, now: Date = new Date()): boolean {
+  if (!dueDate) return false;
+  const due = parseDbTimestamp(dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+
+  // Left: the due date as written (UTC calendar date).
+  const dueDay = due.toISOString().slice(0, 10);
+  // Right: today in Bangkok, so a task due today stays not-overdue until
+  // Bangkok's calendar day actually rolls over.
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: THAI_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+
+  return dueDay < today;
+}
+
+/**
+ * BR: a meeting is "past" once its endTime is behind us - used instead of a
+ * bare timestamp comparison so the same timezone rule applies as above.
+ */
+export function isPast(endTime: Date | string, now: Date = new Date()): boolean {
+  return parseDbTimestamp(endTime).getTime() < now.getTime();
 }
 
 export function formatDate(date: Date | string): string {

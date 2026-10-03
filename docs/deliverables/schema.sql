@@ -15,7 +15,12 @@
 -- `20260911120000_enable_rls_policies`, `20260911130000_...views`,
 -- `20260911140000_...process_due_reminders_function`,
 -- `20260911150000_...get_meeting_context_function`,
--- `20260911160000_...cancel_meeting_reminders_trigger`).
+-- `20260911160000_...cancel_meeting_reminders_trigger`, plus every later
+-- migration through `20261003140000_insert_attribution_owner_only`).
+--
+-- Snapshot taken 2026-10-04 (26 migrations). Objects added by the later
+-- migrations are all present below and flagged with the migration that owns
+-- them, so this file stays reviewable against `prisma/migrations/`.
 --
 -- This supersedes the previous version of this file, which was the SQLite
 -- dev-database dialect from before the project migrated to Supabase
@@ -37,14 +42,25 @@
 --     column under the hood, which drops any index on it): "Person_userId_key",
 --     "PasswordResetOtp_userId_idx", "Task_assigneeId_idx",
 --     "Notification_userId_isRead_idx".
+--     ("PasswordResetOtp_userId_idx" was later dropped and replaced by
+--     "PasswordResetOtp_userId_createdAt_idx" in
+--     20261002130000_password_reset_otp_attempt_limits — see section 3.)
 --   - 72 Row Level Security policies across every table (verified live via
 --     `SELECT count(*) FROM pg_policies WHERE schemaname='public'` = 72),
 --     plus the 2 SECURITY DEFINER helper functions they depend on
---     (`is_admin()`, `is_meeting_participant(text)`).
---   - 2 views (`upcoming_meetings`, `overdue_action_items`), 2 SECURITY
---     INVOKER functions (`process_due_reminders()`, `get_meeting_context
---     (text)`), and 1 trigger (`trg_cancel_meeting_reminders` on `Meeting`)
---     added for requirements.md §8 items 4/7/9/14 and BR-14.
+--     (`is_admin()`, `is_meeting_participant(text)`). The INSERT policies
+--     were tightened twice: 20261003100000_sprint2_rls_hardening closed the
+--     MeetingNote/Decision/RelatedResource/TaskComment/Task author
+--     impersonation, and 20261003140000_insert_attribution_owner_only
+--     replaced five `WITH CHECK (true)` attribution policies (ContactGroup,
+--     Project, Meeting, OnlineMeetingResource, Person).
+--   - 2 views (`upcoming_meetings`, `overdue_action_items`), 12 functions,
+--     and 3 triggers (`trg_cancel_meeting_reminders` on `Meeting`,
+--     `trg_prevent_task_creator_change` on `Task`,
+--     `trg_prevent_user_role_self_escalation` on `"User"`), added for
+--     requirements.md §8 items 4/7/9/14 and BR-14.
+--   - 1 CHECK constraint (`RelatedResource_url_http_check`, from
+--     20261002140000_related_resource_url_check).
 --
 -- Deliberately out of scope / excluded: Supabase's own platform-managed
 -- `rls_auto_enable()` event-trigger function, which exists on this project
@@ -91,7 +107,7 @@ CREATE TYPE "ParticipantSource" AS ENUM ('DIRECT', 'GROUP', 'EXTERNAL');
 CREATE TYPE "ResourceType" AS ENUM ('LINK', 'DOCUMENT', 'FILE');
 CREATE TYPE "TaskStatus" AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED');
 CREATE TYPE "TaskPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
-CREATE TYPE "ReminderStatus" AS ENUM ('PENDING', 'SENT', 'FAILED', 'CANCELLED');
+CREATE TYPE "ReminderStatus" AS ENUM ('PENDING', 'SENT', 'SIMULATED', 'FAILED', 'CANCELLED');
 CREATE TYPE "NotificationType" AS ENUM ('MEETING_INVITE', 'MEETING_UPDATED', 'MEETING_CANCELLED', 'TASK_ASSIGNED', 'AI_SUMMARY_READY', 'REMINDER');
 
 
@@ -120,6 +136,9 @@ CREATE TABLE "User" (
 
 -- OTP for the "forgot password" flow — one user can have many rows (a fresh
 -- OTP is requested every time).
+-- "attempts" was appended by ALTER TABLE ADD COLUMN in
+-- 20261002130000_password_reset_otp_attempt_limits, so unlike every other
+-- column it sits LAST, after the userId that 20260910142937 appended.
 CREATE TABLE "PasswordResetOtp" (
     "id" TEXT NOT NULL,
     "otpHash" TEXT NOT NULL,
@@ -127,6 +146,7 @@ CREATE TABLE "PasswordResetOtp" (
     "usedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "userId" UUID,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (id)
 );
 
@@ -393,7 +413,11 @@ CREATE INDEX "MeetingParticipant_personId_idx" ON "MeetingParticipant" ("personI
 CREATE INDEX "MeetingParticipant_sourceGroupId_idx" ON "MeetingParticipant" ("sourceGroupId");
 CREATE INDEX "Notification_userId_isRead_idx" ON "Notification" ("userId", "isRead"); -- (re-added by the uuid migration)
 CREATE INDEX "OnlineMeetingResource_name_idx" ON "OnlineMeetingResource" (name);
-CREATE INDEX "PasswordResetOtp_userId_idx" ON "PasswordResetOtp" ("userId"); -- (re-added by the uuid migration)
+-- (userId, createdAt) replaces the single-column index: migration
+-- 20261002130000_password_reset_otp_attempt_limits dropped the userId-only one,
+-- because the per-user request limit counts rows by createdAt and this index
+-- also serves the "newest unused code" lookup.
+CREATE INDEX "PasswordResetOtp_userId_createdAt_idx" ON "PasswordResetOtp" ("userId", "createdAt");
 CREATE UNIQUE INDEX "Person_email_key" ON "Person" (email);
 CREATE INDEX "Person_status_idx" ON "Person" (status);
 CREATE INDEX "Person_type_idx" ON "Person" (type);
@@ -552,7 +576,9 @@ CREATE POLICY "delete_admin_only" ON public."User"
 
 ALTER TABLE public."User" ENABLE ROW LEVEL SECURITY;
 
--- Person — select/insert: everyone logged in ·
+-- Person — select: everyone logged in ·
+-- insert: an external contact (userId null) by anyone, or a link to the
+-- caller's OWN account — never somebody else's ·
 -- update: unlinked (userId null) is open to all, linked only to its
 -- owner or admin · delete: admin only
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."Person" TO authenticated;
@@ -561,9 +587,11 @@ CREATE POLICY "select_all_authenticated" ON public."Person"
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY "insert_all_authenticated" ON public."Person"
+-- 20261003140000_insert_attribution_owner_only (was insert_all_authenticated
+-- WITH CHECK (true), which let anyone bind a Person row to another account).
+CREATE POLICY "insert_external_or_self_link" ON public."Person"
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK ( "userId" IS NULL OR "userId" = (select auth.uid()) );
 
 CREATE POLICY "update_unlinked_or_owner_or_admin" ON public."Person"
   FOR UPDATE TO authenticated
@@ -576,7 +604,7 @@ CREATE POLICY "delete_admin_only" ON public."Person"
 
 ALTER TABLE public."Person" ENABLE ROW LEVEL SECURITY;
 
--- ContactGroup — select/insert: everyone logged in ·
+-- ContactGroup — select: everyone logged in · insert: as yourself ·
 -- update/delete: creator or admin
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."ContactGroup" TO authenticated;
 
@@ -584,9 +612,11 @@ CREATE POLICY "select_all_authenticated" ON public."ContactGroup"
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY "insert_all_authenticated" ON public."ContactGroup"
+-- 20261003140000_insert_attribution_owner_only (was insert_all_authenticated
+-- WITH CHECK (true) — createdById could name anybody).
+CREATE POLICY "insert_own_as_creator" ON public."ContactGroup"
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK ( "createdById" = (select auth.uid()) );
 
 CREATE POLICY "update_creator_or_admin" ON public."ContactGroup"
   FOR UPDATE TO authenticated
@@ -629,16 +659,19 @@ CREATE POLICY "delete_group_creator_or_admin" ON public."ContactGroupMember"
 
 ALTER TABLE public."ContactGroupMember" ENABLE ROW LEVEL SECURITY;
 
--- Project — select/insert: everyone logged in · update/delete: manager or admin
+-- Project — select: everyone logged in · insert: as yourself ·
+-- update/delete: manager or admin
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."Project" TO authenticated;
 
 CREATE POLICY "select_all_authenticated" ON public."Project"
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY "insert_all_authenticated" ON public."Project"
+-- 20261003140000_insert_attribution_owner_only (was insert_all_authenticated
+-- WITH CHECK (true) — managerId could name anybody).
+CREATE POLICY "insert_own_as_manager" ON public."Project"
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK ( "managerId" = (select auth.uid()) );
 
 CREATE POLICY "update_manager_or_admin" ON public."Project"
   FOR UPDATE TO authenticated
@@ -681,16 +714,21 @@ CREATE POLICY "delete_project_manager_or_admin" ON public."ProjectMember"
 
 ALTER TABLE public."ProjectMember" ENABLE ROW LEVEL SECURITY;
 
--- Meeting — select/insert: everyone logged in · update/delete: organizer or admin
+-- Meeting — select/insert: everyone logged in (but a direct insert must name
+-- the caller as organizer) · update/delete: organizer or admin
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."Meeting" TO authenticated;
 
 CREATE POLICY "select_all_authenticated" ON public."Meeting"
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY "insert_all_authenticated" ON public."Meeting"
+-- 20261003140000_insert_attribution_owner_only (was insert_all_authenticated
+-- WITH CHECK (true)). The real create path is create_meeting_with_participants()
+-- (SECURITY DEFINER, authorizes p_organizer_id itself, not subject to this
+-- policy), so the "admin creates on behalf of someone" capability is unaffected.
+CREATE POLICY "insert_own_as_organizer" ON public."Meeting"
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK ( "organizerId" = (select auth.uid()) );
 
 CREATE POLICY "update_organizer_or_admin" ON public."Meeting"
   FOR UPDATE TO authenticated
@@ -848,18 +886,18 @@ CREATE POLICY "delete_organizer_or_participant_or_admin" ON public."RelatedResou
 
 ALTER TABLE public."RelatedResource" ENABLE ROW LEVEL SECURITY;
 
--- OnlineMeetingResource — select/insert: everyone logged in ·
--- update/delete: unclaimed (createdById null) is open to all, claimed only
--- to its creator or admin
+-- OnlineMeetingResource — select: everyone logged in · insert: as yourself, or
+-- leave it unclaimed · update/delete: unclaimed (createdById null) is open to
+-- all, claimed only to its creator or admin
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."OnlineMeetingResource" TO authenticated;
 
 CREATE POLICY "select_all_authenticated" ON public."OnlineMeetingResource"
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY "insert_all_authenticated" ON public."OnlineMeetingResource"
+CREATE POLICY "insert_own_as_creator_or_unclaimed" ON public."OnlineMeetingResource"
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK ( "createdById" IS NULL OR "createdById" = (select auth.uid()) );
 
 CREATE POLICY "update_unclaimed_or_creator_or_admin" ON public."OnlineMeetingResource"
   FOR UPDATE TO authenticated
@@ -872,18 +910,22 @@ CREATE POLICY "delete_unclaimed_or_creator_or_admin" ON public."OnlineMeetingRes
 
 ALTER TABLE public."OnlineMeetingResource" ENABLE ROW LEVEL SECURITY;
 
--- Task — select/insert: everyone logged in ·
+-- Task — select: everyone logged in · insert: as yourself ·
 -- update: assignee, creator, or admin · delete: creator only (not
--- assignee) or admin
+-- assignee) or admin. createdById is also frozen once set by
+-- trg_prevent_task_creator_change (an admin may still change it), so an
+-- assignee cannot promote itself to creator and gain the DELETE right.
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."Task" TO authenticated;
 
 CREATE POLICY "select_all_authenticated" ON public."Task"
   FOR SELECT TO authenticated
   USING (true);
 
-CREATE POLICY "insert_all_authenticated" ON public."Task"
+-- 20261003100000_sprint2_rls_hardening (was insert_all_authenticated WITH
+-- CHECK (true) - anyone could create a task claiming somebody else as creator).
+CREATE POLICY "insert_own_as_creator" ON public."Task"
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK ( "createdById" = (select auth.uid()) );
 
 CREATE POLICY "update_assignee_or_creator_or_admin" ON public."Task"
   FOR UPDATE TO authenticated
@@ -1161,11 +1203,13 @@ GRANT SELECT ON public.overdue_action_items TO authenticated;
 
 
 -- =============================================================================
--- 7. FUNCTIONS (5) — requirements.md §8 items 7 and 14, plus three hybrid-
---    migration RPCs added afterward (create_meeting_with_participants,
---    update_project_with_members, update_meeting_with_participants — see
---    docs/DESIGN_DECISIONS.md §5.5/§5.6/§5.7). process_due_reminders()/
---    get_meeting_context() are SECURITY INVOKER (not DEFINER like the RLS
+-- 7. FUNCTIONS (11) — the 2 SECURITY DEFINER RLS helpers in section 5, plus
+--    requirements.md §8 items 7 and 14, plus the hybrid-migration RPCs added
+--    afterward (create_meeting_with_participants, update_project_with_members,
+--    update_meeting_with_participants, reschedule_meeting — see
+--    docs/DESIGN_DECISIONS.md §5.5/§5.6/§5.7) and the two guard functions the
+--    section 8 triggers fire. process_due_reminders()/get_meeting_context()
+--    are SECURITY INVOKER (not DEFINER like the RLS
 --    helpers above) since they only read data and never need to cross
 --    another user's RLS; the three RPCs below mutate data and mix
 --    INVOKER/DEFINER per-function (see each one's own header comment for
@@ -1173,10 +1217,16 @@ GRANT SELECT ON public.overdue_action_items TO authenticated;
 --    prisma/migrations/20260911140000_process_due_reminders_function,
 --    20260911150000_get_meeting_context_function,
 --    20260911170000_create_meeting_with_participants_function,
---    20260912090000_update_project_with_members_function and
---    20260912100000_update_meeting_with_participants_function.
+--    20260912090000_update_project_with_members_function,
+--    20260912100000_update_meeting_with_participants_function and
+--    20261002100000_reschedule_meeting_function. The two trigger guard
+--    functions (prevent_user_role_self_escalation, prevent_task_creator_change)
+--    live with their triggers in section 8, so they are counted there.
 -- =============================================================================
 
+-- Rewritten by 20261003120000_task_due_date_is_a_date (a Reminder for a
+-- meeting that has already started or ended could never usefully fire, so
+-- those rows are now filtered out instead of being mailed as a no-op).
 CREATE OR REPLACE FUNCTION public.process_due_reminders()
 RETURNS SETOF public."Reminder"
 LANGUAGE sql
@@ -1184,18 +1234,130 @@ SECURITY INVOKER
 SET search_path = ''
 STABLE
 AS $$
-  SELECT *
-  FROM public."Reminder"
-  WHERE status = 'PENDING'
-    AND "scheduledAt" <= now()
-  ORDER BY "scheduledAt" ASC;
+  SELECT r.*
+  FROM public."Reminder" r
+  JOIN public."Meeting" m ON m.id = r."meetingId"
+  WHERE r.status = 'PENDING'
+    AND r."scheduledAt" <= now()
+    AND m.status <> 'CANCELLED'
+    AND m.status <> 'COMPLETED'
+    AND m."startTime" > now()
+    AND m."endTime" > now()
+  ORDER BY r."scheduledAt" ASC;
 $$;
 
 COMMENT ON FUNCTION public.process_due_reminders() IS
-  'requirements.md §8.7 / FR-10 / BR-13 — every Reminder still PENDING whose scheduledAt has passed. Read-only; does not mark rows SENT (that still happens in src/app/api/reminders/process-due/route.ts after the email send succeeds).';
+  'requirements.md §8.7 / FR-10 / BR-13 — every Reminder still PENDING whose scheduledAt has passed AND whose meeting is still CANCELLED-less, not COMPLETED and not already under way. Read-only; does not mark rows SENT (that still happens in src/app/api/reminders/process-due/route.ts after the email send succeeds).';
 
 REVOKE ALL ON FUNCTION public.process_due_reminders() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.process_due_reminders() TO authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- reschedule_meeting(...) — atomic replacement for the two separate
+-- supabase-js writes the meeting reschedule dialog used to make
+-- (UPDATE "Meeting" then UPDATE "Reminder"), and a fix for what the second
+-- write did: it set every still-PENDING reminder to a fixed "30 minutes
+-- before the new start", wiping whatever offsets the organizer had picked.
+--
+-- "Reminder" has no offset column — only "scheduledAt" — so the offset is
+-- kept by shifting each PENDING reminder by exactly how far the meeting moved
+-- (new start - old start): "1 day before" stays "1 day before the new start".
+-- That makes atomicity matter: if the meeting update committed but the
+-- reminder shift didn't, the next reschedule would compute its delta from the
+-- already-moved start and the reminders could never be corrected. The old
+-- start is read under FOR UPDATE so two concurrent reschedules can't both
+-- shift reminders from the same stale start.
+--
+-- SENT/FAILED/CANCELLED reminders are history and are left alone. A shifted
+-- reminder can land in the past (e.g. "2 days before" when the meeting moves
+-- to tomorrow) — those are set to CANCELLED rather than staying PENDING, so
+-- the next process_due run doesn't fire them all at once as a burst.
+--
+-- The same checks the dialog makes client-side are repeated here because
+-- supabase-js callers can skip the UI: organizer-or-admin, end after start,
+-- start not in the past (20261003130000). A cancelled meeting can't be
+-- rescheduled — that would silently flip it back to POSTPONED while
+-- trg_cancel_meeting_reminders has already cancelled its reminders.
+--
+-- SECURITY INVOKER: "Meeting"'s update_organizer_or_admin and "Reminder"'s
+-- update_meeting_organizer_or_admin RLS policies already gate both writes;
+-- the explicit organizer check only turns a silent 0-row update into a clear
+-- error message. Timestamps are TIMESTAMP (no time zone) holding UTC, like
+-- every other column here, so "now" is compared as UTC too.
+--
+-- Verbatim from
+-- prisma/migrations/20261002100000_reschedule_meeting_function.
+CREATE OR REPLACE FUNCTION public.reschedule_meeting(
+  p_meeting_id text,
+  p_start_time timestamp,
+  p_end_time timestamp
+)
+RETURNS public."Meeting"
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  v_organizer_id uuid;
+  v_status public."MeetingStatus";
+  v_old_start timestamp;
+  v_meeting public."Meeting";
+BEGIN
+  SELECT "organizerId", status INTO v_organizer_id, v_status
+  FROM public."Meeting" WHERE id = p_meeting_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'ไม่พบการประชุมนี้';
+  END IF;
+  IF v_organizer_id IS DISTINCT FROM auth.uid() AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่เลื่อนเวลาการประชุมนี้ได้' USING ERRCODE = '42501';
+  END IF;
+  IF v_status = 'CANCELLED' THEN
+    RAISE EXCEPTION 'การประชุมนี้ถูกยกเลิกแล้ว เลื่อนเวลาไม่ได้';
+  END IF;
+  IF p_start_time IS NULL OR p_end_time IS NULL THEN
+    RAISE EXCEPTION 'กรุณากำหนดเวลาเริ่มและเวลาสิ้นสุด';
+  END IF;
+  IF p_end_time <= p_start_time THEN
+    RAISE EXCEPTION 'เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม';
+  END IF;
+  IF p_start_time < (now() AT TIME ZONE 'UTC') THEN
+    RAISE EXCEPTION 'เวลาเริ่มต้องไม่เป็นอดีต (ย้อนหลัง)';
+  END IF;
+
+  SELECT "startTime" INTO v_old_start
+  FROM public."Meeting" WHERE id = p_meeting_id
+  FOR UPDATE;
+
+  UPDATE public."Meeting"
+  SET "startTime" = p_start_time,
+      "endTime" = p_end_time,
+      status = 'POSTPONED',
+      "updatedAt" = now()
+  WHERE id = p_meeting_id
+  RETURNING * INTO v_meeting;
+
+  -- SET expressions all read the pre-update row, so status is decided from
+  -- the same shifted time scheduledAt is being set to.
+  UPDATE public."Reminder"
+  SET "scheduledAt" = "scheduledAt" + (p_start_time - v_old_start),
+      status = CASE
+        WHEN "scheduledAt" + (p_start_time - v_old_start) < (now() AT TIME ZONE 'UTC')
+          THEN 'CANCELLED'::public."ReminderStatus"
+        ELSE status
+      END
+  WHERE "meetingId" = p_meeting_id
+    AND status = 'PENDING';
+
+  RETURN v_meeting;
+END;
+$$;
+
+COMMENT ON FUNCTION public.reschedule_meeting(text, timestamp, timestamp) IS
+  'Atomically moves a meeting to new start/end (status POSTPONED) and shifts every PENDING Reminder by the same delta, so each reminder keeps its original offset from the meeting start; a shifted reminder that would fall in the past is set to CANCELLED instead. Organizer or admin only; rejects cancelled meetings, end <= start, and a start in the past. SECURITY INVOKER — RLS on Meeting/Reminder gates both writes.';
+
+REVOKE ALL ON FUNCTION public.reschedule_meeting(text, timestamp, timestamp) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.reschedule_meeting(text, timestamp, timestamp) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.get_meeting_context(p_meeting_id text)
 RETURNS json
@@ -1728,11 +1890,15 @@ GRANT EXECUTE ON FUNCTION public.update_meeting_with_participants(
 
 
 -- =============================================================================
--- 8. TRIGGER (1) — BR-14: fills the "0 triggers" gap that existed until
---    this was added. Verbatim from
---    prisma/migrations/20260911160000_cancel_meeting_reminders_trigger.
+-- 8. TRIGGERS (3) - all AFTER/BEFORE UPDATE row triggers on a public table,
+--    no triggers on INSERT or DELETE anywhere. Verbatim from
+--    prisma/migrations/20260911160000_cancel_meeting_reminders_trigger,
+--    20261002090000_prevent_user_role_self_escalation and
+--    20261003100000_sprint2_rls_hardening.
 -- =============================================================================
 
+-- 8.1 trg_cancel_meeting_reminders (BR-14) - fills the "0 triggers" gap that
+--     existed until this was added.
 CREATE OR REPLACE FUNCTION public.cancel_meeting_reminders()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -1761,8 +1927,82 @@ WHEN (NEW.status = 'CANCELLED' AND OLD.status IS DISTINCT FROM 'CANCELLED')
 EXECUTE FUNCTION public.cancel_meeting_reminders();
 
 
+-- 8.2 trg_prevent_user_role_self_escalation - the "User" table's RLS is
+--     update_self_or_admin, so a non-admin can already update their own row;
+--     without this trigger they could also set role='ADMIN' in that same
+--     statement and grant themselves every is_admin() right in the database.
+--     SECURITY INVOKER, so the trigger is subject to RLS like any other write.
+CREATE OR REPLACE FUNCTION public.prevent_user_role_self_escalation()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.role IS DISTINCT FROM OLD.role
+     AND auth.uid() IS NOT NULL
+     AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'เปลี่ยนบทบาทของตัวเองไม่ได้ (role)'
+      USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.prevent_user_role_self_escalation() IS
+  'FR-14: blocks a signed-in non-admin from changing their own "User".role, which the update_self_or_admin policy would otherwise allow and which would self-escalate to admin everywhere is_admin() is consulted. Fired by trg_prevent_user_role_self_escalation.';
+
+DROP TRIGGER IF EXISTS trg_prevent_user_role_self_escalation ON public."User";
+CREATE TRIGGER trg_prevent_user_role_self_escalation
+BEFORE UPDATE OF role ON public."User"
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_user_role_self_escalation();
+
+
+-- 8.3 trg_prevent_task_creator_change - the symmetric hole on "Task", which
+--     closed two migrations after 8.2: update_assignee_or_creator_or_admin
+--     lets a task's *assignee* update the row, and delete_creator_only_or_admin
+--     keys off "createdById" — so an assignee could set createdById to
+--     themselves and gain the delete right. Freeze the column instead.
+CREATE OR REPLACE FUNCTION public.prevent_task_creator_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW."createdById" IS DISTINCT FROM OLD."createdById"
+     AND auth.uid() IS NOT NULL
+     AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'เปลี่ยนผู้สร้างงานไม่ได้' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.prevent_task_creator_change() IS
+  'FR-12: blocks a signed-in non-admin from changing Task."createdById" - otherwise an assignee (allowed to UPDATE the row) could make itself the creator and gain the creator-or-admin DELETE right. Fired by trg_prevent_task_creator_change.';
+
+DROP TRIGGER IF EXISTS trg_prevent_task_creator_change ON public."Task";
+CREATE TRIGGER trg_prevent_task_creator_change
+BEFORE UPDATE OF "createdById" ON public."Task"
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_task_creator_change();
+
+
+-- 9. CHECK CONSTRAINTS (1) - no column-level DEFAULT/NOT NULL aside from
+--    PRIMARY KEY. RelatedResource.url is rendered as a clickable link and
+--    emailed in reminders, so a javascript:/data: value there would be a
+--    stored-XSS vector in both surfaces.
 -- =============================================================================
--- ✅ VERIFIED — no local Postgres/Docker is available in this environment to
+
+ALTER TABLE public."RelatedResource"
+  ADD CONSTRAINT "RelatedResource_url_http_check"
+  CHECK (url ~* '^https?://');
+
+
+-- =============================================================================
+-- 10. VERIFIED — ✅ no local Postgres/Docker is available in this environment to
 -- spin up a truly separate empty database (`supabase db dump`/pg_dump also
 -- confirmed this — see the top of this file), so this file's every
 -- `public.` qualifier (schema-qualified statements: CREATE POLICY ... ON
@@ -1777,19 +2017,20 @@ EXECUTE FUNCTION public.cancel_meeting_reminders();
 -- with a query showing the schema no longer exists. Raw counts from that
 -- run are in this deliverable's accompanying report.
 --
--- ⚠️ Function count above the dry run's own count: create_meeting_with_participants(),
--- update_project_with_members() and update_meeting_with_participants() were
--- all added to this file AFTER that empty-schema dry run (section 7 now has
--- 5 functions, not 2 — 8 functions total in the whole file, not 5). None of
--- the three were ever re-run through that same fresh-schema test as part of
--- updating this deliverable file. All three are real, currently deployed
--- functions on the actual live `public` schema (via their own migrations,
--- prisma/migrations/20260911170000_.../20260912090000_.../20260912100000_...)
--- and both create_meeting_with_participants() and
--- update_meeting_with_participants() are already load-bearing in production
--- (every real meeting create/edit goes through one or the other) — just not
--- re-verified specifically as *this consolidated schema.sql file, replayed
--- from empty*, still applies cleanly end-to-end with all three included.
+-- ⚠️ NOT re-verified as *this consolidated file, replayed from empty*:
+-- everything this file gained after that dry run — the three hybrid-migration
+-- RPCs (create_meeting_with_participants(), update_project_with_members(),
+-- update_meeting_with_participants()), reschedule_meeting(), the two
+-- Sprint-2 trigger guards, the RelatedResource URL CHECK,
+-- "PasswordResetOtp".attempts + its (userId, createdAt) index, the SIMULATED
+-- reminder status, the two triggers, and the six re-pointed INSERT policies.
+-- All are real, currently deployed objects on the live `public` schema via
+-- their own migrations, and each was cross-checked against the live catalog on
+-- 2026-10-04 (pg_policies = 72, pg_proc = 12 incl. the 1 platform function,
+-- pg_trigger = 3, pg_constraint CHECK = 1, all matching this file
+-- one-for-one). They were just never re-run through the fresh-schema replay
+-- described above. The two RPCs the app calls on every meeting create/edit
+-- are load-bearing in production.
 -- See docs/deliverables/DATA_DICTIONARY.md and ER_DIAGRAM.md for narrative
 -- documentation of every table/enum/relationship, and QUERIES.sql for the
 -- 15 requirements.md §8 queries run against the real `public` schema this

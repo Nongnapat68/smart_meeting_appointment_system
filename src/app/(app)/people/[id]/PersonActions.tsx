@@ -8,7 +8,15 @@ import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { ErrorBanner } from "@/components/ui/Feedback";
 
-export function PersonActions({ person }: { person: Person }) {
+export function PersonActions({
+  person,
+  canEdit,
+  canDelete,
+}: {
+  person: Person;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
   const router = useRouter();
   const { showToast } = useToast();
   const [showEdit, setShowEdit] = useState(false);
@@ -47,47 +55,63 @@ export function PersonActions({ person }: { person: Person }) {
     }
   }
 
-  return (
+return (
     <>
-      <div className="flex gap-2 w-full">
-        <button
-          onClick={() => setShowEdit(true)}
-          className="flex-1 bg-surface-container-lowest text-on-surface border border-outline-variant font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-surface-container-low transition-colors"
-        >
-          <span className="material-symbols-outlined text-lg">edit</span>
-          แก้ไข
-        </button>
-        <button
-          onClick={() => setShowDelete(true)}
-          className="flex-1 bg-surface-container-lowest text-error border border-error/30 font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-error-container/30 transition-colors"
-        >
-          <span className="material-symbols-outlined text-lg">delete</span>
-          ลบ
-        </button>
-      </div>
+      {/* N12: only render the actions this visitor is actually allowed to
+          perform — `canEdit`/`canDelete` mirror the Person RLS policies
+          (see src/lib/permissions.ts). Rendering them unconditionally made a
+          dead-end "แก้ไข"/"ลบ" pair show up on contacts nobody but an admin (or
+          the owner) can touch. The writes were already blocked by RLS; this
+          just stops offering them. */}
+      {(canEdit || canDelete) && (
+        <div className="flex gap-2 w-full">
+          {canEdit && (
+            <button
+              onClick={() => setShowEdit(true)}
+              className="flex-1 bg-surface-container-lowest text-on-surface border border-outline-variant font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-surface-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-lg">edit</span>
+              แก้ไข
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => setShowDelete(true)}
+              className="flex-1 bg-surface-container-lowest text-error border border-error/30 font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-error-container/30 transition-colors"
+            >
+              <span className="material-symbols-outlined text-lg">delete</span>
+              ลบ
+            </button>
+          )}
+        </div>
+      )}
 
-      <EditPersonModal
-        person={person}
-        open={showEdit}
-        onClose={() => setShowEdit(false)}
-        onSaved={() => {
-          setShowEdit(false);
-          showToast("บันทึกการเปลี่ยนแปลงสำเร็จ", "success");
-          router.refresh();
-        }}
-      />
+      {canEdit && (
+        <EditPersonModal
+          person={person}
+          open={showEdit}
+          onClose={() => setShowEdit(false)}
+          onSaved={() => {
+            setShowEdit(false);
+            showToast("บันทึกการเปลี่ยนแปลงสำเร็จ", "success");
+            router.refresh();
+          }}
+        />
+      )}
 
-      <ConfirmDialog
-        open={showDelete}
-        title="ลบผู้ติดต่อนี้?"
-        description={`คุณต้องการลบ "${person.name}" ออกจากระบบใช่หรือไม่ การกระทำนี้ไม่สามารถย้อนกลับได้`}
-        confirmLabel="ลบผู้ติดต่อ"
-        icon="delete_forever"
-        destructive
-        loading={deleting}
-        onConfirm={handleDelete}
-        onCancel={() => setShowDelete(false)}
-      />
+      {canDelete && (
+        <ConfirmDialog
+          open={showDelete}
+          title="ลบผู้ติดต่อนี้?"
+          description={`คุณต้องการลบ "${person.name}" ออกจากระบบใช่หรือไม่ การกระทำนี้ไม่สามารถย้อนกลับได้`}
+          confirmLabel="ลบผู้ติดต่อ"
+          icon="delete_forever"
+          destructive
+          loading={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setShowDelete(false)}
+        />
+      )}
     </>
   );
 }

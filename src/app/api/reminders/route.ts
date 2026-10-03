@@ -44,7 +44,7 @@ export const POST = withApiErrors(async (request: Request) => {
   const user = await requireUser();
   const body = parseBody(createReminderSchema, await request.json());
 
-  const meeting = await prisma.meeting.findUnique({ where: { id: body.meetingId } });
+const meeting = await prisma.meeting.findUnique({ where: { id: body.meetingId } });
   if (!meeting) throw new ApiError(404, "ไม่พบการประชุมนี้");
   assertOwner(
     user,
@@ -52,10 +52,33 @@ export const POST = withApiErrors(async (request: Request) => {
     "เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่เพิ่มการแจ้งเตือนของการประชุมนี้ได้"
   );
 
+  // BR-14: a cancelled meeting gets no new reminders. Meeting.status is only
+  // one of the ways in here - the create RPC takes p_status straight from the
+  // caller, so a meeting can be *created* already cancelled, and the cancel
+  // route updates status on its own row.
+  if (meeting.status === "CANCELLED") {
+    throw new ApiError(400, "ไม่สามารถเพิ่มการแจ้งเตือนให้การประชุมที่ถูกยกเลิกแล้วได้");
+  }
+
+  const scheduledAt = new Date(meeting.startTime.getTime() - body.offsetMinutes * 60 * 1000);
+
+  // N7: an offset longer than the time still left before the meeting puts
+  // scheduledAt in the past. process-due would then pick it up on the very
+  // next run and email "your meeting starts soon" after it already started.
+  // reschedule_meeting() already refuses this same situation by cancelling
+  // the reminder instead of moving it, so the two paths now agree: reject at
+  // creation instead of silently creating a reminder that fires instantly.
+  if (scheduledAt.getTime() <= Date.now()) {
+    throw new ApiError(
+      400,
+      "เวลาแจ้งเตือนต้องอยู่ก่อนเวลาเริ่มประชุมและยังไม่ผ่านไปแล้ว กรุณาลดระยะเวลาแจ้งเตือนลง"
+    );
+  }
+
   const reminder = await prisma.reminder.create({
     data: {
       meetingId: body.meetingId,
-      scheduledAt: new Date(meeting.startTime.getTime() - body.offsetMinutes * 60 * 1000),
+      scheduledAt,
     },
   });
 

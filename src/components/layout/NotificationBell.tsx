@@ -114,7 +114,6 @@ if (!error) setItems((data ?? []) as unknown as NotificationRow[]);
         showToast(err instanceof Error ? err.message : "บันทึกสถานะการอ่านไม่สำเร็จ", "error");
       }
     }
-    }
     setOpen(false);
     if (n.relatedId) router.push(TYPE_META[n.type]?.href(n.relatedId));
   }

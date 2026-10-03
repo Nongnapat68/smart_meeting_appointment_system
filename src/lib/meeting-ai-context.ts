@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api-helpers";
-import { parseDbTimestamp } from "@/lib/format";
+import { isPastDue, parseDbTimestamp } from "@/lib/format";
 import type { Meeting } from "@prisma/client";
 
 /**
@@ -61,10 +61,21 @@ export async function gatherMeetingAiContext(meeting: Pick<Meeting, "id">): Prom
   };
 }
 
-/** FR-16: tasks still open (not started/in progress) whose due date has passed. */
+/**
+ * FR-16: tasks still open (not started/in progress) whose due date has passed.
+ *
+ * N5: overdue-ness goes through isPastDue() (Bangkok calendar-date compare)
+ * rather than `dueDate < now`. dueDate arrives here already parsed from the
+ * DB's midnight-UTC timestamp, so a direct comparison flagged a task due today
+ * as overdue from 07:00 onward - the same off-by-seven-hours bug the two task
+ * list pages had.
+ */
 export function splitOverdueTasks(tasks: MeetingAiContext["relatedTasks"], now = new Date()) {
   const overdue = tasks.filter(
-    (t) => (t.status === "NOT_STARTED" || t.status === "IN_PROGRESS") && t.dueDate !== null && t.dueDate < now
+    (t) =>
+      (t.status === "NOT_STARTED" || t.status === "IN_PROGRESS") &&
+      t.dueDate !== null &&
+      isPastDue(t.dueDate, now)
   );
   const overdueIds = new Set(overdue.map((t) => t.id));
   const open = tasks.filter((t) => t.status !== "COMPLETED" && !overdueIds.has(t.id));
