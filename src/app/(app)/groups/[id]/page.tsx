@@ -10,6 +10,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { formatDate } from "@/lib/format";
+import { useCurrentUser } from "@/lib/use-current-user";
+import { canManageGroup } from "@/lib/permissions";
 import type { ContactGroup, ContactGroupMember, Meeting, Person } from "@prisma/client";
 
 type GroupDetail = ContactGroup & {
@@ -21,6 +23,12 @@ export default function GroupDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { showToast } = useToast();
+  // N12: adding/removing members and deleting the group are all writes the
+  // ContactGroup / ContactGroupMember RLS policies restrict to the group's
+  // creator or an admin. The page is readable by everyone
+  // (select_all_authenticated), so without this the buttons showed up for
+  // everyone and only failed at write time.
+  const currentUser = useCurrentUser();
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +128,8 @@ export default function GroupDetailPage() {
   if (loading) return <FullPageSpinner />;
   if (error || !group) return <div className="p-container-margin"><ErrorBanner message={error ?? "ไม่พบกลุ่มนี้"} /></div>;
 
+  const canManage = canManageGroup(group, currentUser);
+
   return (
     <main className="p-container-margin max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -137,13 +147,15 @@ export default function GroupDetailPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setShowAddMember(true)}
-            className="flex items-center gap-2 bg-surface text-primary border border-outline-variant font-label-md text-label-md py-2.5 px-4 rounded-lg shadow-sm hover:bg-surface-container-low transition-colors"
-          >
-            <span className="material-symbols-outlined text-[18px]">person_add</span>
-            เพิ่มสมาชิก
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowAddMember(true)}
+              className="flex items-center gap-2 bg-surface text-primary border border-outline-variant font-label-md text-label-md py-2.5 px-4 rounded-lg shadow-sm hover:bg-surface-container-low transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">person_add</span>
+              เพิ่มสมาชิก
+            </button>
+          )}
           <Link
             href={`/meetings/new?groupId=${group.id}`}
             className="flex items-center gap-2 bg-primary text-on-primary font-label-md text-label-md py-2.5 px-4 rounded-lg shadow-sm hover:opacity-90 transition-opacity"
@@ -174,7 +186,9 @@ export default function GroupDetailPage() {
                   <th className="py-3 px-6 font-label-md text-label-md text-on-surface-variant font-semibold">สมาชิก</th>
                   <th className="py-3 px-6 font-label-md text-label-md text-on-surface-variant font-semibold">ตำแหน่ง</th>
                   <th className="py-3 px-6 font-label-md text-label-md text-on-surface-variant font-semibold">สถานะในกลุ่ม</th>
-                  <th className="py-3 px-6 font-label-md text-label-md text-on-surface-variant font-semibold text-right">จัดการ</th>
+                  <th className="py-3 px-6 font-label-md text-label-md text-on-surface-variant font-semibold text-right">
+                    {canManage ? "จัดการ" : ""}
+                  </th>
                 </tr>
               </thead>
               <tbody className="font-body-md text-body-md divide-y divide-surface-container-high">
@@ -200,14 +214,18 @@ export default function GroupDetailPage() {
                       )}
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => removeMember(m.personId)}
-                        disabled={removingId === m.personId}
-                        className="text-outline hover:text-error transition-colors p-2 rounded-full hover:bg-error-container disabled:opacity-50"
-                        title="ลบสมาชิก"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">delete</span>
-                      </button>
+                      {canManage ? (
+                        <button
+                          onClick={() => removeMember(m.personId)}
+                          disabled={removingId === m.personId}
+                          className="text-outline hover:text-error transition-colors p-2 rounded-full hover:bg-error-container disabled:opacity-50"
+                          title="ลบสมาชิก"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">delete</span>
+                        </button>
+                      ) : (
+                        <span className="text-xs text-outline">-</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -217,47 +235,53 @@ export default function GroupDetailPage() {
         )}
       </div>
 
-      <div className="pt-2">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-error-container/30 p-5 rounded-xl border border-error-container">
-          <div>
-            <h4 className="font-headline-md text-[16px] text-on-error-container">ลบกลุ่มนี้</h4>
-            <p className="font-body-md text-sm text-on-surface-variant mt-1">
-              การลบกลุ่มจะไม่สามารถกู้คืนข้อมูลกลุ่มและสมาชิกในกลุ่มได้
-            </p>
+      {canManage && (
+        <div className="pt-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-error-container/30 p-5 rounded-xl border border-error-container">
+            <div>
+              <h4 className="font-headline-md text-[16px] text-on-error-container">ลบกลุ่มนี้</h4>
+              <p className="font-body-md text-sm text-on-surface-variant mt-1">
+                การลบกลุ่มจะไม่สามารถกู้คืนข้อมูลกลุ่มและสมาชิกในกลุ่มได้
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDeleteGroup(true)}
+              className="flex items-center gap-2 bg-error text-on-error font-label-md text-label-md py-2.5 px-5 rounded-lg shadow-sm hover:opacity-90 transition-opacity whitespace-nowrap"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+              ลบกลุ่ม
+            </button>
           </div>
-          <button
-            onClick={() => setShowDeleteGroup(true)}
-            className="flex items-center gap-2 bg-error text-on-error font-label-md text-label-md py-2.5 px-5 rounded-lg shadow-sm hover:opacity-90 transition-opacity whitespace-nowrap"
-          >
-            <span className="material-symbols-outlined text-[18px]">delete_forever</span>
-            ลบกลุ่ม
-          </button>
         </div>
-      </div>
+      )}
 
-      <AddMemberModal
-        groupId={group.id}
-        existingPersonIds={group.members.map((m) => m.personId)}
-        open={showAddMember}
-        onClose={() => setShowAddMember(false)}
-        onAdded={() => {
-          setShowAddMember(false);
-          showToast("เพิ่มสมาชิกสำเร็จ", "success");
-          load();
-        }}
-      />
+      {canManage && (
+        <>
+          <AddMemberModal
+            groupId={group.id}
+            existingPersonIds={group.members.map((m) => m.personId)}
+            open={showAddMember}
+            onClose={() => setShowAddMember(false)}
+            onAdded={() => {
+              setShowAddMember(false);
+              showToast("เพิ่มสมาชิกสำเร็จ", "success");
+              load();
+            }}
+          />
 
-      <ConfirmDialog
-        open={showDeleteGroup}
-        title="ลบกลุ่มนี้?"
-        description={`คุณต้องการลบกลุ่ม "${group.name}" ใช่หรือไม่ การกระทำนี้ไม่สามารถย้อนกลับได้`}
-        confirmLabel="ลบกลุ่ม"
-        icon="delete_forever"
-        destructive
-        loading={deleting}
-        onConfirm={deleteGroup}
-        onCancel={() => setShowDeleteGroup(false)}
-      />
+          <ConfirmDialog
+            open={showDeleteGroup}
+            title="ลบกลุ่มนี้?"
+            description={`คุณต้องการลบกลุ่ม "${group.name}" ใช่หรือไม่ การกระทำนี้ไม่สามารถย้อนกลับได้`}
+            confirmLabel="ลบกลุ่ม"
+            icon="delete_forever"
+            destructive
+            loading={deleting}
+            onConfirm={deleteGroup}
+            onCancel={() => setShowDeleteGroup(false)}
+          />
+        </>
+      )}
     </main>
   );
 }

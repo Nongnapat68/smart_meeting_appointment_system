@@ -37,6 +37,34 @@ function check(label: string, condition: boolean, detail?: string) {
   }
 }
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+/**
+ * Trusted-side existence check for one row, read with Prisma (which bypasses
+ * RLS on purpose — the assertions are about whether a rejected INSERT left
+ * anything behind, not about whether Prisma can see it). Kept as a switch so
+ * the test stays fully typed instead of interpolating a table name into raw
+ * SQL.
+ */
+async function countById(table: string, id: string): Promise<number> {
+  switch (table) {
+    case "ContactGroup":
+      return prisma.contactGroup.count({ where: { id } });
+    case "Project":
+      return prisma.project.count({ where: { id } });
+    case "Meeting":
+      return prisma.meeting.count({ where: { id } });
+    case "OnlineMeetingResource":
+      return prisma.onlineMeetingResource.count({ where: { id } });
+    case "Person":
+      return prisma.person.count({ where: { id } });
+    default:
+      throw new Error(`countById: unhandled table ${table}`);
+  }
+}
+
 async function signIn(email: string): Promise<SupabaseClient> {
   const client = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,8 +106,21 @@ async function setupFixtures() {
 }
 
 async function cleanupFixtures(f: Awaited<ReturnType<typeof setupFixtures>>) {
+  // Assertion 7 creates real rows through supabase-js; assertion 6's rejected
+  // inserts should leave nothing, but delete by the [test-rls] prefix anyway
+  // so a policy regression can never leak fixtures into the seeded data.
+  // Order matters: Meeting.projectId / Task.projectId are ON DELETE RESTRICT.
   await prisma.notification.deleteMany({ where: { id: { in: [f.notifSomchai.id, f.notifSiriporn.id] } } });
-  await prisma.meeting.deleteMany({ where: { id: f.meeting.id } });
+  await prisma.meeting.deleteMany({ where: { title: { startsWith: "[test-rls]" } } });
+  await prisma.contactGroupMember.deleteMany({ where: { group: { name: { startsWith: "[test-rls]" } } } });
+  await prisma.contactGroup.deleteMany({ where: { name: { startsWith: "[test-rls]" } } });
+  await prisma.projectMember.deleteMany({ where: { project: { name: { startsWith: "[test-rls]" } } } });
+  await prisma.task.deleteMany({ where: { project: { name: { startsWith: "[test-rls]" } } } });
+  await prisma.project.deleteMany({ where: { name: { startsWith: "[test-rls]" } } });
+  await prisma.onlineMeetingResource.deleteMany({ where: { name: { startsWith: "[test-rls]" } } });
+  await prisma.person.deleteMany({ where: { name: { startsWith: "[test-rls]" } } });
+  await prisma.person.deleteMany({ where: { email: { startsWith: "forged-" } } });
+  await prisma.person.deleteMany({ where: { email: { startsWith: "own-" } } });
 }
 
 async function main() {
@@ -178,6 +219,116 @@ async function main() {
       "5b. somchai (admin) reading PasswordResetOtp gets 0 rows or an error",
       !!otpAdminErr || (otpAsSomchai?.length ?? 0) === 0,
       `error=${otpAdminErr?.message ?? "none"} rows=${otpAsSomchai?.length}`
+    );
+
+    // 6. INSERT may not forge attribution — prisma/migrations/
+    // 20261003140000_insert_attribution_owner_only. An INSERT that violates
+    // WITH CHECK comes back as an error (42501, unlike the silent 0-row
+    // filter an UPDATE gets), and must leave nothing behind. Each case is
+    // run as siriporn, a plain MEMBER.
+    //
+    // Forged cases: every table names somchai in its attribution column.
+    const forged: { table: string; row: Record<string, unknown> }[] = [
+      {
+        table: "ContactGroup",
+        row: { id: crypto.randomUUID(), name: "[test-rls] forged group", createdById: f.somchai.id, updatedAt: nowIso() },
+      },
+      {
+        table: "Project",
+        row: { id: crypto.randomUUID(), name: "[test-rls] forged project", managerId: f.somchai.id, updatedAt: nowIso() },
+      },
+      {
+        table: "Meeting",
+        row: {
+          id: crypto.randomUUID(),
+          title: "[test-rls] forged meeting",
+          type: "SINGLE",
+          status: "PENDING",
+          startTime: new Date(Date.now() + 3600_000).toISOString(),
+          endTime: new Date(Date.now() + 7200_000).toISOString(),
+          organizerId: f.somchai.id,
+        },
+      },
+      {
+        table: "OnlineMeetingResource",
+        row: { id: crypto.randomUUID(), name: "[test-rls] forged room", url: "https://example.com/x", createdById: f.somchai.id, updatedAt: nowIso() },
+      },
+      {
+        table: "Person",
+        row: { id: crypto.randomUUID(), name: "[test-rls] forged contact", email: `forged-${Date.now()}@example.com`, type: "EXTERNAL", status: "ACTIVE", userId: f.somchai.id, updatedAt: nowIso() },
+      },
+    ];
+
+    for (const { table, row } of forged) {
+      const { data, error } = await asSiriporn.from(table).insert(row).select("id");
+      const rows = await countById(table, (row as { id: string }).id);
+      console.log(`   raw [${table} forged]:`, JSON.stringify({ data, error: error?.message ?? null, rowsInTable: rows }));
+      check(
+        `6. siriporn cannot INSERT ${table} with somebody else's attribution column`,
+        !!error && rows === 0,
+        error
+          ? `insert unexpectedly SUCCEEDED (${rows} rows in table)`
+          : `insert returned no error, ${rows} rows in table`
+      );
+    }
+
+    // 7. The same inserts with the caller's OWN attribution still work — the
+    // policies tightened above, they must not have closed the real create
+    // paths (groups/page.tsx, projects/page.tsx, MeetingForm.tsx,
+    // people/page.tsx all send authData.user.id).
+    const own: { table: string; row: Record<string, unknown> }[] = [
+      {
+        table: "ContactGroup",
+        row: { id: crypto.randomUUID(), name: "[test-rls] own group", createdById: f.siriporn.id, updatedAt: nowIso() },
+      },
+      {
+        table: "Project",
+        row: { id: crypto.randomUUID(), name: "[test-rls] own project", managerId: f.siriporn.id, updatedAt: nowIso() },
+      },
+      {
+        table: "OnlineMeetingResource",
+        row: { id: crypto.randomUUID(), name: "[test-rls] own room", url: "https://example.com/own", createdById: f.siriporn.id, updatedAt: nowIso() },
+      },
+      {
+        // External contact with no login: userId omitted, exactly what the
+        // people form sends.
+        table: "Person",
+        row: { id: crypto.randomUUID(), name: "[test-rls] own external contact", email: `own-${Date.now()}@example.com`, type: "EXTERNAL", status: "ACTIVE", updatedAt: nowIso() },
+      },
+    ];
+
+    for (const { table, row } of own) {
+      const { data, error } = await asSiriporn.from(table).insert(row).select("id");
+      console.log(`   raw [${table} own]:`, JSON.stringify({ data, error: error?.message ?? null }));
+      check(
+        `7. siriporn can still INSERT ${table} as herself`,
+        !error && (data?.length ?? 0) === 1,
+        error ? error.message : `no error but ${data?.length ?? 0} rows returned`
+      );
+    }
+
+    // 8. ...and the ownership rights she just earned follow her, while
+    // somchai (the forged "creator" from assertion 6) has none of them.
+    const ownGroupId = own.find((o) => o.table === "ContactGroup")!.row.id as string;
+    const { data: siriEdit, error: siriEditErr } = await asSiriporn
+      .from("ContactGroup")
+      .update({ name: "[test-rls] own group, renamed by its creator" })
+      .eq("id", ownGroupId)
+      .select("id");
+    check(
+      "8a. siriporn can edit the group she created herself",
+      !siriEditErr && siriEdit?.length === 1,
+      siriEditErr?.message ?? `got ${siriEdit?.length} rows`
+    );
+    const { data: somchaiEdit, error: somchaiEditErr } = await asSomchai
+      .from("ContactGroup")
+      .update({ name: "[test-rls] admin edits a group" })
+      .eq("id", ownGroupId)
+      .select("id");
+    check(
+      "8b. somchai (admin) can still edit any group",
+      !somchaiEditErr && somchaiEdit?.length === 1,
+      somchaiEditErr?.message ?? `got ${somchaiEdit?.length} rows`
     );
   } finally {
     console.log("\nCleaning up test fixtures...");

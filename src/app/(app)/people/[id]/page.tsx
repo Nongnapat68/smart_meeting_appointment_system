@@ -5,6 +5,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import { formatDateTime } from "@/lib/format";
 import { meetingStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { PersonActions } from "./PersonActions";
+import { getCurrentUser } from "@/lib/auth";
+import { canDeletePerson, canEditPerson } from "@/lib/permissions";
 
 export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,6 +18,11 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
     },
   });
   if (!person) notFound();
+
+  // N12: the edit/delete buttons used to render for every signed-in visitor,
+  // including people the RLS policies would refuse (a linked contact owned by
+  // somebody else cannot be edited, and deleting a contact is admin-only).
+  const user = await getCurrentUser();
 
   const meetingHistory = await prisma.meetingParticipant.findMany({
     where: { personId: id },
@@ -49,7 +56,7 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
                 <span className="material-symbols-outlined text-lg">event</span>
                 นัดประชุม
               </Link>
-              <PersonActions person={person} />
+              <PersonActions person={person} canEdit={canEditPerson(person, user)} canDelete={canDeletePerson(user)} />
             </div>
           </div>
 

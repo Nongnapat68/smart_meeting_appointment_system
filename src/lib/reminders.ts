@@ -59,6 +59,12 @@ export type ProcessDueResult = {
  * processes it again. Each row is moved with `updateMany({ where: { id,
  * status: "PENDING" } })`, which only succeeds while it is still PENDING at
  * the moment of the write.
+ *
+ * The same run also sweeps up the PENDING reminders process_due_reminders()
+ * deliberately does *not* return (20261003130100 — cancelled/finished meetings
+ * and meetings that already started): the SQL function only selects, so
+ * without this they would sit PENDING forever and keep showing up as pending
+ * on /reminders. They are reported as SKIPPED like the in-loop skips.
  */
 export async function processDueReminders(): Promise<ProcessDueResult[]> {
   const dueIds = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM process_due_reminders();`;
@@ -80,8 +86,6 @@ export async function processDueReminders(): Promise<ProcessDueResult[]> {
       results.push({
         id: reminder.id,
         meetingTitle: reminder.meeting.title,
-        // count === 0 means another concurrent call already moved this
-        // reminder out of PENDING between the findMany above and this write.
         status: updated.count > 0 ? status : "SKIPPED",
       });
     } catch (err) {
@@ -93,7 +97,35 @@ export async function processDueReminders(): Promise<ProcessDueResult[]> {
       results.push({ id: reminder.id, meetingTitle: reminder.meeting.title, status: "FAILED" });
     }
   }
+  results.push(...(await sweepUnsendableReminders()));
   return results;
+}
+
+/**
+ * Cancels the PENDING reminders whose meeting can no longer be reminded about
+ * (cancelled, completed, already started, or already ended) and returns them
+ * as SKIPPED. The meeting test is repeated here rather than trusting the caller's
+ * read, and the UPDATE only touches rows that are still PENDING — a reminder
+ * sent between the SELECT and the UPDATE keeps its SENT status.
+ *
+ * POSTPONED is not swept: a postponed meeting moved its start (and its pending
+ * reminders with it), so its reminders are still legitimately due.
+ */
+async function sweepUnsendableReminders(): Promise<ProcessDueResult[]> {
+  const rows = await prisma.$queryRaw<{ id: string; title: string }[]>`
+    SELECT r.id, m.title
+    FROM public."Reminder" r
+    JOIN public."Meeting" m ON m.id = r."meetingId"
+    WHERE r.status = 'PENDING'
+      AND (m.status IN ('CANCELLED', 'COMPLETED') OR m."startTime" <= now() OR m."endTime" <= now())
+    ORDER BY r."scheduledAt" ASC`;
+  if (rows.length === 0) return [];
+
+  await prisma.reminder.updateMany({
+    where: { id: { in: rows.map((r) => r.id) }, status: "PENDING" },
+    data: { status: "CANCELLED" },
+  });
+  return rows.map((r) => ({ id: r.id, meetingTitle: r.title, status: "SKIPPED" }));
 }
 
 /**

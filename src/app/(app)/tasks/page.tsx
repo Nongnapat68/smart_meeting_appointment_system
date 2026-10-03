@@ -6,7 +6,7 @@ import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EmptyState, ErrorBanner, FullPageSpinner, Spinner } from "@/components/ui/Feedback";
-import { formatDate, parseDbTimestamp } from "@/lib/format";
+import { formatDate, isPastDue } from "@/lib/format";
 import { TaskStatusSelect } from "@/components/tasks/TaskStatusSelect";
 import { TaskFormModal } from "@/components/tasks/TaskFormModal";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
@@ -116,8 +116,10 @@ export default function TasksPage() {
     }
   }
 
-  const now = new Date();
-  const overdueTasks = items.filter((t) => t.status !== "COMPLETED" && t.dueDate && parseDbTimestamp(t.dueDate) < now);
+  // N5: dueDate is a date stored as midnight UTC, so comparing it to `now()`
+  // made every task due today look overdue from 07:00 onward. isPastDue()
+  // compares Bangkok calendar dates instead.
+  const overdueTasks = items.filter((t) => t.status !== "COMPLETED" && isPastDue(t.dueDate));
   const otherTasks = items.filter((t) => !overdueTasks.includes(t));
   const total = statusCounts.NOT_STARTED + statusCounts.IN_PROGRESS + statusCounts.COMPLETED;
 

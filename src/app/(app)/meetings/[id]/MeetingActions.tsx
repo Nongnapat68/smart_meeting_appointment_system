@@ -11,7 +11,7 @@ import { DateTimeField } from "@/components/meetings/DateTimeField";
 import { toDatetimeLocalValue } from "@/lib/format";
 import type { MeetingWithStringDates } from "./types";
 
-export function MeetingActions({ meeting }: { meeting: MeetingWithStringDates }) {
+export function MeetingActions({ meeting, canManage }: { meeting: MeetingWithStringDates; canManage: boolean }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [showReschedule, setShowReschedule] = useState(false);
@@ -66,29 +66,39 @@ export function MeetingActions({ meeting }: { meeting: MeetingWithStringDates })
           <span className="material-symbols-outlined text-[18px]">download</span>
           <span className="hidden sm:inline">.ics</span>
         </a>
-        {!isCancelled && (
+{!isCancelled && (
           <>
-            <Link
-              href={`/meetings/${meeting.id}/edit`}
-              className="px-4 py-2 rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:bg-surface-container-low transition-colors font-body-md font-medium shadow-sm flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">edit</span>
-              <span className="hidden sm:inline">แก้ไข</span>
-            </Link>
-            <button
-              onClick={() => setShowReschedule(true)}
-              className="px-4 py-2 rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:bg-surface-container-low transition-colors font-body-md font-medium shadow-sm flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">schedule</span>
-              <span className="hidden sm:inline">เลื่อนเวลา</span>
-            </button>
-            <button
-              onClick={() => setShowCancel(true)}
-              className="px-4 py-2 rounded-lg bg-error-container text-on-error-container hover:bg-error hover:text-on-error transition-colors font-body-md font-medium shadow-sm flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">cancel</span>
-              <span className="hidden sm:inline">ยกเลิก</span>
-            </button>
+            {/* N12: edit / reschedule / cancel are all writes on the Meeting
+                row, so they follow "update_organizer_or_admin" — organizer or
+                admin only (canManage, see src/lib/permissions.ts). Read-only
+                actions (.ics download, "เข้าร่วม") stay available to everyone,
+                since select_all_authenticated lets any signed-in user open the
+                meeting in the first place. */}
+            {canManage && (
+              <>
+                <Link
+                  href={`/meetings/${meeting.id}/edit`}
+                  className="px-4 py-2 rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-body-md font-medium shadow-sm flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                  <span className="hidden sm:inline">แก้ไข</span>
+                </Link>
+                <button
+                  onClick={() => setShowReschedule(true)}
+                  className="px-4 py-2 rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-body-md font-medium shadow-sm flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">schedule</span>
+                  <span className="hidden sm:inline">เลื่อนเวลา</span>
+                </button>
+                <button
+                  onClick={() => setShowCancel(true)}
+                  className="px-4 py-2 rounded-lg bg-error-container text-on-error-container hover:bg-error hover:text-on-error transition-colors font-body-md font-medium shadow-sm flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">cancel</span>
+                  <span className="hidden sm:inline">ยกเลิก</span>
+                </button>
+              </>
+            )}
             {meeting.location && (
               <a
                 href={isLink ? meeting.location! : undefined}
@@ -107,7 +117,7 @@ export function MeetingActions({ meeting }: { meeting: MeetingWithStringDates })
       {/* Mounted only while open, so every open starts from the meeting's
           current times (after router.refresh()) instead of the times it had
           when this component first rendered. */}
-      {showReschedule && (
+      {canManage && showReschedule && (
         <RescheduleModal
           meeting={meeting}
           onClose={() => setShowReschedule(false)}
@@ -119,17 +129,19 @@ export function MeetingActions({ meeting }: { meeting: MeetingWithStringDates })
         />
       )}
 
-      <ConfirmDialog
-        open={showCancel}
-        title="ยกเลิกการประชุมนี้?"
-        description={`คุณต้องการยกเลิกการประชุม "${meeting.title}" ใช่หรือไม่ ผู้เข้าร่วมทั้งหมดจะเห็นสถานะการยกเลิก`}
-        confirmLabel="ยกเลิกการประชุม"
-        icon="cancel"
-        destructive
-        loading={cancelling}
-        onConfirm={handleCancel}
-        onCancel={() => setShowCancel(false)}
-      />
+      {canManage && (
+        <ConfirmDialog
+          open={showCancel}
+          title="ยกเลิกการประชุมนี้?"
+          description={`คุณต้องการยกเลิกการประชุม "${meeting.title}" ใช่หรือไม่ ผู้เข้าร่วมทั้งหมดจะเห็นสถานะการยกเลิก`}
+          confirmLabel="ยกเลิกการประชุม"
+          icon="cancel"
+          destructive
+          loading={cancelling}
+          onConfirm={handleCancel}
+          onCancel={() => setShowCancel(false)}
+        />
+      )}
     </>
   );
 }

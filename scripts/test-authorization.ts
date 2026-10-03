@@ -218,8 +218,17 @@ async function main() {
     });
     check("POST /api/meetings/:id/reschedule (another user's meeting) -> 403", meetingReschedule.status === 403, `got ${meetingReschedule.status}`);
 
+    // N11: DELETE /api/meetings/:id was removed from the route file (no UI
+    // ever called it — meetings are cancelled, never deleted), so the method
+    // is now gone from the endpoint entirely. The cross-user 403 it used to
+    // assert is already covered by the PUT probe above, which hits the same
+    // assertOwner() check on the same row.
     const meetingDelete = await asB(`/api/meetings/${f.meeting.id}`, { method: "DELETE" });
-    check("DELETE /api/meetings/:id (another user's meeting) -> 403", meetingDelete.status === 403, `got ${meetingDelete.status}`);
+    check(
+      "DELETE /api/meetings/:id no longer exists (404/405, not an authorized delete)",
+      meetingDelete.status === 404 || meetingDelete.status === 405,
+      `got ${meetingDelete.status}`
+    );
 
     const taskEdit = await asB(`/api/tasks/${f.task.id}`, {
       method: "PATCH",
@@ -253,9 +262,10 @@ async function main() {
 
     // Negative control: fully unauthenticated (no cookie at all) must get 401, not 403 —
     // proves the 403s above are specifically an *authorization* check, not just
-    // this endpoint always failing.
-    const noAuth = await fetch(`${BASE}/api/meetings/${f.meeting.id}`, { method: "DELETE" });
-    check("DELETE /api/meetings/:id with no session -> 401 (not 403)", noAuth.status === 401, `got ${noAuth.status}`);
+    // this endpoint always failing. Uses /api/tasks/:id because the meetings
+    // DELETE method was removed (see above); the task route still has one.
+    const noAuth = await fetch(`${BASE}/api/tasks/${f.task.id}`, { method: "DELETE" });
+    check("DELETE /api/tasks/:id with no session -> 401 (not 403)", noAuth.status === 401, `got ${noAuth.status}`);
 
     // Positive control: the *actual* owner (User A) can still edit their own
     // meeting — proves assertOwner isn't just denying everyone.

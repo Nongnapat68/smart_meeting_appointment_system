@@ -9,6 +9,8 @@ import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./
 import { CreateTaskButton } from "@/components/tasks/CreateTaskButton";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import { SAMPLE_MODE_MODEL } from "@/lib/ai-sample-mode";
+import { getCurrentUser } from "@/lib/auth";
+import { canEditMeeting } from "@/lib/permissions";
 import type { MeetingDetail } from "./types";
 
 export default async function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -44,6 +46,14 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
   if (!meeting) notFound();
 
   const badge = meetingStatusBadge(meeting.status);
+  // N12: everyone can read a meeting (select_all_authenticated), but only the
+  // organizer or an admin may change it (update_organizer_or_admin), so the
+  // edit / reschedule / cancel controls are only rendered for them. Before
+  // this, any signed-in user - including a fellow attendee - saw a full set of
+  // buttons that RLS silently turned into 0-row updates. See
+  // src/lib/permissions.ts.
+  const user = await getCurrentUser();
+  const canManage = canEditMeeting(meeting, user);
   // PostgREST embeds AISummary as an array here ([] or [row]) despite the
   // unique meetingId, so `meeting.aiSummary` was always truthy and `.content`
   // undefined: the card said "ดู / แก้ไข" with no summary, and a real summary
@@ -129,7 +139,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
 
-          <MeetingActions meeting={meeting} />
+          <MeetingActions meeting={meeting} canManage={canManage} />
         </div>
       </div>
 
