@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { aiErrorToApiError, assertAiConfigured, generatePendingIssuesAnalysis } from "@/lib/ai";
+import { aiErrorToApiError, generatePendingIssuesAnalysis, isAiConfigured } from "@/lib/ai";
+import { buildSamplePendingIssues } from "@/lib/ai-sample-mode";
 import { ApiError, assertOwner, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { assertMeetingAllowsAi, gatherMeetingAiContext, splitOverdueTasks } from "@/lib/meeting-ai-context";
 
@@ -28,13 +29,16 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
     "เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่วิเคราะห์ประเด็นค้างของการประชุมนี้ได้"
   );
   assertMeetingAllowsAi(meeting);
-  assertAiConfigured();
+  // No API key: sample mode (plain templates, no LLM) — see src/lib/ai-sample-mode.ts.
+  const sampleMode = !isAiConfigured();
 
   const ctx = await gatherMeetingAiContext(meeting);
   const { overdue, open } = splitOverdueTasks(ctx.relatedTasks);
 
   let analysis: string;
-  try {
+  if (sampleMode) {
+    analysis = buildSamplePendingIssues({ overdueTasks: overdue, openTasks: open });
+  } else try {
     analysis = await generatePendingIssuesAnalysis({
       projectName: meeting.project?.name ?? null,
       overdueTasks: overdue.map((t) => ({ title: t.title, status: t.status, priority: t.priority, dueDate: t.dueDate as Date })),
@@ -56,5 +60,6 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
     analysis,
     overdueTasks: overdue.map((t) => ({ id: t.id, title: t.title, dueDate: t.dueDate })),
     sources,
+    mode: sampleMode ? "sample" : "ai",
   });
 });
