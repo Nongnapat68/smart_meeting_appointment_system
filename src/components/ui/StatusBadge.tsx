@@ -65,6 +65,8 @@ export function reminderStatusBadge(status: string) {
       return { label: "รอส่ง", variant: "warning" as const };
     case "SENT":
       return { label: "ส่งแล้ว", variant: "success" as const };
+    case "SIMULATED":
+      return { label: "จำลองการส่ง (ไม่ได้ส่งจริง)", variant: "primary" as const };
     case "FAILED":
       return { label: "ส่งไม่สำเร็จ", variant: "error" as const };
     case "CANCELLED":

@@ -63,9 +63,13 @@ model PasswordResetOtp {
   otpHash   String
   expiresAt DateTime
   usedAt    DateTime?
+  // Wrong guesses against this code; locked out at OTP_MAX_FAILED_ATTEMPTS (src/lib/otp.ts).
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
 
-  @@index([userId])
+  // (userId, createdAt) serves both the per-user request-rate count and the
+  // "newest code for this user" lookup; it also covers plain userId lookups.
+  @@index([userId, createdAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -224,8 +228,10 @@ model Meeting {
   organizerPersonId String?
   organizerPerson   Person? @relation("MeetingOrganizerPerson", fields: [organizerPersonId], references: [id], onDelete: SetNull)
 
+  // Restrict: a project with meetings can't be deleted (only empty ones can —
+  // migration 20261003110100_project_delete_only_when_empty).
   projectId   String?
-  project     Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
   // Reusable online meeting link (FR-07/BR-09/BR-10) — nullable because a meeting
   // may instead use a physical `location`, or a one-off text link typed into it.
@@ -405,8 +411,9 @@ model Task {
   createdById  String?  @db.Uuid
   createdBy    User?    @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
+  // Restrict, same as Meeting.projectId — see that comment.
   projectId    String?
-  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: Restrict)
   meetingId    String?
   meeting      Meeting? @relation(fields: [meetingId], references: [id], onDelete: SetNull)
 
@@ -449,7 +456,10 @@ model TaskAttachment {
 
 enum ReminderStatus {
   PENDING
-  SENT
+  SENT // an email was actually delivered
+  // Due and processed, but only logged — no email transport configured
+  // (sendEmail() returned "simulated"). Never claims a real delivery.
+  SIMULATED
   FAILED
   CANCELLED
 }

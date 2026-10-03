@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/Toast";
 import { relativeTime } from "@/lib/format";
 
 type NotificationType =
@@ -34,12 +36,25 @@ const TYPE_META: Record<NotificationType, { icon: string; href: (id: string) => 
 
 export function NotificationBell({ initialUnreadCount = 0 }: { initialUnreadCount?: number }) {
   const router = useRouter();
+const pathname = usePathname();
+  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+// The badge always comes from the database: a count-only query over every
+  // unread row (select_owner_only RLS scopes it to this user), not from the
+  // 10 rows the dropdown shows — those undercount once there are more than
+  // 10 unread.
+  const refreshUnreadCount = useCallback(async () => {
+    const { count, error } = await createClient()
+      .from("Notification")
+      .select("*", { count: "exact", head: true })
+      .eq("isRead", false);
+    if (!error) setUnreadCount(count ?? 0);
+  }, []);
   // Fetch-on-mount pattern deemed safe by design (see eslint.config.mjs).
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,13 +63,10 @@ export function NotificationBell({ initialUnreadCount = 0 }: { initialUnreadCoun
       .select("*")
       .order("createdAt", { ascending: false })
       .limit(10);
-    if (!error) {
-      const rows = (data ?? []) as unknown as NotificationRow[];
-      setItems(rows);
-      setUnreadCount(rows.filter((n) => !n.isRead).length);
-    }
+if (!error) setItems((data ?? []) as unknown as NotificationRow[]);
+    await refreshUnreadCount();
     setLoading(false);
-  }, []);
+  }, [refreshUnreadCount]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,6 +75,14 @@ export function NotificationBell({ initialUnreadCount = 0 }: { initialUnreadCoun
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+// The (app) layout — and this bell with it — stays mounted across
+  // client-side navigation, so initialUnreadCount from the server render goes
+  // stale. Re-read the real count on every page change.
+  useEffect(() => {
+    // Fetch-on-navigation, same fetch-then-setState pattern as load() above.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshUnreadCount();
+  }, [pathname, refreshUnreadCount]);
   useEffect(() => {
     if (!open) return;
     const onMouseDown = (e: MouseEvent) => {
@@ -79,28 +99,42 @@ export function NotificationBell({ initialUnreadCount = 0 }: { initialUnreadCoun
     };
   }, [open]);
 
+// Save first, then navigate. This used to only decrement local state and
+  // fire `.update()` without awaiting it — a supabase-js query builder never
+  // sends its request until awaited, so the row stayed isRead=false and the
+  // badge came back on the next page load.
   async function openNotification(n: NotificationRow) {
     if (!n.isRead) {
-      setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
-      setUnreadCount((c) => Math.max(0, c - 1));
-      createClient().from("Notification").update({ isRead: true }).eq("id", n.id);
+      try {
+        const res = await api.post<{ unreadCount: number }>(`/api/notifications/${n.id}/read`);
+        setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+        setUnreadCount(res.unreadCount);
+      } catch (err) {
+        // Still open what was clicked; the badge keeps the real (unchanged) count.
+        showToast(err instanceof Error ? err.message : "บันทึกสถานะการอ่านไม่สำเร็จ", "error");
+      }
+    }
     }
     setOpen(false);
     if (n.relatedId) router.push(TYPE_META[n.type]?.href(n.relatedId));
   }
 
   async function markAllRead() {
-    if (items.every((n) => n.isRead)) return;
-    setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setUnreadCount(0);
+if (unreadCount === 0) return;
     try {
       const { data: authData } = await createClient().auth.getUser();
-      if (authData.user) {
-        await createClient().from("Notification").update({ isRead: true }).eq("userId", authData.user.id).eq("isRead", false);
-      }
-    } catch {
-      // best-effort — the dot just stays until next fetch
+      if (!authData.user) throw new Error("กรุณาเข้าสู่ระบบก่อนใช้งาน");
+      const { error } = await createClient()
+        .from("Notification")
+        .update({ isRead: true })
+        .eq("userId", authData.user.id)
+        .eq("isRead", false);
+      if (error) throw new Error(error.message);
+      setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "บันทึกสถานะการอ่านไม่สำเร็จ", "error");
     }
+    await refreshUnreadCount();
   }
 
   return (

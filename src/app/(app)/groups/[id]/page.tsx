@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { orContainsAny } from "@/lib/search";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
@@ -302,12 +303,12 @@ function AddMemberModal({
         // Same 3-field OR search GET /api/people used to do — see
         // people/page.tsx's load() / MeetingForm.tsx's personQuery effect
         // for the same pattern.
-        const pattern = `%${q}%`;
         const { data: items, error } = await createClient()
           .from("Person")
           .select("*")
-          .or(`name.ilike."${pattern}",email.ilike."${pattern}",department.ilike."${pattern}"`)
-          .limit(20);
+          .or(orContainsAny(["name", "email", "department"], q))
+          .limit(20)
+          .retry(false);
         if (error) throw error;
         setResults((items ?? []).filter((p: Person) => !existingPersonIds.includes(p.id)));
       } catch {

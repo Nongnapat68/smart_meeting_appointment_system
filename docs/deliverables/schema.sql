@@ -430,7 +430,8 @@ ALTER TABLE "ProjectMember" ADD CONSTRAINT "ProjectMember_projectId_fkey" FOREIG
 ALTER TABLE "OnlineMeetingResource" ADD CONSTRAINT "OnlineMeetingResource_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"(id) ON DELETE SET NULL;
 ALTER TABLE "Meeting" ADD CONSTRAINT "Meeting_organizerId_fkey" FOREIGN KEY ("organizerId") REFERENCES "User"(id) ON DELETE SET NULL;
 ALTER TABLE "Meeting" ADD CONSTRAINT "Meeting_organizerPersonId_fkey" FOREIGN KEY ("organizerPersonId") REFERENCES "Person"(id) ON UPDATE CASCADE ON DELETE SET NULL;
-ALTER TABLE "Meeting" ADD CONSTRAINT "Meeting_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+-- RESTRICT (was SET NULL): only an empty project can be deleted — migration 20261003110100_project_delete_only_when_empty.
+ALTER TABLE "Meeting" ADD CONSTRAINT "Meeting_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
 ALTER TABLE "Meeting" ADD CONSTRAINT "Meeting_onlineMeetingResourceId_fkey" FOREIGN KEY ("onlineMeetingResourceId") REFERENCES "OnlineMeetingResource"(id) ON UPDATE CASCADE ON DELETE SET NULL;
 ALTER TABLE "MeetingParticipant" ADD CONSTRAINT "MeetingParticipant_meetingId_fkey" FOREIGN KEY ("meetingId") REFERENCES "Meeting"(id) ON UPDATE CASCADE ON DELETE CASCADE;
 ALTER TABLE "MeetingParticipant" ADD CONSTRAINT "MeetingParticipant_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
@@ -446,7 +447,7 @@ ALTER TABLE "RelatedResource" ADD CONSTRAINT "RelatedResource_addedById_fkey" FO
 ALTER TABLE "Task" ADD CONSTRAINT "Task_assigneeId_fkey" FOREIGN KEY ("assigneeId") REFERENCES "User"(id) ON DELETE SET NULL;
 ALTER TABLE "Task" ADD CONSTRAINT "Task_assigneePersonId_fkey" FOREIGN KEY ("assigneePersonId") REFERENCES "Person"(id) ON UPDATE CASCADE ON DELETE SET NULL;
 ALTER TABLE "Task" ADD CONSTRAINT "Task_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"(id) ON DELETE SET NULL;
-ALTER TABLE "Task" ADD CONSTRAINT "Task_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"(id) ON UPDATE CASCADE ON DELETE SET NULL;
+ALTER TABLE "Task" ADD CONSTRAINT "Task_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"(id) ON UPDATE CASCADE ON DELETE RESTRICT;
 ALTER TABLE "Task" ADD CONSTRAINT "Task_meetingId_fkey" FOREIGN KEY ("meetingId") REFERENCES "Meeting"(id) ON UPDATE CASCADE ON DELETE SET NULL;
 ALTER TABLE "TaskComment" ADD CONSTRAINT "TaskComment_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"(id) ON UPDATE CASCADE ON DELETE CASCADE;
 ALTER TABLE "TaskComment" ADD CONSTRAINT "TaskComment_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"(id) ON DELETE SET NULL;
@@ -897,7 +898,9 @@ ALTER TABLE public."Task" ENABLE ROW LEVEL SECURITY;
 
 -- TaskComment — select: everyone logged in ·
 -- insert: the task's assignee, creator, or admin ·
--- update/delete: no route exists yet — closed to admin only
+-- update: admin only (no edit feature) ·
+-- delete: the comment's own author while still the task's assignee/creator, or admin
+--   (migration 20261003110000_task_comment_delete_own)
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."TaskComment" TO authenticated;
 
 CREATE POLICY "select_all_authenticated" ON public."TaskComment"
@@ -919,9 +922,18 @@ CREATE POLICY "update_admin_only" ON public."TaskComment"
   USING ( (select public.is_admin()) )
   WITH CHECK ( (select public.is_admin()) );
 
-CREATE POLICY "delete_admin_only" ON public."TaskComment"
+CREATE POLICY "delete_own_if_task_editor_or_admin" ON public."TaskComment"
   FOR DELETE TO authenticated
-  USING ( (select public.is_admin()) );
+  USING (
+    (select public.is_admin())
+    OR (
+      "authorId" = (select auth.uid())
+      AND EXISTS (
+        SELECT 1 FROM public."Task" t
+        WHERE t.id = "taskId" AND (t."assigneeId" = (select auth.uid()) OR t."createdById" = (select auth.uid()))
+      )
+    )
+  );
 
 ALTER TABLE public."TaskComment" ENABLE ROW LEVEL SECURITY;
 

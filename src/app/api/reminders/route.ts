@@ -29,7 +29,8 @@ export const GET = withApiErrors(async (request: Request) => {
     prisma.reminder.groupBy({ by: ["status"], _count: true }),
   ]);
 
-  const counts = { PENDING: 0, SENT: 0, FAILED: 0, CANCELLED: 0 } as Record<ReminderStatus, number>;
+  // Built from the enum itself so a new status can't be left out of the counts.
+  const counts = Object.fromEntries(Object.values(ReminderStatus).map((s) => [s, 0])) as Record<ReminderStatus, number>;
   statusCounts.forEach((c) => {
     counts[c.status] = c._count;
   });
