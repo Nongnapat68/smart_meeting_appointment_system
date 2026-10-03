@@ -35,6 +35,22 @@ export function canDeleteTask(task: { createdById: string | null }, user: { id: 
   return user.role === "ADMIN" || task.createdById === user.id;
 }
 
+export const COMMENT_DELETE_RULE = "ลบได้เฉพาะความคิดเห็นของตัวเอง (และต้องยังเป็นผู้รับผิดชอบหรือผู้สร้างงานนี้) หรือผู้ดูแลระบบ";
+
+/**
+ * Whether to offer "delete" on a comment: only on the user's own comments,
+ * and only while they may still comment on the task — mirrors the
+ * delete_own_if_task_editor_or_admin RLS policy on TaskComment.
+ */
+export function canDeleteComment(
+  comment: { authorId: string | null },
+  task: { assigneeId: string | null; createdById: string | null },
+  user: { id: string; role: string } | null
+): boolean {
+  if (!user || comment.authorId !== user.id) return false;
+  return canEditTask(task, user);
+}
+
 /**
  * Sets a task's status straight through RLS (update_assignee_or_creator_or_admin).
  * completedAt is set on entering COMPLETED and cleared otherwise — the

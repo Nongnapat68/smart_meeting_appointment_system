@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { projectStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { TaskQuickToggle } from "./TaskQuickToggle";
+import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { CreateTaskButton } from "@/components/tasks/CreateTaskButton";
 import { getCurrentUser } from "@/lib/auth";
 import { canEditTask } from "@/lib/tasks";
@@ -46,6 +47,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <div>
             <div className="flex items-center justify-between mb-4">
               <StatusBadge {...badge} />
+              {/* same rule as the delete_manager_or_admin RLS policy */}
+              {user && (user.role === "ADMIN" || project.managerId === user.id) && (
+                <ProjectDeleteButton
+                  projectId={project.id}
+                  projectName={project.name}
+                  meetingCount={project.meetings.length}
+                  taskCount={project.tasks.length}
+                />
+              )}
             </div>
             <h1 className="font-headline-lg text-headline-lg font-bold text-on-background mb-2">{project.name}</h1>
             <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl leading-relaxed mb-6">

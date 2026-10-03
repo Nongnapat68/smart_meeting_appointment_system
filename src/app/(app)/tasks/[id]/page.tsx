@@ -12,7 +12,7 @@ import { ConfirmDialog } from "@/components/ui/Modal";
 import { formatDate, relativeTime } from "@/lib/format";
 import { ATTACHMENT_ACCEPT } from "@/lib/upload-validation";
 import { dbWriteErrorMessage } from "@/lib/db-errors";
-import { canDeleteTask, canEditTask, TASK_DELETE_RULE, TASK_EDIT_RULE } from "@/lib/tasks";
+import { canDeleteComment, canDeleteTask, canEditTask, COMMENT_DELETE_RULE, TASK_DELETE_RULE, TASK_EDIT_RULE } from "@/lib/tasks";
 import { useCurrentUser } from "@/lib/use-current-user";
 import { TaskStatusSelect } from "@/components/tasks/TaskStatusSelect";
 import { TaskFormModal } from "@/components/tasks/TaskFormModal";
@@ -43,6 +43,8 @@ export default function TaskDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [posting, setPosting] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState<TaskDetail["comments"][number] | null>(null);
+  const [deletingComment, setDeletingComment] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,6 +154,29 @@ export default function TaskDetailPage() {
     }
   }
 
+  // Own comments only (delete_own_if_task_editor_or_admin RLS). A blocked
+  // DELETE matches 0 rows silently, hence .select() + the length check.
+  async function deleteComment() {
+    if (!commentToDelete) return;
+    setDeletingComment(true);
+    try {
+      const { data, error: dbError } = await createClient()
+        .from("TaskComment")
+        .delete()
+        .eq("id", commentToDelete.id)
+        .select("id");
+      if (dbError) throw new Error(dbWriteErrorMessage(dbError, "ลบความคิดเห็น", COMMENT_DELETE_RULE));
+      if (!data || data.length === 0) throw new Error(`คุณไม่มีสิทธิ์ลบความคิดเห็นนี้ — ${COMMENT_DELETE_RULE}`);
+      showToast("ลบความคิดเห็นแล้ว", "success");
+      load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "ลบความคิดเห็นไม่สำเร็จ", "error");
+    } finally {
+      setDeletingComment(false);
+      setCommentToDelete(null);
+    }
+  }
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !task) return;
@@ -235,6 +260,17 @@ export default function TaskDetailPage() {
         onConfirm={deleteTask}
         onCancel={() => setConfirmDelete(false)}
       />
+      <ConfirmDialog
+        open={commentToDelete !== null}
+        title="ลบความคิดเห็นนี้?"
+        description="ความคิดเห็นจะถูกลบถาวร หากต้องการแก้ข้อความ ให้พิมพ์ความคิดเห็นใหม่หลังลบ"
+        confirmLabel="ลบความคิดเห็น"
+        destructive
+        icon="delete"
+        loading={deletingComment}
+        onConfirm={deleteComment}
+        onCancel={() => setCommentToDelete(null)}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -257,7 +293,20 @@ export default function TaskDetailPage() {
                   <div className="flex-1 bg-surface-container-low rounded-xl rounded-tl-none p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-label-md text-label-md font-semibold text-on-surface">{c.author?.name ?? "ผู้ใช้"}</span>
-                      <span className="text-xs text-outline">{relativeTime(c.createdAt)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-outline">{relativeTime(c.createdAt)}</span>
+                        {canDeleteComment(c, task, currentUser) && (
+                          <button
+                            type="button"
+                            onClick={() => setCommentToDelete(c)}
+                            title="ลบความคิดเห็นนี้"
+                            aria-label="ลบความคิดเห็นนี้"
+                            className="text-outline hover:text-error hover:bg-error-container/30 p-1 rounded transition-colors flex items-center"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="font-body-md text-body-md text-on-surface-variant">{c.content}</p>
                   </div>
