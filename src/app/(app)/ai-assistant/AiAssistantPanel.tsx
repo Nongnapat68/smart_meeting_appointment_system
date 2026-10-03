@@ -43,7 +43,6 @@ export function AiAssistantPanel({
   );
   const [summary, setSummary] = useState<AISummary | null>(null);
   const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,22 +67,15 @@ export function AiAssistantPanel({
   const [agendaError, setAgendaError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedId) return;
-    // Fetch-on-mount pattern deemed safe by design (see eslint.config.mjs).
+    // Every load / meeting switch starts all three cards in their "not yet
+    // generated" state — results only appear after the user presses a button.
+    // The saved summary isn't fetched here (POST still persists it, and the
+    // meeting detail page still shows it).
+    // Resetting state on meeting switch — deemed safe by design (see eslint.config.mjs).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
+    setSummary(null);
+    setContent("");
     setError(null);
-    api
-      .get<{ summary: AISummary | null }>(`/api/meetings/${selectedId}/ai-summary`)
-      .then((res) => {
-        setSummary(res.summary);
-        setContent(res.summary?.content ?? "");
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ"))
-      .finally(() => setLoading(false));
-
-    // FR-16/17 results aren't persisted per meeting, so switching meetings
-    // clears them instead of showing stale results from a different one.
     setPendingIssues(null);
     setPendingIssuesSources([]);
     setPendingIssuesError(null);
@@ -256,10 +248,6 @@ export function AiAssistantPanel({
                     <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
                     สร้างสรุปด้วย AI
                   </button>
-                </div>
-              ) : loading ? (
-                <div className="flex justify-center py-12">
-                  <Spinner className="w-8 h-8" />
                 </div>
               ) : error ? (
                 <p className="text-error font-body-md text-body-md">{error}</p>
