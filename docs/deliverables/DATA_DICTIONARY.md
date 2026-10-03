@@ -226,7 +226,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `updatedAt` | TIMESTAMP(3) | ❌ | auto | | |
 | `organizerId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้จัดประชุม (บัญชีที่ login) |
 | `organizerPersonId` | TEXT | ✅ | `null` | **FK** → `Person.id`, `onDelete: SetNull` | ผู้จัดประชุมในฐานะ contact record |
-| `projectId` | TEXT | ✅ | `null` | **FK** → `Project.id`, `onDelete: SetNull` | `null` ได้ตาม BR-06 (meeting ไม่จำเป็นต้องอยู่ project) |
+| `projectId` | TEXT | ✅ | `null` | **FK** → `Project.id`, `onDelete: Restrict` | `null` ได้ตาม BR-06 (meeting ไม่จำเป็นต้องอยู่ project) — Restrict: ลบ project ได้เฉพาะเมื่อไม่มี meeting/task ผูกอยู่ (กันประวัติหาย BR-17) |
 | `onlineMeetingResourceId` | TEXT | ✅ | `null` | **FK** → `OnlineMeetingResource.id`, `onDelete: SetNull`, indexed | ลิงก์ประชุมออนไลน์แบบใช้ซ้ำได้ (FR-07) |
 
 **FK ขาเข้า**: `MeetingParticipant.meetingId`, `Reminder.meetingId`, `MeetingNote.meetingId`, `Decision.meetingId`, `RelatedResource.meetingId`, `Task.meetingId`, `AISummary.meetingId`, ตาราง join `_MeetingGroups`
@@ -317,7 +317,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `assigneeId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed | ผู้รับผิดชอบ (บัญชี login) |
 | `assigneePersonId` | TEXT | ✅ | `null` | **FK** → `Person.id`, `onDelete: SetNull` | ผู้รับผิดชอบในฐานะ contact (รองรับ external assignee) |
 | `createdById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้สร้างงาน |
-| `projectId` | TEXT | ✅ | `null` | **FK** → `Project.id`, `onDelete: SetNull` | |
+| `projectId` | TEXT | ✅ | `null` | **FK** → `Project.id`, `onDelete: Restrict` | ลบ project ที่ยังมี task ผูกอยู่ไม่ได้ |
 | `meetingId` | TEXT | ✅ | `null` | **FK** → `Meeting.id`, `onDelete: SetNull` | การประชุมต้นทาง (FR-14: "การประชุมต้นทาง") |
 
 **FK ขาเข้า**: `TaskComment.taskId`, `TaskAttachment.taskId`

@@ -422,8 +422,11 @@ export function MeetingForm({
       const participantPersonIds = selectedPeople.map((p) => p.id);
       const groupIds = selectedGroups.map((g) => g.id);
 
-      let resolvedProjectId = projectId;
-      if (projectId === NEW_PROJECT_OPTION) {
+      // The project picker only exists for type PROJECT; switching the type
+      // to SINGLE hides it but used to keep sending the old projectId, so a
+      // "one-shot" meeting stayed linked to the project.
+      let resolvedProjectId = type === "PROJECT" ? projectId : "";
+      if (resolvedProjectId === NEW_PROJECT_OPTION) {
         const newName = newProjectName.trim();
         if (!newName) throw new Error("กรุณาระบุชื่อโปรเจกต์ใหม่");
         // Same direct-insert pattern as projects/page.tsx: Project.id and
