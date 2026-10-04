@@ -6,6 +6,7 @@ import { formatDateTime, formatTime } from "@/lib/format";
 import { meetingStatusBadge, participantSourceBadge, StatusBadge, taskStatusBadge } from "@/components/ui/StatusBadge";
 import { MeetingActions } from "./MeetingActions";
 import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./MeetingContext";
+import { MeetingHistoryCard } from "./MeetingHistoryCard";
 import { CreateTaskButton } from "@/components/tasks/CreateTaskButton";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import { SAMPLE_MODE_MODEL } from "@/lib/ai-sample-mode";
@@ -220,6 +221,14 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
           <MeetingNotesCard meetingId={meeting.id} initialNotes={meeting.notes} />
           <MeetingDecisionsCard meetingId={meeting.id} initialDecisions={meeting.decisions} />
           <MeetingResourcesCard meetingId={meeting.id} initialResources={meeting.resources} />
+
+          {/* FR-11: notes from previous, related meetings. Renders nothing when
+              this meeting has no project - see MeetingHistoryCard for why. */}
+          <MeetingHistoryCard
+            meetingId={meeting.id}
+            projectId={meeting.project?.id ?? null}
+            currentStartTime={meeting.startTime}
+          />
         </div>
 
         <div className="space-y-6">

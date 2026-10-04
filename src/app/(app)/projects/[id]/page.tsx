@@ -24,6 +24,20 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (!project) notFound();
   const user = await getCurrentUser();
 
+  // FR-13 "Decision ควรสามารถย้อนกลับไปตรวจสอบได้ว่าเกิดขึ้นจากการประชุมใด
+  // และเกี่ยวข้องกับโครงการใด". Decision deliberately carries no projectId -
+  // the model comment says a decision must never point at a different project
+  // than its own meeting does - so the trace runs through Meeting.projectId.
+  // That also means it cannot be a nested `include` on the query above: there is
+  // no Decision field on Project for Prisma to follow. Filtering on the related
+  // meeting instead keeps the single source of truth, and a decision can never
+  // disagree with its meeting about which project it belongs to.
+  const decisions = await prisma.decision.findMany({
+    where: { meeting: { projectId: id } },
+    orderBy: { decidedAt: "desc" },
+    include: { meeting: { select: { id: true, title: true } }, decidedBy: { select: { name: true } } },
+  });
+
   const taskTotal = project.tasks.length;
   const taskCompleted = project.tasks.filter((t) => t.status === "COMPLETED").length;
   // N5: same fix as tasks/page.tsx - dueDate is a date held as midnight UTC, so
@@ -162,6 +176,42 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <div className="space-y-3 max-h-[480px] overflow-y-auto">
                 {project.tasks.map((t) => (
                   <TaskQuickToggle key={`${t.id}-${t.status}`} task={t} canEdit={canEditTask(t, user)} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* FR-13: the decisions taken in this project's meetings, each linking
+              back to the meeting it came from. Read-only here on purpose - a
+              decision is edited on its own meeting page (meetings/[id]), which
+              is where the note/resource/decision cards live. */}
+          <div className="bg-surface-container-lowest rounded-xl p-card-padding shadow-[0_4px_15px_rgba(0,0,0,0.05)] border border-outline-variant/30">
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="font-headline-md text-headline-md font-semibold text-on-background flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">gavel</span>
+                มติที่ประชุมของโปรเจกต์ ({decisions.length})
+              </h3>
+            </div>
+            {decisions.length === 0 ? (
+              <p className="text-on-surface-variant font-body-md text-body-md">ยังไม่มีมติที่ประชุมในโปรเจกต์นี้</p>
+            ) : (
+              <div className="space-y-3 max-h-[480px] overflow-y-auto">
+                {decisions.map((d) => (
+                  <div key={d.id} className="p-3 rounded-lg bg-surface-container-low border-l-4 border-primary">
+                    <p className="font-body-md text-body-md text-on-surface">{d.content}</p>
+                    <div className="flex items-start justify-between gap-2 mt-1">
+                      <Link
+                        href={`/meetings/${d.meeting.id}`}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline min-w-0"
+                      >
+                        <span className="material-symbols-outlined text-[14px] shrink-0">event_note</span>
+                        <span className="truncate">{d.meeting.title}</span>
+                      </Link>
+                      <span className="text-xs text-on-surface-variant whitespace-nowrap shrink-0">
+                        {d.decidedBy?.name ?? "ไม่ทราบผู้ตัดสินใจ"} • {formatDate(d.decidedAt)}
+                      </span>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

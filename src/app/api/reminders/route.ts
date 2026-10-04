@@ -75,6 +75,25 @@ const meeting = await prisma.meeting.findUnique({ where: { id: body.meetingId } 
     );
   }
 
+  // FR-10 "ระบบต้องไม่สร้างการแจ้งเตือนซ้ำ". Reminder stores only scheduledAt,
+  // not the offset, so a duplicate offset is exactly a duplicate scheduledAt
+  // for this meeting. Checked here (not just in MeetingForm) because the form's
+  // preset filtering is a client-side nicety: this route is the boundary every
+  // caller goes through. Scheduled reminders are excluded from the check so
+  // re-adding an offset whose reminder already fired is still allowed - only a
+  // reminder that could actually fire again is a duplicate.
+  const existing = await prisma.reminder.findFirst({
+    where: {
+      meetingId: body.meetingId,
+      scheduledAt,
+      status: { in: ["PENDING", "SENT", "FAILED"] },
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new ApiError(400, "การประชุมนี้มีการแจ้งเตือนที่เวลาเดียวกันอยู่แล้ว กรุณาเลือกระยะเวลาที่ต่างกัน");
+  }
+
   const reminder = await prisma.reminder.create({
     data: {
       meetingId: body.meetingId,

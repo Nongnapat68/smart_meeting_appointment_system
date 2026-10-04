@@ -22,6 +22,12 @@ import type { NoteWithAuthor, DecisionWithUser, ResourceWithUser } from "./types
 // the toast when a save is rejected, instead of the raw English RLS error.
 const MEETING_CONTRIBUTOR_RULE = "เฉพาะผู้จัดประชุม ผู้เข้าร่วมประชุมนี้ หรือผู้ดูแลระบบเท่านั้น";
 
+// FR-11/12/13 AC "แก้ไข/ลบ": the UPDATE and DELETE policies
+// (update_/delete_organizer_or_participant_or_admin) use the identical rule to
+// the INSERT one above, so they share its wording.
+const MEETING_CONTRIBUTOR_RULE_ACTION =
+  "เฉพาะผู้จัดประชุม ผู้เข้าร่วมประชุมนี้ หรือผู้ดูแลระบบเท่านั้นที่แก้ไขหรือลบรายการนี้ได้";
+
 const RESOURCE_TYPE_LABEL: Record<ResourceType, string> = {
   LINK: "ลิงก์",
   DOCUMENT: "เอกสาร",
@@ -45,6 +51,61 @@ export function MeetingNotesCard({
   const [notes, setNotes] = useState(initialNotes);
   const [content, setContent] = useState("");
   const [posting, setPosting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId || !draft.trim()) return;
+    setSaving(true);
+    try {
+      // update_organizer_or_participant_or_admin RLS policy — same rule as the
+      // insert policy below. A blocked UPDATE matches 0 rows *silently* (no
+      // thrown error, unlike a blocked INSERT's WITH CHECK violation), so
+      // .select() + a null check is what surfaces it here. updatedAt is set
+      // explicitly for the same client-side-only-default reason as on insert.
+      const { data, error: dbError } = await createClient()
+        .from("MeetingNote")
+        .update({ content: draft.trim(), updatedAt: new Date().toISOString() })
+        .eq("id", editingId)
+        .select("*, author:User(name)")
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error(MEETING_CONTRIBUTOR_RULE_ACTION);
+
+      setNotes((prev) => prev.map((n) => (n.id === editingId ? (data as NoteWithAuthor) : n)));
+      setEditingId(null);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "แก้ไขบันทึกไม่สำเร็จ", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setDeletingId(id);
+    try {
+      // delete_organizer_or_participant_or_admin — same silent 0-row block and
+      // the same .select() + null-check remedy as saveEdit above.
+      const { data, error: dbError } = await createClient()
+        .from("MeetingNote")
+        .delete()
+        .eq("id", id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error(MEETING_CONTRIBUTOR_RULE_ACTION);
+
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+      showToast("ลบบันทึกการประชุมแล้ว", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "ลบบันทึกไม่สำเร็จ", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,10 +158,63 @@ export function MeetingNotesCard({
         {notes.length === 0 && <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีบันทึกการประชุม</p>}
         {notes.map((n) => (
           <div key={n.id} className="p-3 rounded-lg bg-surface-container-low">
-            <p className="font-body-md text-body-md text-on-surface whitespace-pre-line">{n.content}</p>
-            <p className="text-xs text-on-surface-variant mt-1">
-              {n.author?.name ?? "ไม่ทราบผู้บันทึก"} • {relativeTime(n.createdAt)}
-            </p>
+            {editingId === n.id ? (
+              <form onSubmit={saveEdit} className="flex flex-col gap-2">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={3}
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface text-sm resize-none"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    disabled={saving}
+                    className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant text-xs font-label-md disabled:opacity-60"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving || !draft.trim()}
+                    className="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-label-md disabled:opacity-60"
+                  >
+                    {saving ? "กำลังบันทึก..." : "บันทึก"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p className="font-body-md text-body-md text-on-surface whitespace-pre-line">{n.content}</p>
+                <div className="flex items-start justify-between gap-2 mt-1">
+                  <p className="text-xs text-on-surface-variant">
+                    {n.author?.name ?? "ไม่ทราบผู้บันทึก"} • {relativeTime(n.createdAt)}
+                  </p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => {
+                        setEditingId(n.id);
+                        setDraft(n.content);
+                      }}
+                      title="แก้ไขบันทึก"
+                      className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                    </button>
+                    <button
+                      onClick={() => remove(n.id)}
+                      disabled={deletingId === n.id}
+                      title="ลบบันทึก"
+                      className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
@@ -135,6 +249,59 @@ export function MeetingDecisionsCard({
   const [decisions, setDecisions] = useState(initialDecisions);
   const [content, setContent] = useState("");
   const [posting, setPosting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId || !draft.trim()) return;
+    setSaving(true);
+    try {
+      // Same update_organizer_or_participant_or_admin policy and the same
+      // silent-0-row remedy as MeetingNotesCard.saveEdit. Decision has no
+      // updatedAt column — decidedAt is the decision's own timestamp and is not
+      // meant to move when the wording is corrected — so nothing else is sent.
+      const { data, error: dbError } = await createClient()
+        .from("Decision")
+        .update({ content: draft.trim() })
+        .eq("id", editingId)
+        .select("*, decidedBy:User(name)")
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error(MEETING_CONTRIBUTOR_RULE_ACTION);
+
+      setDecisions((prev) => prev.map((d) => (d.id === editingId ? (data as DecisionWithUser) : d)));
+      setEditingId(null);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "แก้ไขมติไม่สำเร็จ", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setDeletingId(id);
+    try {
+      // delete_organizer_or_participant_or_admin — same remedy as above.
+      const { data, error: dbError } = await createClient()
+        .from("Decision")
+        .delete()
+        .eq("id", id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error(MEETING_CONTRIBUTOR_RULE_ACTION);
+
+      setDecisions((prev) => prev.filter((d) => d.id !== id));
+      showToast("ลบมติที่ประชุมแล้ว", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "ลบมติไม่สำเร็จ", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -182,12 +349,65 @@ export function MeetingDecisionsCard({
       </h3>
       <div className="space-y-3 mb-4 max-h-80 overflow-y-auto">
         {decisions.length === 0 && <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีมติที่บันทึกไว้</p>}
-        {decisions.map((d) => (
-          <div key={d.id} className="p-3 rounded-lg bg-surface-container-low">
-            <p className="font-body-md text-body-md text-on-surface whitespace-pre-line">{d.content}</p>
-            <p className="text-xs text-on-surface-variant mt-1">
-              {d.decidedBy?.name ?? "ไม่ทราบผู้บันทึก"} • {relativeTime(d.decidedAt)}
-            </p>
+{decisions.map((d) => (
+          <div key={d.id} className="p-3 rounded-lg bg-surface-container-low border-l-4 border-primary">
+            {editingId === d.id ? (
+              <form onSubmit={saveEdit} className="flex flex-col gap-2">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={3}
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface text-sm resize-none"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    disabled={saving}
+                    className="px-3 py-1.5 rounded-lg border border-outline-variant text-on-surface-variant text-xs font-label-md disabled:opacity-60"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving || !draft.trim()}
+                    className="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-label-md disabled:opacity-60"
+                  >
+                    {saving ? "กำลังบันทึก..." : "บันทึก"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p className="font-body-md text-body-md text-on-surface whitespace-pre-line">{d.content}</p>
+                <div className="flex items-start justify-between gap-2 mt-1">
+                  <p className="text-xs text-on-surface-variant">
+                    ตัดสินใจโดย {d.decidedBy?.name ?? "ไม่ทราบ"} • {relativeTime(d.decidedAt)}
+                  </p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => {
+                        setEditingId(d.id);
+                        setDraft(d.content);
+                      }}
+                      title="แก้ไขมติที่ประชุม"
+                      className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                    </button>
+                    <button
+                      onClick={() => remove(d.id)}
+                      disabled={deletingId === d.id}
+                      title="ลบมติที่ประชุม"
+                      className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
@@ -224,6 +444,66 @@ export function MeetingResourcesCard({
   const [url, setUrl] = useState("");
   const [type, setType] = useState<ResourceType>("LINK");
   const [posting, setPosting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ title: "", url: "", type: "LINK" as ResourceType });
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingId) return;
+    if (!draft.title.trim() || !draft.url.trim()) {
+      showToast("กรุณากรอกชื่อและ URL", "error");
+      return;
+    }
+    if (!isHttpUrl(draft.url)) {
+      showToast("URL ต้องขึ้นต้นด้วย http:// หรือ https://", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      // Same update_organizer_or_participant_or_admin policy and the same
+      // silent-0-row remedy as MeetingNotesCard.saveEdit. RelatedResource has
+      // no updatedAt column, so only the three editable fields are sent.
+      const { data, error: dbError } = await createClient()
+        .from("RelatedResource")
+        .update({ title: draft.title.trim(), url: draft.url.trim(), type: draft.type })
+        .eq("id", editingId)
+        .select("*, addedBy:User(name)")
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error(MEETING_CONTRIBUTOR_RULE_ACTION);
+
+      setResources((prev) => prev.map((r) => (r.id === editingId ? (data as ResourceWithUser) : r)));
+      setEditingId(null);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "แก้ไขเอกสารอ้างอิงไม่สำเร็จ", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setDeletingId(id);
+    try {
+      // delete_organizer_or_participant_or_admin — same remedy as above.
+      const { data, error: dbError } = await createClient()
+        .from("RelatedResource")
+        .delete()
+        .eq("id", id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error(MEETING_CONTRIBUTOR_RULE_ACTION);
+
+      setResources((prev) => prev.filter((r) => r.id !== id));
+      showToast("ลบเอกสารอ้างอิงแล้ว", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "ลบเอกสารอ้างอิงไม่สำเร็จ", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -280,22 +560,98 @@ export function MeetingResourcesCard({
       <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
         {resources.length === 0 && <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีเอกสารอ้างอิง</p>}
         {resources.map((r) => (
-          <a
+          <div
             key={r.id}
-            href={r.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-container-low transition-colors border border-transparent hover:border-outline-variant/50"
+            className="flex items-center gap-1 rounded-lg hover:bg-surface-container-low transition-colors border border-transparent hover:border-outline-variant/50 px-1"
           >
-            <span className="material-symbols-outlined text-[20px] text-secondary">{RESOURCE_TYPE_ICON[r.type]}</span>
-            <div className="flex-1 min-w-0">
-              <p className="font-label-md text-label-md text-on-surface truncate">{r.title}</p>
-              <p className="text-[11px] text-outline truncate">
-                {RESOURCE_TYPE_LABEL[r.type]} • {r.addedBy?.name ?? "ไม่ทราบผู้เพิ่ม"}
-              </p>
-            </div>
-            <span className="material-symbols-outlined text-[14px] text-on-surface-variant">open_in_new</span>
-          </a>
+            {editingId === r.id ? (
+              <form onSubmit={saveEdit} className="flex-1 flex flex-col gap-2 p-2">
+                <div className="flex gap-2">
+                  <input
+                    value={draft.title}
+                    onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                    placeholder="ชื่อเอกสาร/ลิงก์"
+                    autoFocus
+                    className="flex-1 px-3 py-2 rounded-lg border border-outline-variant bg-surface text-sm"
+                  />
+                  <select
+                    value={draft.type}
+                    onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value as ResourceType }))}
+                    className="px-2 py-2 rounded-lg border border-outline-variant bg-surface text-sm"
+                  >
+                    <option value="LINK">ลิงก์</option>
+                    <option value="DOCUMENT">เอกสาร</option>
+                    <option value="FILE">ไฟล์</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={draft.url}
+                    onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
+                    placeholder="https://..."
+                    className="flex-1 px-3 py-2 rounded-lg border border-outline-variant bg-surface text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    disabled={saving}
+                    className="px-3 py-2 rounded-lg border border-outline-variant text-on-surface-variant text-xs font-label-md disabled:opacity-60"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving || !draft.title.trim() || !draft.url.trim()}
+                    className="px-3 py-2 rounded-lg bg-primary text-on-primary text-xs font-label-md disabled:opacity-60"
+                  >
+                    {saving ? "กำลังบันทึก..." : "บันทึก"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 flex items-center gap-3 p-2 min-w-0"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-secondary shrink-0">
+                    {RESOURCE_TYPE_ICON[r.type]}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-label-md text-label-md text-on-surface truncate">{r.title}</p>
+                    <p className="text-[11px] text-outline truncate">
+                      {RESOURCE_TYPE_LABEL[r.type]} • {r.addedBy?.name ?? "ไม่ทราบผู้เพิ่ม"}
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-[14px] text-on-surface-variant shrink-0">
+                    open_in_new
+                  </span>
+                </a>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => {
+                      setEditingId(r.id);
+                      setDraft({ title: r.title, url: r.url, type: r.type });
+                    }}
+                    title="แก้ไขเอกสารอ้างอิง"
+                    className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                  </button>
+                  <button
+                    onClick={() => remove(r.id)}
+                    disabled={deletingId === r.id}
+                    title="ลบเอกสารอ้างอิง"
+                    className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         ))}
       </div>
       <form onSubmit={submit} className="space-y-2">

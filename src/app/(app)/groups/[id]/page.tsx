@@ -33,6 +33,7 @@ export default function GroupDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [showEditGroup, setShowEditGroup] = useState(false);
   const [showDeleteGroup, setShowDeleteGroup] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -148,13 +149,22 @@ export default function GroupDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {canManage && (
-            <button
-              onClick={() => setShowAddMember(true)}
-              className="flex items-center gap-2 bg-surface text-primary border border-outline-variant font-label-md text-label-md py-2.5 px-4 rounded-lg shadow-sm hover:bg-surface-container-low transition-colors"
-            >
-              <span className="material-symbols-outlined text-[18px]">person_add</span>
-              เพิ่มสมาชิก
-            </button>
+            <>
+              <button
+                onClick={() => setShowEditGroup(true)}
+                className="flex items-center gap-2 bg-surface text-primary border border-outline-variant font-label-md text-label-md py-2.5 px-4 rounded-lg shadow-sm hover:bg-surface-container-low transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">edit</span>
+                แก้ไขกลุ่ม
+              </button>
+              <button
+                onClick={() => setShowAddMember(true)}
+                className="flex items-center gap-2 bg-surface text-primary border border-outline-variant font-label-md text-label-md py-2.5 px-4 rounded-lg shadow-sm hover:bg-surface-container-low transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">person_add</span>
+                เพิ่มสมาชิก
+              </button>
+            </>
           )}
           <Link
             href={`/meetings/new?groupId=${group.id}`}
@@ -257,6 +267,22 @@ export default function GroupDetailPage() {
 
       {canManage && (
         <>
+          {/* Mounted only while open (same pattern as
+              meetings/[id]/MeetingActions.tsx's RescheduleModal) so every open
+              starts from the group's current values instead of whatever they
+              were when this component first rendered. */}
+          {showEditGroup && (
+            <EditGroupModal
+              group={group}
+              onClose={() => setShowEditGroup(false)}
+              onSaved={() => {
+                setShowEditGroup(false);
+                showToast("แก้ไขกลุ่มสำเร็จ", "success");
+                load();
+              }}
+            />
+          )}
+
           <AddMemberModal
             groupId={group.id}
             existingPersonIds={group.members.map((m) => m.personId)}
@@ -299,6 +325,118 @@ function StatCard({ icon, label, value }: { icon: string; label: string; value: 
         </div>
       </div>
     </div>
+  );
+}
+
+// FR-02 "แก้ไขข้อมูลกลุ่ม". Icon choices must stay in sync with the create
+// modal's list in ../../groups/page.tsx.
+const ICON_CHOICES = ["group", "work", "gavel", "campaign", "hub", "diversity_3"];
+
+function EditGroupModal({
+  group,
+  onClose,
+  onSaved,
+}: {
+  group: ContactGroup;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(group.name);
+  const [description, setDescription] = useState(group.description ?? "");
+  const [icon, setIcon] = useState(group.icon);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError("กรุณากรอกชื่อกลุ่ม");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      // update_creator_or_admin RLS policy replaces assertOwner() — same
+      // 0-row-silent-block subtlety as removeMember/deleteGroup above, so
+      // .select() + a null check is what turns "not permitted" into a real
+      // error instead of a silent no-op. updatedAt has no DB default
+      // (Prisma's @updatedAt is client-side-only) so it is set explicitly,
+      // same as the create modal does on insert.
+      const { data, error: dbError } = await createClient()
+        .from("ContactGroup")
+        .update({
+          name: name.trim(),
+          description: description.trim() || null,
+          icon,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq("id", group.id)
+        .select()
+        .maybeSingle();
+      if (dbError) throw new Error(dbError.message);
+      if (!data) throw new Error("เฉพาะผู้สร้างกลุ่มหรือผู้ดูแลระบบเท่านั้นที่แก้ไขกลุ่มนี้ได้ หรือไม่พบกลุ่มนี้");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "แก้ไขกลุ่มไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} maxWidth="max-w-md">
+      <h2 className="font-headline-md text-headline-md text-on-surface">แก้ไขกลุ่ม</h2>
+      {error && <ErrorBanner message={error} />}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface-variant block">ชื่อกลุ่ม</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface-variant block">คำอธิบาย</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest resize-none"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="font-label-md text-label-md text-on-surface-variant block">ไอคอน</label>
+          <div className="flex gap-2 flex-wrap">
+            {ICON_CHOICES.map((ic) => (
+              <button
+                key={ic}
+                type="button"
+                onClick={() => setIcon(ic)}
+                className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${
+                  icon === ic ? "bg-primary text-on-primary border-primary" : "border-outline-variant text-on-surface-variant"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[20px]">{ic}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-outline-variant font-label-md">
+            ยกเลิก
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md disabled:opacity-60"
+          >
+            {loading ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

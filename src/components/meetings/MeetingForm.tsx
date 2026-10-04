@@ -397,8 +397,29 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
     setReminderOffsets((prev) => prev.filter((m) => m !== minutes));
   }
 
+  // FR-10 "ระบบต้องไม่สร้างการแจ้งเตือนซ้ำ". Mirrors the duplicate check in
+  // POST /api/reminders exactly: Reminder stores only scheduledAt, so the thing
+  // to compare is the instant a given offset resolves to, not the raw offset
+  // number. Deriving it also keeps this in agreement with the server after a
+  // reschedule, where reschedule_meeting() cancels a reminder at its old
+  // instant rather than moving it - so an offset's meaning genuinely depends on
+  // the current start time.
+  const existingScheduledAts = new Set(existingReminders.map((r) => new Date(r.scheduledAt).getTime()));
+
+  function isOffsetTaken(minutes: number): boolean {
+    if (!startTime) return false;
+    return existingScheduledAts.has(new Date(startTime).getTime() - minutes * 60 * 1000);
+  }
+
   async function addExistingMeetingReminder(minutes: number) {
     if (!initial) return;
+    // Greying out a taken preset is only a hint (a stale render, or a custom
+    // offset typed in by hand, can still collide), so the guard that actually
+    // decides lives here as well as in the route.
+    if (isOffsetTaken(minutes)) {
+      showToast("การประชุมนี้มีการแจ้งเตือนที่เวลาเดียวกันอยู่แล้ว กรุณาเลือกระยะเวลาที่ต่างกัน", "error");
+      return;
+    }
     setAddingReminder(true);
     try {
       await api.post("/api/reminders", { meetingId: initial.meeting.id, offsetMinutes: minutes });
@@ -899,7 +920,7 @@ p_project_id: resolvedProjectId || null,
                   })}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {REMINDER_PRESETS.map((p) => (
+                  {REMINDER_PRESETS.filter((p) => !isOffsetTaken(p.minutes)).map((p) => (
                     <button
                       key={p.minutes}
                       type="button"

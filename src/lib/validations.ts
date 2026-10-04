@@ -187,9 +187,18 @@ export const meetingSchema = z
     // before this was configurable, so existing callers keep working unchanged.
     reminderOffsetMinutes: z.array(reminderOffsetMinutes).optional().default([30]),
   })
-  .refine((d) => new Date(d.endTime) > new Date(d.startTime), {
-    message: "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่ม",
+.refine((d) => new Date(d.endTime) > new Date(d.startTime), {
+    message: "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น",
     path: ["endTime"],
+  })
+  // FR-10 "ระบบต้องไม่สร้างการแจ้งเตือนซ้ำ": two offsets in this array map to
+  // two reminders at startTime-N, so a repeated value means the same instant
+  // would be notified twice. Checked here so a client that bypasses the form's
+  // preset filtering still can't ask for a duplicate. create_meeting_with_
+  // participants() also de-dupes in SQL as the last line of defence.
+  .refine((d) => new Set(d.reminderOffsetMinutes).size === d.reminderOffsetMinutes.length, {
+    message: "ไม่สามารถตั้งเวลาแจ้งเตือนซ้ำกันได้ กรุณาเลือกระยะเวลาที่ต่างกัน",
+    path: ["reminderOffsetMinutes"],
   });
 
 export const updateMeetingSchema = z.object({

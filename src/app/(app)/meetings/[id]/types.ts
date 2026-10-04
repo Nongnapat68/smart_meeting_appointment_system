@@ -51,3 +51,15 @@ export interface MeetingDetail extends MeetingWithStringDates {
 export type NoteWithAuthor = MeetingDetail["notes"][number];
 export type DecisionWithUser = MeetingDetail["decisions"][number];
 export type ResourceWithUser = MeetingDetail["resources"][number];
+
+// One row of MeetingHistoryCard's own query: an earlier meeting in the same
+// project, carrying the notes that meeting logged. Declared here for the same
+// reason as MeetingDetail above - PostgREST embed shapes are not inferred, so
+// the shape has to be stated rather than derived.
+export interface HistoryMeeting {
+  id: string;
+  title: string;
+  startTime: string;
+  status: string;
+  notes: (Stringify<MeetingNote> & { author: { name: string } | null })[];
+}
