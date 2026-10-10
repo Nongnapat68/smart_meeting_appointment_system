@@ -33,7 +33,7 @@
 
 ### 3a. `MeetingParticipant.source` / `sourceGroupId`
 
-เพิ่ม enum `ParticipantSource { DIRECT, GROUP, EXTERNAL }` และ `sourceGroupId` nullable FK ไป `ContactGroup` (`onDelete: SetNull` — กลุ่มต้นทางถูกลบภายหลังไม่ควรทำให้แถว participant ที่มีอยู่แล้วหายไปด้วย มันแค่ไม่รู้ว่ามาจากกลุ่มไหนอีกต่อไป) resolve ค่านี้ครั้งเดียวตอนสร้าง meeting ใน `resolveParticipants()` (`src/app/api/meetings/route.ts`) ตามหลัก snapshot เดียวกับที่ BR-03 ยืนยันไปแล้วว่าถูกต้อง — ไม่มีการ query สดกลับไปยัง group ภายหลัง
+เพิ่ม enum `ParticipantSource { DIRECT, GROUP, EXTERNAL }` และ `sourceGroupId` nullable FK ไป `ContactGroup` (`onDelete: SetNull` — กลุ่มต้นทางถูกลบภายหลังไม่ควรทำให้แถว participant ที่มีอยู่แล้วหายไปด้วย มันแค่ไม่รู้ว่ามาจากกลุ่มไหนอีกต่อไป) resolve ค่านี้ครั้งเดียวตอนสร้าง meeting ใน `resolveParticipants()` (`src/lib/meeting-participants.ts` — ปัจจุบันใช้โดย `PUT /api/meetings/[id]`; ส่วนการสร้างผ่าน RPC `create_meeting_with_participants` ทำ resolution เดียวกันใน SQL และ route เดิม `src/app/api/meetings/route.ts` ถูกลบไปแล้วในงาน ข้อ 20) ตามหลัก snapshot เดียวกับที่ BR-03 ยืนยันไปแล้วว่าถูกต้อง — ไม่มีการ query สดกลับไปยัง group ภายหลัง
 
 ลำดับความสำคัญเมื่อคนคนเดียวมาจากหลายแหล่งพร้อมกัน: **DIRECT ชนะเสมอ** (เพราะเป็นการเลือกที่จงใจที่สุด) ถ้าไม่ใช่ DIRECT แล้วมาจากหลายกลุ่ม จะใช้กลุ่มแรกที่เจอ (schema เก็บได้แค่ 1 `sourceGroupId` ต่อแถว ไม่ใช่ array — ตัดสินใจไม่ให้ participant ยึดติดกับหลายกลุ่มพร้อมกัน เพราะ "มาจากกลุ่มไหน" ในบริบทนี้ใช้ตอบคำถามเชิงรายงานเป็นหลัก ไม่ใช่ business rule ที่ต้อง exact)
 
@@ -41,7 +41,7 @@
 
 **ทางเลือกที่พิจารณา** (ตามที่ระบุไว้ใน `GAP_ANALYSIS.md` เดิม):
 - (ก) เปลี่ยน `MeetingParticipant.personId` เป็น nullable, `onDelete: SetNull`, เพิ่ม `personNameSnapshot`/`personEmailSnapshot` เพื่อให้แถวประวัติยังอยู่ได้แม้ Person ต้นทางถูกลบจริง
-- (ข) เปลี่ยน `onDelete: Cascade` → `Restrict` บน `MeetingParticipant.person` แล้วบังคับให้ `DELETE /api/people/[id]` ปฏิเสธการลบ (409) เมื่อ person นั้นมีประวัติเข้าร่วมประชุมอยู่ — ให้ผู้ใช้เปลี่ยนสถานะเป็น "ไม่ใช้งาน" (`status: INACTIVE`, มีอยู่แล้วในฟอร์มแก้ไข) แทน
+- (ข) เปลี่ยน `onDelete: Cascade` → `Restrict` บน `MeetingParticipant.person` แล้วบังคับให้ `DELETE /api/people/[id]` ปฏิเสธการลบ (409) เมื่อ person นั้นมีประวัติเข้าร่วมประชุมอยู่ — ให้ผู้ใช้เปลี่ยนสถานะเป็น "ไม่ใช้งาน" (`status: INACTIVE`, มีอยู่แล้วในฟอร์มแก้ไข) แทน (หมายเหตุ: route `/api/people/[id]` ถูกลบแล้วในงาน ข้อ 20 — ด่านที่เหลือจริงคือ FK `ON DELETE RESTRICT` ที่ DB + RLS ของ `Person`)
 
 **ตัดสินใจ**: (ข)
 
@@ -49,7 +49,7 @@
 1. **Ripple น้อยกว่ามาก** — (ก) ทำให้ `person` เป็น optional ทุกที่ที่ `include: { participants: { include: { person: true } } }` ถูกใช้ (`meetings/[id]/page.tsx`, `MeetingForm.tsx`, `ai-summary/route.ts`, `reminders/[id]/retry/route.ts`) ต้องแก้ nullable-check ทุกจุดที่อ่าน `p.person.name`/`.email`/`.avatarUrl` เพิ่มความเสี่ยง regression โดยไม่ได้แก้ปัญหาที่ต่างจาก (ข)
 2. **การรับประกันที่แน่นกว่า** — (ข) ปฏิเสธการ hard-delete ที่ DB level ด้วย FK constraint จริง (`ON DELETE RESTRICT`) ไม่ใช่แค่ระดับ application logic เพียงอย่างเดียว ต่อให้มี code path อื่นในอนาคตที่เรียก `prisma.person.delete()` ตรงๆ โดยไม่ผ่าน endpoint นี้ ก็ยังถูกบล็อกอยู่ดี
 3. **ไม่มีข้อมูลซ้ำซ้อนที่ต้อง sync** — (ก) ต้องเขียน `personNameSnapshot`/`personEmailSnapshot` ทุกครั้งที่สร้าง participant และไม่มีประโยชน์เพิ่มถ้า Person ไม่เคยถูกลบเลย (กรณีทั่วไป) ส่วน (ข) ไม่ต้องเก็บข้อมูลซ้ำเลย ประวัติสมบูรณ์ 100% เพราะ Person ต้นฉบับไม่เคยถูกลบจริง
-4. **ปุ่ม "ลบ" ในหน้า Person ยังมีความหมายตรงตัว** — ไม่ใช่การแปลงให้ "ลบ" กลายเป็น "ปิดใช้งาน" แบบเงียบๆ (ซึ่งจะขัดกับข้อความยืนยัน "การกระทำนี้ไม่สามารถย้อนกลับได้" ที่มีอยู่แล้วใน UI) — คนที่ไม่เคยมีประวัติเข้าร่วมประชุมยังลบจริงได้ตามปกติ มีแค่คนที่มีประวัติแล้วเท่านั้นที่ต้องเปลี่ยนสถานะแทน ซึ่งระบบมีฟีเจอร์นี้อยู่แล้ว (`PUT /api/people/[id]`, `status: INACTIVE`)
+4. **ปุ่ม "ลบ" ในหน้า Person ยังมีความหมายตรงตัว** — ไม่ใช่การแปลงให้ "ลบ" กลายเป็น "ปิดใช้งาน" แบบเงียบๆ (ซึ่งจะขัดกับข้อความยืนยัน "การกระทำนี้ไม่สามารถย้อนกลับได้" ที่มีอยู่แล้วใน UI) — คนที่ไม่เคยมีประวัติเข้าร่วมประชุมยังลบจริงได้ตามปกติ มีแค่คนที่มีประวัติแล้วเท่านั้นที่ต้องเปลี่ยนสถานะแทน ซึ่งระบบมีฟีเจอร์นี้อยู่แล้ว (`status: INACTIVE`; เดิมแก้ผ่าน `PUT /api/people/[id]` ซึ่งถูกลบแล้วในงาน ข้อ 20 — ปัจจุบันแก้ผ่าน supabase-js ตรง)
 
 **ผลคือ**: BR-02 กลายเป็น ✅ เต็มรูปแบบ ไม่ใช่ "ลดความเสี่ยง" เฉยๆ — hard-delete ที่จะทำลายประวัติทำไม่ได้อีกต่อไปทั้งจาก UI ปกติและจาก DB constraint
 
@@ -64,6 +64,8 @@ Schema ของ `Reminder` ไม่ต้องแก้ (`meetingId` ไม�
 - เพิ่ม `POST /api/reminders` ใหม่ (`{ meetingId, offsetMinutes }`) สำหรับเพิ่ม reminder รายการที่ 2, 3, ... ให้ meeting ที่สร้างไปแล้ว โดยไม่ต้องแก้ meeting ทั้งตัว
 
 **ยังไม่ทำในรอบนี้**: การเพิ่ม input หลายช่องใน `MeetingForm.tsx` ให้ผู้ใช้กรอก offset ได้เองตอนสร้างนัดหมาย (ตอนนี้ยังส่ง `[30]` เป็นค่าเดียวเสมอจากฟอร์ม) — API พร้อมรับหลายค่าแล้ว แต่ UI ฝั่งสร้าง meeting ยังไม่มีช่องให้กรอกเพิ่ม เป็นงานที่เหลือสำหรับรอบถัดไป
+
+**อัปเดต: การกัน reminder ซ้ำ (FR-10, migration `20261004120000_meeting_reminder_dedupe`)** — เพราะ `Reminder` เก็บแค่ `scheduledAt` ไม่มีคอลัมน์ offset การขอ offset ซ้ำจึงเท่ากับสองแถวที่เวลาเดียวกัน และผู้จัดจะถูกเตือนเรื่องเดียวกันซ้ำ ระบบกันไว้ 4 จุดบังคับใช้: (1) `MeetingForm.tsx` ปิด (grey out) offset ที่มีอยู่แล้ว (2) `meetingSchema` ใน `src/lib/validations.ts` ปฏิเสธ offset ที่ซ้ำ (3) `create_meeting_with_participants()` ข้าม offset ที่เคย insert แล้วผ่านตัวแปร `v_seen_offsets` และ (4) `POST /api/reminders` (`src/app/api/reminders/route.ts`) มีเช็คเทียบเท่าสำหรับ reminder ที่เพิ่มภายหลัง ตั้งใจ**ไม่**ใส่ UNIQUE index บน `(meetingId, scheduledAt)`: partial index แบบ `status = 'PENDING'` จะทำให้ `reschedule_meeting()` และ `update_meeting_with_participants()` — ที่เลื่อน reminder ที่ยัง pending ทั้งชุดพร้อมกันด้วย delta เดียว — abort ทั้ง transaction ด้วย constraint violation แทนที่จะ degrade อย่างนุ่มนวล guard ระดับแอปจึงปฏิเสธคำขอที่ผิด ณ จุดที่ส่งมา แทนที่จะให้ DB โยน error ตอนเลื่อนเวลา migration ยังมี `DELETE` เก็บกวาด reminder `PENDING` ที่ซ้ำอยู่เดิม (เก็บ `(createdAt, id)` น้อยสุด) ก่อนติดตั้งกฎใหม่
 
 ---
 
