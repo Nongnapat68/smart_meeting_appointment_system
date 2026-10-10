@@ -39,7 +39,8 @@ export const GET = withApiErrors(async (request: Request) => {
 });
 
 // FR-10/BR-11: add another reminder to a meeting that already exists — the
-// initial batch is created inline by POST /api/meetings (reminderOffsetMinutes).
+// initial batch is created inline by the create_meeting_with_participants RPC
+// (p_reminder_offset_minutes).
 export const POST = withApiErrors(async (request: Request) => {
   const user = await requireUser();
   const body = parseBody(createReminderSchema, await request.json());

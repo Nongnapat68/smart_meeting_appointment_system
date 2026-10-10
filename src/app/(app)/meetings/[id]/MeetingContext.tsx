@@ -15,8 +15,9 @@ import type { NoteWithAuthor, DecisionWithUser, ResourceWithUser } from "./types
 // the only thing here (no GET: initial rows arrive as
 // initialNotes/initialDecisions/initialResources props, read by the parent
 // page's own nested select back in Meeting round 1 — see ./types.ts). The
-// old GET /api/meetings/[id]/{notes,decisions,resources} routes still exist
-// but nothing here calls them anymore.
+// old GET /api/meetings/[id]/{notes,decisions,resources} routes were removed
+// in ข้อ 20 (nothing called them anymore); all writes here go through
+// supabase-js + RLS.
 
 // FR-11 AC3/AC4: who RLS lets add notes / decisions / resources — shown in
 // the toast when a save is rejected, instead of the raw English RLS error.

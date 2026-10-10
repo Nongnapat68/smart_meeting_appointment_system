@@ -17,9 +17,10 @@ export interface ResolvedParticipant {
  * signal of intent; first-matching group wins if they're in more than one
  * selected group (a participant has exactly one sourceGroupId in this schema).
  *
- * Shared by both `POST /api/meetings` (create) and `PUT /api/meetings/[id]`
- * (edit) so that inviting "ทั้งกลุ่ม" produces the same GROUP-sourced
- * `MeetingParticipant` rows regardless of which endpoint is used.
+ * Used by `PUT /api/meetings/[id]` (edit); the create path resolves the same
+ * DIRECT/GROUP/EXTERNAL precedence inside the `create_meeting_with_participants`
+ * SQL function, so inviting "ทั้งกลุ่ม" produces the same GROUP-sourced
+ * `MeetingParticipant` rows regardless of which path is used.
  */
 export async function resolveParticipants(
   personIds: string[],
