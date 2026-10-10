@@ -312,6 +312,50 @@ async function main() {
     check("seed.ts creates a SIMULATED reminder", /status:\s*"SIMULATED"/.test(seed));
     const page = readFileSync("src/app/(app)/reminders/page.tsx", "utf8");
     check("reminders page has a SIMULATED stat card + filter", page.includes('setStatusFilter("SIMULATED")') && page.includes("counts.SIMULATED"));
+
+    // ─────────────────────────────────────────────────────────────────────
+    console.log("\n[6] FR-10: a repeated reminder offset never creates a duplicate");
+    // The create form's preset filtering is only a client nicety: the frontend
+    // calls create_meeting_with_participants() directly through supabase-js, so
+    // the guard that actually holds is the one inside the RPC. Two requested
+    // offsets that are equal mean two rows for the same instant (Reminder
+    // stores scheduledAt, not the offset), so the meeting would be announced
+    // twice. Proving the RPC keeps one row per distinct offset.
+    const tsRpc = (d: Date) => d.toISOString().replace("Z", "");
+    async function createViaRpc(offsets: number[]) {
+      const start = new Date(Date.now() + 24 * HOUR);
+      const end = new Date(start.getTime() + HOUR);
+      const rows = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('request.jwt.claim.sub', ${organizer}, true)`;
+        return tx.$queryRaw<{ id: string }[]>`
+          SELECT id FROM public.create_meeting_with_participants(
+            ${organizer}::uuid, ${`rpc dedup ${tag}`}, ${tsRpc(start)}::timestamp, ${tsRpc(end)}::timestamp,
+            NULL, 'SINGLE', 'PENDING', NULL, NULL, NULL, '{}', '{}', '{}', ${offsets}::int[]
+          )`;
+      });
+      return rows[0].id;
+    }
+
+    const dupMeetingId = await createViaRpc([30, 30, 15, 15, 30]);
+    meetingIds.push(dupMeetingId);
+    const dupReminders = await prisma.reminder.findMany({ where: { meetingId: dupMeetingId } });
+    check("offsets [30,30,15,15,30] → exactly 2 reminders", dupReminders.length === 2, `rows=${dupReminders.length}`);
+    check(
+      "…at 2 distinct instants (15 and 30 min before the start)",
+      new Set(dupReminders.map((r) => r.scheduledAt.getTime())).size === 2
+    );
+    const allSameMeetingId = await createViaRpc([60, 60, 60, 60]);
+    meetingIds.push(allSameMeetingId);
+    check(
+      "offsets [60,60,60,60] → exactly 1 reminder",
+      (await prisma.reminder.count({ where: { meetingId: allSameMeetingId } })) === 1
+    );
+    const pendingGroups = await prisma.reminder.groupBy({
+      by: ["scheduledAt"],
+      where: { meetingId: dupMeetingId, status: "PENDING" },
+      _count: true,
+    });
+    check("no two PENDING reminders of a meeting share a scheduledAt", pendingGroups.every((g) => g._count === 1));
   } finally {
     await prisma.reminder.deleteMany({ where: { meetingId: { in: meetingIds } } });
     await prisma.meetingParticipant.deleteMany({ where: { meetingId: { in: meetingIds } } });
