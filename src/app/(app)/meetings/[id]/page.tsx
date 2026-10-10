@@ -218,9 +218,24 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
 
           {/* FR-11/12/13: Notes / Decisions / Related Resources — each backed
               by its own entity, each supporting multiple rows per meeting. */}
-          <MeetingNotesCard meetingId={meeting.id} initialNotes={meeting.notes} />
-          <MeetingDecisionsCard meetingId={meeting.id} initialDecisions={meeting.decisions} />
-          <MeetingResourcesCard meetingId={meeting.id} initialResources={meeting.resources} />
+          <MeetingNotesCard
+            meetingId={meeting.id}
+            initialNotes={meeting.notes}
+            meeting={{ organizerId: meeting.organizerId }}
+            currentUser={user}
+          />
+          <MeetingDecisionsCard
+            meetingId={meeting.id}
+            initialDecisions={meeting.decisions}
+            meeting={{ organizerId: meeting.organizerId }}
+            currentUser={user}
+          />
+          <MeetingResourcesCard
+            meetingId={meeting.id}
+            initialResources={meeting.resources}
+            meeting={{ organizerId: meeting.organizerId }}
+            currentUser={user}
+          />
 
           {/* FR-11: notes from previous, related meetings. Renders nothing when
               this meeting has no project - see MeetingHistoryCard for why. */}

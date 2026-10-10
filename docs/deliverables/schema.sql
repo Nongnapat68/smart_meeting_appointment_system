@@ -16,9 +16,9 @@
 -- `20260911140000_...process_due_reminders_function`,
 -- `20260911150000_...get_meeting_context_function`,
 -- `20260911160000_...cancel_meeting_reminders_trigger`, plus every later
--- migration through `20261003140000_insert_attribution_owner_only`).
+-- migration through `20261005090000_narrow_update_delete_and_attachment_url`).
 --
--- Snapshot taken 2026-10-04 (26 migrations). Objects added by the later
+-- Snapshot taken 2026-10-11 (28 migrations). Objects added by the later
 -- migrations are all present below and flagged with the migration that owns
 -- them, so this file stays reviewable against `prisma/migrations/`.
 --
@@ -60,7 +60,7 @@
 --     `trg_prevent_user_role_self_escalation` on `"User"`), added for
 --     requirements.md §8 items 4/7/9/14 and BR-14.
 --   - 1 CHECK constraint (`RelatedResource_url_http_check`, from
---     20261002140000_related_resource_url_check).
+--     20261003100000_sprint2_rls_hardening).
 --
 -- Deliberately out of scope / excluded: Supabase's own platform-managed
 -- `rls_auto_enable()` event-trigger function, which exists on this project
@@ -792,25 +792,29 @@ CREATE POLICY "insert_organizer_or_participant_or_admin" ON public."MeetingNote"
     )
   );
 
-CREATE POLICY "update_organizer_or_participant_or_admin" ON public."MeetingNote"
+-- 20261005090000_narrow_update_delete_and_attachment_url: UPDATE/DELETE are
+-- no longer open to every participant — only the row's own author, the
+-- meeting's organizer, or an admin (the INSERT policy above still lets any
+-- participant add).
+CREATE POLICY "update_author_or_organizer_or_admin" ON public."MeetingNote"
   FOR UPDATE TO authenticated
   USING (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "authorId" = (select auth.uid())
   )
   WITH CHECK (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "authorId" = (select auth.uid())
   );
 
-CREATE POLICY "delete_organizer_or_participant_or_admin" ON public."MeetingNote"
+CREATE POLICY "delete_author_or_organizer_or_admin" ON public."MeetingNote"
   FOR DELETE TO authenticated
   USING (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "authorId" = (select auth.uid())
   );
 
 ALTER TABLE public."MeetingNote" ENABLE ROW LEVEL SECURITY;
@@ -834,25 +838,27 @@ CREATE POLICY "insert_organizer_or_participant_or_admin" ON public."Decision"
     )
   );
 
-CREATE POLICY "update_organizer_or_participant_or_admin" ON public."Decision"
+-- 20261005090000_narrow_update_delete_and_attachment_url: same narrowing as
+-- MeetingNote — author (decidedById), organizer, or admin only.
+CREATE POLICY "update_author_or_organizer_or_admin" ON public."Decision"
   FOR UPDATE TO authenticated
   USING (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "decidedById" = (select auth.uid())
   )
   WITH CHECK (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "decidedById" = (select auth.uid())
   );
 
-CREATE POLICY "delete_organizer_or_participant_or_admin" ON public."Decision"
+CREATE POLICY "delete_author_or_organizer_or_admin" ON public."Decision"
   FOR DELETE TO authenticated
   USING (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "decidedById" = (select auth.uid())
   );
 
 ALTER TABLE public."Decision" ENABLE ROW LEVEL SECURITY;
@@ -876,32 +882,33 @@ CREATE POLICY "insert_organizer_or_participant_or_admin" ON public."RelatedResou
     )
   );
 
-CREATE POLICY "update_organizer_or_participant_or_admin" ON public."RelatedResource"
+-- 20261005090000_narrow_update_delete_and_attachment_url: same narrowing as
+-- MeetingNote — author (addedById), organizer, or admin only.
+CREATE POLICY "update_author_or_organizer_or_admin" ON public."RelatedResource"
   FOR UPDATE TO authenticated
   USING (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "addedById" = (select auth.uid())
   )
   WITH CHECK (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "addedById" = (select auth.uid())
   );
 
-CREATE POLICY "delete_organizer_or_participant_or_admin" ON public."RelatedResource"
+CREATE POLICY "delete_author_or_organizer_or_admin" ON public."RelatedResource"
   FOR DELETE TO authenticated
   USING (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR (select public.is_meeting_participant("meetingId"))
+    OR "addedById" = (select auth.uid())
   );
 
 ALTER TABLE public."RelatedResource" ENABLE ROW LEVEL SECURITY;
 
 -- OnlineMeetingResource — select: everyone logged in · insert: as yourself, or
--- leave it unclaimed · update/delete: unclaimed (createdById null) is open to
--- all, claimed only to its creator or admin
+-- leave it unclaimed · update/delete: only the creator or an admin (see below)
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public."OnlineMeetingResource" TO authenticated;
 
 CREATE POLICY "select_all_authenticated" ON public."OnlineMeetingResource"
@@ -912,14 +919,17 @@ CREATE POLICY "insert_own_as_creator_or_unclaimed" ON public."OnlineMeetingResou
   FOR INSERT TO authenticated
   WITH CHECK ( "createdById" IS NULL OR "createdById" = (select auth.uid()) );
 
-CREATE POLICY "update_unclaimed_or_creator_or_admin" ON public."OnlineMeetingResource"
+-- 20261005090000_narrow_update_delete_and_attachment_url: update/delete are
+-- no longer open to anyone for an unclaimed room — only the creator or an
+-- admin (the app never creates unclaimed rows; a leftover one is admin-only).
+CREATE POLICY "update_creator_or_admin" ON public."OnlineMeetingResource"
   FOR UPDATE TO authenticated
-  USING ( "createdById" IS NULL OR "createdById" = (select auth.uid()) OR (select public.is_admin()) )
-  WITH CHECK ( "createdById" IS NULL OR "createdById" = (select auth.uid()) OR (select public.is_admin()) );
+  USING ( "createdById" = (select auth.uid()) OR (select public.is_admin()) )
+  WITH CHECK ( "createdById" = (select auth.uid()) OR (select public.is_admin()) );
 
-CREATE POLICY "delete_unclaimed_or_creator_or_admin" ON public."OnlineMeetingResource"
+CREATE POLICY "delete_creator_or_admin" ON public."OnlineMeetingResource"
   FOR DELETE TO authenticated
-  USING ( "createdById" IS NULL OR "createdById" = (select auth.uid()) OR (select public.is_admin()) );
+  USING ( "createdById" = (select auth.uid()) OR (select public.is_admin()) );
 
 ALTER TABLE public."OnlineMeetingResource" ENABLE ROW LEVEL SECURITY;
 
@@ -1003,14 +1013,21 @@ CREATE POLICY "select_all_authenticated" ON public."TaskAttachment"
   FOR SELECT TO authenticated
   USING (true);
 
+-- 20261005090000_narrow_update_delete_and_attachment_url: fileUrl must live
+-- under the task's own upload prefix — the only path that inserts attachments
+-- (POST /api/tasks/[id]/attachments, via Prisma) always writes
+-- '/uploads/tasks/<taskId>/<uuid>-<name>.<ext>'.
 CREATE POLICY "insert_task_assignee_or_creator_or_admin" ON public."TaskAttachment"
   FOR INSERT TO authenticated
   WITH CHECK (
-    (select public.is_admin())
-    OR EXISTS (
-      SELECT 1 FROM public."Task" t
-      WHERE t.id = "taskId" AND (t."assigneeId" = (select auth.uid()) OR t."createdById" = (select auth.uid()))
+    (
+      (select public.is_admin())
+      OR EXISTS (
+        SELECT 1 FROM public."Task" t
+        WHERE t.id = "taskId" AND (t."assigneeId" = (select auth.uid()) OR t."createdById" = (select auth.uid()))
+      )
     )
+    AND "fileUrl" LIKE '/uploads/tasks/' || "taskId" || '/%'
   );
 
 CREATE POLICY "update_admin_only" ON public."TaskAttachment"
@@ -2112,10 +2129,13 @@ ALTER TABLE public."RelatedResource"
 -- update_meeting_with_participants()), reschedule_meeting(), the two
 -- Sprint-2 trigger guards, the RelatedResource URL CHECK,
 -- "PasswordResetOtp".attempts + its (userId, createdAt) index, the SIMULATED
--- reminder status, the two triggers, and the six re-pointed INSERT policies.
+-- reminder status, the two triggers, the six re-pointed INSERT policies, and
+-- the nine policies narrowed by 20261005090000_narrow_update_delete_and_attachment_url
+-- (the six MeetingNote/Decision/RelatedResource UPDATE/DELETE guards, the two
+-- OnlineMeetingResource guards, the one TaskAttachment INSERT fileUrl check).
 -- All are real, currently deployed objects on the live `public` schema via
 -- their own migrations, and each was cross-checked against the live catalog on
--- 2026-10-04 (pg_policies = 72, pg_proc = 12 incl. the 1 platform function,
+-- 2026-10-11 (pg_policies = 72, pg_proc = 12 incl. the 1 platform function,
 -- pg_trigger = 3, pg_constraint CHECK = 1, all matching this file
 -- one-for-one). They were just never re-run through the fresh-schema replay
 -- described above. The two RPCs the app calls on every meeting create/edit

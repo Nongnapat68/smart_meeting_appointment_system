@@ -16,7 +16,8 @@
     "test:rls": "tsx scripts/test-rls.ts",
     "test:otp": "tsx scripts/test-otp.ts",
     "test:reminders": "tsx scripts/test-reminders.ts",
-    "test:uploads": "tsx scripts/test-uploads.ts"
+    "test:uploads": "tsx scripts/test-uploads.ts",
+    "test:redirect": "tsx scripts/test-open-redirect.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -67,3 +67,46 @@ export function canManageGroup(group: { createdById: string | null }, user: Perm
   if (!user) return false;
   return isAdmin(user) || group.createdById === user.id;
 }
+
+/**
+ * Mirrors the narrowed "update_author_or_organizer_or_admin" /
+ * "delete_author_or_organizer_or_admin" policies on "MeetingNote": only an
+ * admin, the meeting's organizer, or the note's own author may edit or delete
+ * it. The same rule governs both, so one check covers both buttons.
+ */
+export function canEditMeetingNote(
+  note: { authorId: string | null },
+  meeting: { organizerId: string | null },
+  user: PermissionUser | null
+): boolean {
+  if (!user) return false;
+  return isAdmin(user) || meeting.organizerId === user.id || note.authorId === user.id;
+}
+
+/**
+ * Mirrors the narrowed "update_author_or_organizer_or_admin" /
+ * "delete_author_or_organizer_or_admin" policies on "Decision": an admin, the
+ * meeting's organizer, or the decision's own author.
+ */
+export function canEditDecision(
+  decision: { decidedById: string | null },
+  meeting: { organizerId: string | null },
+  user: PermissionUser | null
+): boolean {
+  if (!user) return false;
+  return isAdmin(user) || meeting.organizerId === user.id || decision.decidedById === user.id;
+}
+
+/**
+ * Mirrors the narrowed "update_author_or_organizer_or_admin" /
+ * "delete_author_or_organizer_or_admin" policies on "RelatedResource": an
+ * admin, the meeting's organizer, or the resource's own author.
+ */
+export function canEditRelatedResource(
+  resource: { addedById: string | null },
+  meeting: { organizerId: string | null },
+  user: PermissionUser | null
+): boolean {
+  if (!user) return false;
+  return isAdmin(user) || meeting.organizerId === user.id || resource.addedById === user.id;
+}

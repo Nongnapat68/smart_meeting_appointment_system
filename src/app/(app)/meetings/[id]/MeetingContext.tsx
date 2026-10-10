@@ -5,6 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { relativeTime } from "@/lib/format";
 import { dbWriteErrorMessage, isHttpUrl } from "@/lib/db-errors";
+import {
+  canEditDecision,
+  canEditMeetingNote,
+  canEditRelatedResource,
+  type PermissionUser,
+} from "@/lib/permissions";
 import type { ResourceType } from "@prisma/client";
 import type { NoteWithAuthor, DecisionWithUser, ResourceWithUser } from "./types";
 
@@ -23,11 +29,18 @@ import type { NoteWithAuthor, DecisionWithUser, ResourceWithUser } from "./types
 // the toast when a save is rejected, instead of the raw English RLS error.
 const MEETING_CONTRIBUTOR_RULE = "เฉพาะผู้จัดประชุม ผู้เข้าร่วมประชุมนี้ หรือผู้ดูแลระบบเท่านั้น";
 
-// FR-11/12/13 AC "แก้ไข/ลบ": the UPDATE and DELETE policies
-// (update_/delete_organizer_or_participant_or_admin) use the identical rule to
-// the INSERT one above, so they share its wording.
+// FR-11/12/13 AC "แก้ไข/ลบ": the narrowed UPDATE and DELETE policies
+// (update_/delete_author_or_organizer_or_admin) allow only the row's own
+// author, the meeting's organizer, or an admin — not every participant.
 const MEETING_CONTRIBUTOR_RULE_ACTION =
-  "เฉพาะผู้จัดประชุม ผู้เข้าร่วมประชุมนี้ หรือผู้ดูแลระบบเท่านั้นที่แก้ไขหรือลบรายการนี้ได้";
+  "เฉพาะผู้เขียน ผู้จัดประชุม หรือผู้ดูแลระบบเท่านั้นที่แก้ไขหรือลบรายการนี้ได้";
+
+// N12: the meeting rows these cards need to decide button visibility, and the
+// caller's identity, both come from the parent server component.
+export interface MeetingContributionPermissions {
+  meeting: { organizerId: string | null };
+  currentUser: PermissionUser | null;
+}
 
 const RESOURCE_TYPE_LABEL: Record<ResourceType, string> = {
   LINK: "ลิงก์",
@@ -44,10 +57,12 @@ const RESOURCE_TYPE_ICON: Record<ResourceType, string> = {
 export function MeetingNotesCard({
   meetingId,
   initialNotes,
+  meeting,
+  currentUser,
 }: {
   meetingId: string;
   initialNotes: NoteWithAuthor[];
-}) {
+} & MeetingContributionPermissions) {
   const { showToast } = useToast();
   const [notes, setNotes] = useState(initialNotes);
   const [content, setContent] = useState("");
@@ -62,11 +77,13 @@ export function MeetingNotesCard({
     if (!editingId || !draft.trim()) return;
     setSaving(true);
     try {
-      // update_organizer_or_participant_or_admin RLS policy — same rule as the
-      // insert policy below. A blocked UPDATE matches 0 rows *silently* (no
-      // thrown error, unlike a blocked INSERT's WITH CHECK violation), so
-      // .select() + a null check is what surfaces it here. updatedAt is set
-      // explicitly for the same client-side-only-default reason as on insert.
+      // update_author_or_organizer_or_admin RLS policy — only the note's
+      // author, its meeting's organizer, or an admin (narrower than the
+      // insert policy below, which any participant may use). A blocked UPDATE
+      // matches 0 rows *silently* (no thrown error, unlike a blocked INSERT's
+      // WITH CHECK violation), so .select() + a null check is what surfaces it
+      // here. updatedAt is set explicitly for the same client-side-only-default
+      // reason as on insert.
       const { data, error: dbError } = await createClient()
         .from("MeetingNote")
         .update({ content: draft.trim(), updatedAt: new Date().toISOString() })
@@ -88,7 +105,7 @@ export function MeetingNotesCard({
   async function remove(id: string) {
     setDeletingId(id);
     try {
-      // delete_organizer_or_participant_or_admin — same silent 0-row block and
+      // delete_author_or_organizer_or_admin — same silent 0-row block and
       // the same .select() + null-check remedy as saveEdit above.
       const { data, error: dbError } = await createClient()
         .from("MeetingNote")
@@ -194,24 +211,28 @@ export function MeetingNotesCard({
                     {n.author?.name ?? "ไม่ทราบผู้บันทึก"} • {relativeTime(n.createdAt)}
                   </p>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => {
-                        setEditingId(n.id);
-                        setDraft(n.content);
-                      }}
-                      title="แก้ไขบันทึก"
-                      className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">edit</span>
-                    </button>
-                    <button
-                      onClick={() => remove(n.id)}
-                      disabled={deletingId === n.id}
-                      title="ลบบันทึก"
-                      className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
+                    {canEditMeetingNote(n, meeting, currentUser) && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setEditingId(n.id);
+                            setDraft(n.content);
+                          }}
+                          title="แก้ไขบันทึก"
+                          className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">edit</span>
+                        </button>
+                        <button
+                          onClick={() => remove(n.id)}
+                          disabled={deletingId === n.id}
+                          title="ลบบันทึก"
+                          className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </>
@@ -242,10 +263,12 @@ export function MeetingNotesCard({
 export function MeetingDecisionsCard({
   meetingId,
   initialDecisions,
+  meeting,
+  currentUser,
 }: {
   meetingId: string;
   initialDecisions: DecisionWithUser[];
-}) {
+} & MeetingContributionPermissions) {
   const { showToast } = useToast();
   const [decisions, setDecisions] = useState(initialDecisions);
   const [content, setContent] = useState("");
@@ -260,7 +283,7 @@ export function MeetingDecisionsCard({
     if (!editingId || !draft.trim()) return;
     setSaving(true);
     try {
-      // Same update_organizer_or_participant_or_admin policy and the same
+      // Same update_author_or_organizer_or_admin policy and the same
       // silent-0-row remedy as MeetingNotesCard.saveEdit. Decision has no
       // updatedAt column — decidedAt is the decision's own timestamp and is not
       // meant to move when the wording is corrected — so nothing else is sent.
@@ -285,7 +308,7 @@ export function MeetingDecisionsCard({
   async function remove(id: string) {
     setDeletingId(id);
     try {
-      // delete_organizer_or_participant_or_admin — same remedy as above.
+      // delete_author_or_organizer_or_admin — same remedy as above.
       const { data, error: dbError } = await createClient()
         .from("Decision")
         .delete()
@@ -387,24 +410,28 @@ export function MeetingDecisionsCard({
                     ตัดสินใจโดย {d.decidedBy?.name ?? "ไม่ทราบ"} • {relativeTime(d.decidedAt)}
                   </p>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => {
-                        setEditingId(d.id);
-                        setDraft(d.content);
-                      }}
-                      title="แก้ไขมติที่ประชุม"
-                      className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">edit</span>
-                    </button>
-                    <button
-                      onClick={() => remove(d.id)}
-                      disabled={deletingId === d.id}
-                      title="ลบมติที่ประชุม"
-                      className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
+                    {canEditDecision(d, meeting, currentUser) && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setEditingId(d.id);
+                            setDraft(d.content);
+                          }}
+                          title="แก้ไขมติที่ประชุม"
+                          className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">edit</span>
+                        </button>
+                        <button
+                          onClick={() => remove(d.id)}
+                          disabled={deletingId === d.id}
+                          title="ลบมติที่ประชุม"
+                          className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </>
@@ -435,10 +462,12 @@ export function MeetingDecisionsCard({
 export function MeetingResourcesCard({
   meetingId,
   initialResources,
+  meeting,
+  currentUser,
 }: {
   meetingId: string;
   initialResources: ResourceWithUser[];
-}) {
+} & MeetingContributionPermissions) {
   const { showToast } = useToast();
   const [resources, setResources] = useState(initialResources);
   const [title, setTitle] = useState("");
@@ -463,7 +492,7 @@ export function MeetingResourcesCard({
     }
     setSaving(true);
     try {
-      // Same update_organizer_or_participant_or_admin policy and the same
+      // Same update_author_or_organizer_or_admin policy and the same
       // silent-0-row remedy as MeetingNotesCard.saveEdit. RelatedResource has
       // no updatedAt column, so only the three editable fields are sent.
       const { data, error: dbError } = await createClient()
@@ -487,7 +516,7 @@ export function MeetingResourcesCard({
   async function remove(id: string) {
     setDeletingId(id);
     try {
-      // delete_organizer_or_participant_or_admin — same remedy as above.
+      // delete_author_or_organizer_or_admin — same remedy as above.
       const { data, error: dbError } = await createClient()
         .from("RelatedResource")
         .delete()
@@ -631,24 +660,28 @@ export function MeetingResourcesCard({
                   </span>
                 </a>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => {
-                      setEditingId(r.id);
-                      setDraft({ title: r.title, url: r.url, type: r.type });
-                    }}
-                    title="แก้ไขเอกสารอ้างอิง"
-                    className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">edit</span>
-                  </button>
-                  <button
-                    onClick={() => remove(r.id)}
-                    disabled={deletingId === r.id}
-                    title="ลบเอกสารอ้างอิง"
-                    className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">delete</span>
-                  </button>
+                  {canEditRelatedResource(r, meeting, currentUser) && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setEditingId(r.id);
+                          setDraft({ title: r.title, url: r.url, type: r.type });
+                        }}
+                        title="แก้ไขเอกสารอ้างอิง"
+                        className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                      </button>
+                      <button
+                        onClick={() => remove(r.id)}
+                        disabled={deletingId === r.id}
+                        title="ลบเอกสารอ้างอิง"
+                        className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             )}

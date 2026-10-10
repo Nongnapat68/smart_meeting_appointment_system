@@ -1,4 +1,5 @@
 import { LoginForm } from "./LoginForm";
+import { safeNextPath } from "@/lib/safe-next-path";
 
 export default async function LoginPage({
   searchParams,
@@ -6,7 +7,7 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
-  const nextUrl = next && next.startsWith("/") ? next : "/dashboard";
+  const nextUrl = safeNextPath(next);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-gutter">

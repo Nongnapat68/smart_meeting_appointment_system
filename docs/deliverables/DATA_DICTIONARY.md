@@ -209,6 +209,8 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 
 **FK ขาเข้า**: `Meeting.onlineMeetingResourceId` (หลาย meeting อ้างอิงลิงก์เดียวกันได้ — BR-09)
 
+**RLS (`schema.sql` §5)**: select — everyone logged in · insert — ตัวเองเป็น `createdById` หรือปล่อย `NULL` (unclaimed) · update/delete — เฉพาะผู้สร้าง (`createdById`) หรือ admin เท่านั้น (`update/delete_creator_or_admin`, migration `20261005090000_narrow_update_delete_and_attachment_url` — ข้อ 12; unclaimed เข้าถึงได้เฉพาะ admin)
+
 ---
 
 ## Meeting
@@ -269,6 +271,8 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
 | `updatedAt` | TIMESTAMP(3) | ❌ | auto | | |
 
+**RLS (`schema.sql` §5)**: select — everyone logged in · insert — participant/organizer/admin ตั้ง `authorId` เป็นตัวเอง · update/delete — เฉพาะผู้เขียน (`authorId`) หรือผู้จัดประชุม (`Meeting.organizerId`) หรือ admin (`update/delete_author_or_organizer_or_admin`, migration `20261005090000_narrow_update_delete_and_attachment_url` — ข้อ 13)
+
 ---
 
 ## Decision
@@ -283,6 +287,8 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `decidedById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้บันทึกมติ |
 | `decidedAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | เวลาตัดสินใจ |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | เวลาบันทึกเข้าระบบ (แยกจาก `decidedAt` เผื่อบันทึกย้อนหลัง) |
+
+**RLS (`schema.sql` §5)**: select — everyone logged in · insert — participant/organizer/admin ตั้ง `decidedById` เป็นตัวเอง · update/delete — เฉพาะผู้ลงมติ (`decidedById`) หรือผู้จัดประชุม หรือ admin (`update/delete_author_or_organizer_or_admin`, migration `20261005090000_narrow_update_delete_and_attachment_url` — ข้อ 13)
 
 ---
 
@@ -299,6 +305,8 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `type` | `"ResourceType"` (enum) | ❌ | `'LINK'` | | ค่าที่เป็นไปได้: `LINK`, `DOCUMENT`, `FILE` |
 | `addedById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้เพิ่ม |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
+
+**RLS (`schema.sql` §5)**: select — everyone logged in · insert — participant/organizer/admin ตั้ง `addedById` เป็นตัวเอง · update/delete — เฉพาะผู้เพิ่ม (`addedById`) หรือผู้จัดประชุม หรือ admin (`update/delete_author_or_organizer_or_admin`, migration `20261005090000_narrow_update_delete_and_attachment_url` — ข้อ 13)
 
 ---
 
@@ -354,6 +362,8 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `fileSize` | INTEGER | ❌ | — | | ขนาดไฟล์ (bytes) จำกัดสูงสุด 10MB ที่ชั้น API |
 | `mimeType` | TEXT | ❌ | — | | |
 | `uploadedAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
+
+**RLS (`schema.sql` §5)**: select — everyone logged in · insert — assignee/creator ของ task หรือ admin โดย `fileUrl` ต้องขึ้นต้นด้วย `/uploads/tasks/<taskId>/` (ตรวจใน policy `insert_task_assignee_or_creator_or_admin`, migration `20261005090000_narrow_update_delete_and_attachment_url` — ข้อ 11) · update/delete — admin only
 
 ---
 

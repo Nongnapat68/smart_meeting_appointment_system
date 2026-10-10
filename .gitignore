@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# dev server pid file written by the local dev workflow (not shared)
+/dev-server.pid
+
 # debug
 npm-debug.log*
 yarn-debug.log*
