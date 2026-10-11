@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { ErrorBanner } from "@/components/ui/Feedback";
+import { isValidPhone, PHONE_FORMAT_MESSAGE } from "@/lib/validations";
 
 export function PersonActions({
   person,
@@ -140,6 +141,7 @@ function EditPersonModal({
     setError(null);
     setLoading(true);
     try {
+      if (!isValidPhone(phone)) throw new Error(PHONE_FORMAT_MESSAGE);
       // update_unlinked_or_owner_or_admin RLS policy replaces assertOwner()'s
       // "!existing.userId || existing.userId === user.id" check — same 0-row
       // silent-block subtlety as handleDelete above.
@@ -160,6 +162,20 @@ function EditPersonModal({
         .maybeSingle();
       if (dbError) throw new Error(dbError.message);
       if (!data) throw new Error("คุณไม่มีสิทธิ์แก้ไขข้อมูลผู้ติดต่อของผู้ใช้รายอื่น หรือไม่พบผู้ติดต่อนี้");
+
+      // B6: when the signed-in user edits their own linked contact, keep
+      // User.phone (what Settings shows) in step — the reverse of PATCH
+      // /api/users/me syncing Person. Allowed by "update_self_or_admin".
+      if (person.userId) {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData.user?.id === person.userId) {
+          const { error: userError } = await supabase
+            .from("User")
+            .update({ phone: phone.trim() || null, updatedAt: new Date().toISOString() })
+            .eq("id", person.userId);
+          if (userError) throw new Error(`บันทึกผู้ติดต่อแล้ว แต่อัปเดตเบอร์ในหน้าตั้งค่าไม่สำเร็จ: ${userError.message}`);
+        }
+      }
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");

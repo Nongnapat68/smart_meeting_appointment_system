@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateTaskSchema } from "@/lib/validations";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
+import { removeTaskUploads } from "@/lib/task-uploads";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -97,5 +98,6 @@ export const DELETE = withApiErrors(async (_request: Request, { params }: Params
   );
 
   await prisma.task.delete({ where: { id } });
+  await removeTaskUploads(id);
   return NextResponse.json({ ok: true });
 });

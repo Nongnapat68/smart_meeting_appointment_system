@@ -16,7 +16,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <div className="flex-1 md:ml-sidebar-width flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 md:ml-sidebar-width flex flex-col min-h-screen">
         <TopBar userName={user.name} avatarUrl={user.avatarUrl} unreadCount={unreadCount} />
         <main className="flex-1 pt-16">{children}</main>
       </div>

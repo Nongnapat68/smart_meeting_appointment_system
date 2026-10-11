@@ -90,6 +90,28 @@ const ATTACHMENT_LABEL = "รูปภาพ (JPG, PNG, WEBP, GIF), PDF, Word, E
 export const AVATAR_ACCEPT = AVATAR_EXTENSIONS.map((e) => `.${e}`).join(",");
 export const ATTACHMENT_ACCEPT = ATTACHMENT_EXTENSIONS.map((e) => `.${e}`).join(",");
 
+// Task attachments: at most 10MB per file. The whole multipart request may be
+// a little larger than the file (boundaries + part headers), so the request
+// cap adds a fixed allowance on top. next.config.ts raises the proxy's body
+// buffer (experimental.proxyClientMaxBodySize) above this request cap — the
+// default 10MB buffer truncated bodies of files near 10MB, request.formData()
+// then threw and the route answered a generic 500.
+export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export const ATTACHMENT_MAX_REQUEST_BYTES = ATTACHMENT_MAX_BYTES + 512 * 1024;
+export const ATTACHMENT_TOO_LARGE_MESSAGE = "ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 10MB)";
+
+/**
+ * Checked from the Content-Length header before the body is read, so an
+ * oversized upload is refused with 413 instead of being parsed at all. A
+ * missing or unparsable header passes here; the per-file size check after
+ * parsing still applies.
+ */
+export function checkAttachmentRequestSize(contentLength: string | null): { ok: true } | { ok: false; message: string } {
+  const length = contentLength === null ? NaN : Number(contentLength);
+  if (Number.isFinite(length) && length > ATTACHMENT_MAX_REQUEST_BYTES) return { ok: false, message: ATTACHMENT_TOO_LARGE_MESSAGE };
+  return { ok: true };
+}
+
 // Tags a browser could run script through if a "text" file were ever rendered
 // as a page. Only tags: event-handler attributes (onload=...) need one of these
 // to live in, and matching them alone would reject ordinary text like

@@ -10,7 +10,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { ConfirmDialog } from "@/components/ui/Modal";
 import { formatDate, relativeTime } from "@/lib/format";
-import { ATTACHMENT_ACCEPT } from "@/lib/upload-validation";
+import { ATTACHMENT_ACCEPT, ATTACHMENT_MAX_BYTES, ATTACHMENT_TOO_LARGE_MESSAGE } from "@/lib/upload-validation";
 import { dbWriteErrorMessage } from "@/lib/db-errors";
 import { canDeleteComment, canDeleteTask, canEditTask, COMMENT_DELETE_RULE, TASK_DELETE_RULE, TASK_EDIT_RULE } from "@/lib/tasks";
 import { useCurrentUser } from "@/lib/use-current-user";
@@ -104,6 +104,13 @@ export default function TaskDetailPage() {
       const { data, error: dbError } = await createClient().from("Task").delete().eq("id", task.id).select("id");
       if (dbError) throw new Error(dbWriteErrorMessage(dbError, "ลบงาน", TASK_DELETE_RULE));
       if (!data || data.length === 0) throw new Error(`คุณไม่มีสิทธิ์ลบงานนี้ — ${TASK_DELETE_RULE}`);
+      // The row (and its TaskAttachment rows) are gone; remove the files on
+      // disk too. Best effort — the task itself is already deleted.
+      try {
+        await api.delete(`/api/tasks/${task.id}/attachments`);
+      } catch (cleanupErr) {
+        console.error("attachment file cleanup failed for task", task.id, cleanupErr);
+      }
       showToast("ลบงานแล้ว", "success");
       router.push("/tasks");
     } catch (err) {
@@ -180,6 +187,12 @@ export default function TaskDetailPage() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !task) return;
+    // Same 10MB rule the route enforces — refused here without uploading.
+    if (file.size > ATTACHMENT_MAX_BYTES) {
+      showToast(ATTACHMENT_TOO_LARGE_MESSAGE, "error");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();

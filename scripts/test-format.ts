@@ -24,6 +24,7 @@ import {
   nextHourLocalValue,
   parseLocalAsBangkok,
 } from "@/lib/format";
+import { isValidPhone, PHONE_FORMAT_MESSAGE, personSchema, updatePersonSchema, updateProfileSchema } from "@/lib/validations";
 
 const INSTANT = new Date("2026-10-20T03:00:00Z"); // 10:00 Asia/Bangkok
 
@@ -87,6 +88,22 @@ const first = outputs[tzs[0]];
 for (const tz of tzs.slice(1)) {
   check(`TZ=${tz} matches TZ=${tzs[0]}`, outputs[tz] === first, `got ${outputs[tz]}`);
 }
+
+console.log("\n[3] Phone number format (Settings API schema + People forms share isValidPhone)");
+for (const ok of ["081-234-5678", "0123456789", "+66 81 234 5678", "(02) 123-4567", "", "   "]) {
+  check(`phone ${JSON.stringify(ok)} accepted`, isValidPhone(ok));
+}
+check("phone null / undefined accepted (optional)", isValidPhone(null) && isValidPhone(undefined));
+for (const bad of ["abc<script>", "081-234-567x", "12345678", "1234567890123456", "081.234.5678", "+66#812345678"]) {
+  check(`phone ${JSON.stringify(bad)} rejected`, !isValidPhone(bad));
+}
+const badProfile = updateProfileSchema.safeParse({ name: "x", phone: "abc<script>" });
+check(
+  "updateProfileSchema rejects a bad phone with the Thai message",
+  !badProfile.success && badProfile.error.issues[0]?.message === PHONE_FORMAT_MESSAGE
+);
+check("updateProfileSchema accepts a seeded phone and null", updateProfileSchema.safeParse({ name: "x", phone: "081-234-5680" }).success && updateProfileSchema.safeParse({ name: "x", phone: null }).success);
+check("personSchema / updatePersonSchema reject a bad phone", !personSchema.safeParse({ name: "x", email: "a@b.co", phone: "abc" }).success && !updatePersonSchema.safeParse({ phone: "abc" }).success);
 
 console.log(`\n${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

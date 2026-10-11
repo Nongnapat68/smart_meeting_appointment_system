@@ -6,6 +6,21 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const email = () => z.string().trim().min(1, "กรุณากรอกอีเมล").regex(EMAIL_RE, "รูปแบบอีเมลไม่ถูกต้อง");
 const nonEmpty = (msg: string) => z.string().trim().min(1, msg);
 
+// Phone numbers: optional; when given, only digits, spaces and - + ( ), with
+// 9-15 digits in total (covers "081-234-5678", "0123456789", "+66 81 234 5678").
+// Shared by the Settings API schema and the People forms (which write through
+// supabase-js and call isValidPhone themselves).
+export const PHONE_FORMAT_MESSAGE =
+  "รูปแบบเบอร์โทรศัพท์ไม่ถูกต้อง — ใช้ได้เฉพาะตัวเลข ช่องว่าง - + ( ) และต้องมีตัวเลข 9-15 หลัก";
+export function isValidPhone(value: string | null | undefined): boolean {
+  const v = (value ?? "").trim();
+  if (!v) return true;
+  if (!/^[0-9 ()+-]+$/.test(v)) return false;
+  const digits = v.replace(/\D/g, "").length;
+  return digits >= 9 && digits <= 15;
+}
+const phone = () => z.string().trim().refine(isValidPhone, PHONE_FORMAT_MESSAGE).optional().nullable();
+
 // Optional reference (meetingId/projectId/…): trim and treat a blank string as
 // "absent" (null), so an empty id never reaches Prisma and trips a foreign-key
 // constraint (which would otherwise surface as a 500). Ids are Prisma cuids or
@@ -90,7 +105,7 @@ export const changePasswordSchema = z
 
 export const updateProfileSchema = z.object({
   name: nonEmpty("กรุณากรอกชื่อ"),
-  phone: z.string().trim().optional().nullable(),
+  phone: phone(),
   title: z.string().trim().optional().nullable(),
   department: z.string().trim().optional().nullable(),
   emailNotifications: z.boolean().optional(),
@@ -102,7 +117,7 @@ export const updateProfileSchema = z.object({
 export const personSchema = z.object({
   name: nonEmpty("กรุณากรอกชื่อ"),
   email: email(),
-  phone: z.string().trim().optional().nullable(),
+  phone: phone(),
   title: z.string().trim().optional().nullable(),
   department: z.string().trim().optional().nullable(),
   type: z.enum(["INTERNAL", "EXTERNAL"]).default("EXTERNAL"),
@@ -116,7 +131,7 @@ export const personSchema = z.object({
 export const updatePersonSchema = z.object({
   name: nonEmpty("กรุณากรอกชื่อ").optional(),
   email: email().optional(),
-  phone: z.string().trim().optional().nullable(),
+  phone: phone(),
   title: z.string().trim().optional().nullable(),
   department: z.string().trim().optional().nullable(),
   type: z.enum(["INTERNAL", "EXTERNAL"]).optional(),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 
 export function Modal({
@@ -23,6 +23,18 @@ export function Modal({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Every caller puts its title as the first heading inside `children`, so the
+  // dialog is labelled by that heading (given an id here if it has none).
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open || !panelRef.current) return;
+    const heading = panelRef.current.querySelector("h1, h2, h3");
+    if (!heading) return;
+    if (!heading.id) heading.id = titleId;
+    panelRef.current.setAttribute("aria-labelledby", heading.id);
+  }, [open, titleId, children]);
+
   if (!open) return null;
 
   return (
@@ -31,6 +43,9 @@ export function Modal({
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
         className={`bg-surface-container-lowest rounded-xl shadow-[0_4px_15px_rgba(0,0,0,0.15)] w-full ${maxWidth} flex flex-col p-6 gap-6`}
         onClick={(e) => e.stopPropagation()}
       >

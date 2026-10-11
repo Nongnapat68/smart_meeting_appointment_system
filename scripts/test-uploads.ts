@@ -11,7 +11,18 @@
  *
  * Exits 0 if every assertion passes.
  */
-import { checkAttachmentUpload, checkAvatarUpload, ATTACHMENT_ACCEPT, AVATAR_ACCEPT } from "@/lib/upload-validation";
+import { readFileSync } from "fs";
+import path from "path";
+import { taskUploadDir, taskUploadsRoot } from "@/lib/task-uploads";
+import {
+  checkAttachmentUpload,
+  checkAvatarUpload,
+  checkAttachmentRequestSize,
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_MAX_REQUEST_BYTES,
+  AVATAR_ACCEPT,
+} from "@/lib/upload-validation";
 
 let failures = 0;
 let passed = 0;
@@ -155,6 +166,34 @@ check("avatar real JPEG accepted with ext jpg", (() => {
 console.log("\n[6] accept hints for the file pickers");
 check("avatar picker accept lists only images", AVATAR_ACCEPT === ".jpg,.jpeg,.png,.webp,.gif", AVATAR_ACCEPT);
 check("attachment picker accept has no .html/.svg/.js", !/\.(html?|svg|js)\b/.test(ATTACHMENT_ACCEPT), ATTACHMENT_ACCEPT);
+
+console.log("\n[7] Attachments: size limit (10MB) checked from Content-Length before the body is read");
+const MB = 1024 * 1024;
+const sized = (n: number | null) => checkAttachmentRequestSize(n === null ? null : String(n));
+check("max file size is 10MB", ATTACHMENT_MAX_BYTES === 10 * MB);
+check("request cap leaves room for multipart overhead on a 10MB file", ATTACHMENT_MAX_REQUEST_BYTES > ATTACHMENT_MAX_BYTES);
+check("small request (25 B) passes", sized(25).ok);
+check("10MB file + 1KB multipart overhead passes", sized(10 * MB + 1024).ok);
+check("request exactly at the cap passes", sized(ATTACHMENT_MAX_REQUEST_BYTES).ok);
+check("~11MB request is refused with the Thai size message", (() => {
+  const r = sized(11 * MB);
+  return !r.ok && r.message === "ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 10MB)";
+})());
+check("one byte over the cap is refused", !sized(ATTACHMENT_MAX_REQUEST_BYTES + 1).ok);
+check("missing Content-Length passes to the per-file check", sized(null).ok);
+check("unparsable Content-Length passes to the per-file check", checkAttachmentRequestSize("abc").ok);
+check("next.config proxyClientMaxBodySize is larger than the request cap (else bodies arrive truncated → 500)", (() => {
+  const m = readFileSync("next.config.ts", "utf8").match(/proxyClientMaxBodySize:\s*"(\d+)mb"/);
+  return !!m && Number(m[1]) * MB >= ATTACHMENT_MAX_REQUEST_BYTES;
+})());
+
+console.log("\n[8] Task upload folder removed on task delete: only a direct child of public/uploads/tasks/");
+const ROOT = taskUploadsRoot();
+check("cuid task id resolves inside the tasks folder", taskUploadDir("cmv40lls40001uwcsm9a5dedm") === path.join(ROOT, "cmv40lls40001uwcsm9a5dedm"));
+check("uuid task id resolves inside the tasks folder", taskUploadDir("6f46be4e-3d53-468f-a030-2c7447531395") === path.join(ROOT, "6f46be4e-3d53-468f-a030-2c7447531395"));
+for (const bad of ["..", "../avatars", "..\\avatars", "a/b", "x/../../..", "/etc", "C:\\Windows", "", ".", "rlswild%123", "a".repeat(65)]) {
+  check(`task id ${JSON.stringify(bad.length > 20 ? bad.slice(0, 8) + "…" : bad)} refused`, taskUploadDir(bad) === null);
+}
 
 console.log(`\n${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { orContainsAny } from "@/lib/search";
@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
 import { personStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { Modal } from "@/components/ui/Modal";
+import { isValidPhone, PHONE_FORMAT_MESSAGE } from "@/lib/validations";
 import type { Person, ContactGroupMember, ContactGroup } from "@prisma/client";
 
 type PersonRow = Person & { groupMemberships: (ContactGroupMember & { group: ContactGroup })[] };
@@ -267,6 +268,7 @@ function AddPersonModal({
     setError(null);
     setLoading(true);
     try {
+      if (!isValidPhone(phone)) throw new Error(PHONE_FORMAT_MESSAGE);
       // Person.id has no DB default (Prisma's @default(cuid()) is a
       // client-side-only default) and Person.updatedAt has no DB default
       // either (@updatedAt is Prisma-managed, not a DB trigger) — both must
@@ -356,10 +358,12 @@ function Field({
   required?: boolean;
   maxLength?: number;
 }) {
+  const id = useId();
   return (
     <div className="space-y-1">
-      <label className="font-label-md text-label-md text-on-surface-variant block">{label}</label>
+      <label htmlFor={id} className="font-label-md text-label-md text-on-surface-variant block">{label}</label>
       <input
+        id={id}
         type={type}
         required={required}
         value={value}
