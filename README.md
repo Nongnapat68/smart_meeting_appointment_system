@@ -16,11 +16,11 @@ Tailwind CSS 4 · [Anthropic API](https://docs.anthropic.com/) (Claude) สำ�
 - **บุคคล/กลุ่มผู้ติดต่อ** — จัดการทั้งผู้ใช้งานในระบบและบุคคลภายนอกที่ไม่มีบัญชี, จัดกลุ่มเพื่อเลือกผู้เข้าร่วมประชุมได้รวดเร็ว
 - **นัดหมาย/การประชุม** — ทั้งแบบครั้งเดียว (One-shot) และแบบต่อเนื่องภายใต้โครงการ (Project-based), เลือกผู้เข้าร่วมได้ทั้งทีละคน/ทั้งกลุ่ม/อีเมลภายนอก
 - **ลิงก์ประชุมออนไลน์แบบใช้ซ้ำได้** — บันทึกลิงก์ (Teams/Zoom/Google Meet ฯลฯ) ไว้ใช้กับหลายนัดหมาย แก้ไข URL ที่จุดเดียวมีผลกับทุกนัดหมายที่อ้างอิง
-- **คำเชิญ** — สร้างไฟล์ `.ics` มาตรฐาน (RFC 5545) และส่งอีเมลเชิญพร้อมไฟล์แนบให้ผู้เข้าร่วมทุกคน
+- **คำเชิญ** — สร้างไฟล์ `.ics` มาตรฐาน (RFC 5545) ดาวน์โหลดได้จากหน้ารายละเอียดประชุม และเตรียมอีเมลเชิญพร้อมไฟล์แนบให้ผู้เข้าร่วมทุกคน (ปัจจุบันการส่งอีเมลเป็น stub — ดู "ข้อจำกัดที่ยังอยู่")
 - **การแจ้งเตือนก่อนประชุม** — ตั้งได้หลายรายการต่อ 1 นัดหมาย (เช่น 7 วัน/2 วัน/1 วัน/1 ชั่วโมงก่อน) พร้อมกันการส่งซ้ำ
 - **Meeting Notes / Decisions / Related Resources** — บันทึกสรุปการประชุม มติ และเอกสารประกอบ หลายรายการต่อ 1 นัดหมาย เรียกดูย้อนหลังได้
 - **Action Items** — งานที่เกิดจากการประชุม ติดตามสถานะเสร็จ/ค้างได้ พร้อมความเห็นและไฟล์แนบ
-- **AI ช่วยเตรียมประชุม** (เฉพาะการประชุมที่ผูกโปรเจกต์) — สรุปก่อนประชุมจากบริบทเดิม, วิเคราะห์ประเด็นค้าง, แนะนำ agenda จากหัวข้อใหม่
+- **AI ช่วยเตรียมประชุม** (เฉพาะการประชุมที่ผูกโปรเจกต์) — สรุปก่อนประชุมจากบริบทเดิม, วิเคราะห์ประเด็นค้าง, แนะนำ agenda จากหัวข้อใหม่ (ถ้าไม่ตั้ง `ANTHROPIC_API_KEY` จะใช้โหมดเทมเพลตที่ประกอบข้อความจากข้อมูลจริงในระบบ ไม่ได้เรียก AI)
 
 ดูสถานะความครบถ้วนเทียบกับ requirements แบบละเอียดทุกข้อที่ [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md)
 
@@ -31,8 +31,8 @@ Tailwind CSS 4 · [Anthropic API](https://docs.anthropic.com/) (Claude) สำ�
 ```bash
 git clone https://github.com/Nongnapat68/smart_meeting_appointment_system.git
 cd smart_meeting_appointment_system
-npm install
-npx prisma generate    # ดูขั้นตอน 2. ด้านล่าง — ต้องรันหลังติดตั้ง dependencies เสมอ
+npm ci                 # ติดตั้งตาม package-lock.json ทุกตัว (npm install ก็ได้ แต่อาจแก้ package-lock.json)
+npx prisma generate    # npm ci เรียกให้อัตโนมัติแล้ว (postinstall) — รันซ้ำได้ถ้าเจอ "@prisma/client did not initialize yet"
 ```
 
 ### 1. ตั้งค่า environment variables
@@ -51,7 +51,7 @@ cp .env.example .env
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase Dashboard → Project Settings → API → **Publishable key** (เดิมเรียก `anon` key) — ปลอดภัยที่จะ expose ให้ browser *(ใหม่)* |
 | `SUPABASE_SECRET_KEY` | Supabase Dashboard → Project Settings → API → **Secret key** — สิทธิ์เต็ม ใช้ฝั่ง server เท่านั้น **ห้าม** ใส่ prefix `NEXT_PUBLIC_` เด็ดขาด *(ใหม่)* |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) — จำเป็นสำหรับฟีเจอร์ AI (สรุปก่อนประชุม/วิเคราะห์ประเด็นค้าง/แนะนำ agenda) เท่านั้น ส่วนอื่นของระบบใช้งานได้ปกติแม้ไม่ตั้งค่า |
-| `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` | ไม่บังคับสำหรับ dev — ถ้าไม่ตั้งค่า อีเมล OTP/คำเชิญ/แจ้งเตือนจะ log ออกทาง server console แทนการส่งจริง (ดู `src/lib/email.ts`) |
+| `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` | ไม่ต้องตั้ง — `sendEmail()` (`src/lib/email.ts`) ยังเป็น stub: ทุกอีเมล (OTP/คำเชิญ/แจ้งเตือน) ถูก log ออกทาง server console เสมอ แม้ตั้ง `SMTP_HOST` ก็ไม่ส่งจริง (โค้ดอ่านแค่ `SMTP_HOST`; อีกสี่ตัวเตรียมไว้สำหรับ transport จริงในอนาคต) |
 | `REMINDER_AUTO_PROCESS` / `REMINDER_AUTO_PROCESS_INTERVAL_SECONDS` | ไม่บังคับ — **ค่าเริ่มต้นปิด** ดูหัวข้อ "ประมวลผลการแจ้งเตือนอัตโนมัติ" ด้านล่าง |
 
 #### ประมวลผลการแจ้งเตือนอัตโนมัติ (ไม่บังคับ)
@@ -77,11 +77,13 @@ REMINDER_AUTO_PROCESS_INTERVAL_SECONDS="60"  # ตรวจทุกกี่ว
 npx prisma generate
 ```
 
-`npm install` มี postinstall hook ของ `@prisma/client` ที่ควร generate ให้อัตโนมัติอยู่แล้ว แต่ทดสอบจริงพบว่าบางครั้ง
-client ที่ postinstall สร้างไว้ยัง initialize ไม่สมบูรณ์ (รันแล้วเจอ `@prisma/client did not initialize yet`) — รันคำสั่งนี้ตรงๆ
-อีกรอบเพื่อความชัวร์ก่อนไปขั้นต่อไปเสมอ
+`package.json` มี `postinstall: prisma generate` จึงสร้าง client ให้ทุกครั้งที่ `npm ci`/`npm install` (ทดสอบโคลนใหม่แล้วพบว่า
+postinstall ของ `@prisma/client` เองไม่ได้สร้างให้) ถ้ายังเจอ `@prisma/client did not initialize yet` ให้รันคำสั่งนี้ซ้ำ
 
 ### 3. สร้างฐานข้อมูล
+
+> **ถ้าใช้ฐานข้อมูล Supabase ของทีมที่มีอยู่แล้ว (ได้ `.env` จากเจ้าของโปรเจกต์)**: ข้ามขั้น 3 และ 4 ไปขั้น 5 ได้เลย — migration ถูก apply ครบแล้ว และ**ห้ามรัน `db:seed`** เพราะจะลบข้อมูลทุกตารางของทุกคน
+> ขั้น 3–4 ใช้เฉพาะเมื่อสร้างโปรเจกต์ Supabase ใหม่ที่ว่างเปล่าของตัวเอง
 
 ```bash
 npx prisma migrate deploy
@@ -96,11 +98,13 @@ npx prisma migrate deploy
 ### 4. ใส่ข้อมูลตัวอย่าง
 
 ```bash
-npm run db:seed
+SEED_RESET_ALL=yes npm run db:seed                     # bash / Git Bash
+$env:SEED_RESET_ALL="yes"; npm run db:seed             # PowerShell
 ```
 
-สร้างผู้ใช้ตัวอย่าง 5 คนใน Supabase Auth จริง + ข้อมูลผู้ติดต่อ/กลุ่ม/โปรเจกต์/นัดหมาย/งาน ตัวอย่าง (รันซ้ำได้ปลอดภัย — ลบข้อมูล
-ตัวอย่างเดิมแล้วสร้างใหม่ทุกครั้ง ไม่กระทบข้อมูลจริงอื่นที่ไม่ใช่ 5 บัญชีนี้)
+**คำเตือน: สคริปต์นี้ลบข้อมูลทุกแถวของทุกตาราง (ไม่ใช่แค่ข้อมูลตัวอย่าง) แล้วสร้างผู้ใช้ตัวอย่าง 5 คนใน Supabase Auth +
+ข้อมูลผู้ติดต่อ/กลุ่ม/โปรเจกต์/นัดหมาย/งาน ตัวอย่างใหม่** — ใช้กับฐานข้อมูลใหม่ของตัวเองเท่านั้น ห้ามรันกับฐานข้อมูลที่ใช้ร่วมกัน
+ถ้าไม่ตั้ง `SEED_RESET_ALL=yes` สคริปต์จะปฏิเสธและไม่แตะฐานข้อมูล
 
 ### 5. รัน
 
@@ -109,6 +113,30 @@ npm run dev
 ```
 
 เปิด [http://localhost:3000](http://localhost:3000) แล้ว login ด้วยบัญชีทดสอบด้านล่าง
+
+---
+
+## ทดสอบ (test:*)
+
+ตรวจโค้ด: `npm run lint` และ `npm run typecheck` (สร้าง type ของ route ด้วย `next typegen` ก่อน `tsc` — `npx tsc` เปล่าๆ ในโคลนใหม่จะหา `LayoutProps` ไม่เจอ) ; `npm run build` ตรวจ type ให้ด้วย
+
+ชุดทดสอบเป็นสคริปต์ `tsx` ใน `scripts/` แต่ละชุดพิมพ์ผล ✅/❌ และจบด้วย exit 0 เมื่อผ่านทั้งหมด:
+
+- `npm run test:uploads`, `npm run test:format`, `npm run test:redirect` — pure function ไม่ต้องใช้ฐานข้อมูลหรือเซิร์ฟเวอร์
+- `npm run test:rls`, `npm run test:authz` — ใช้ `.env` และ**ต่อฐานข้อมูลจริง**: สร้าง fixture ชั่วคราวแล้วลบเอง (`test:authz` เปิด `next dev` ชั่วคราวที่พอร์ต 3199) — รันเมื่อจำเป็นเท่านั้น
+- `npm run test:otp`, `npm run test:reminders` — ต้องใช้ Postgres ทิ้งได้ในเครื่อง (localhost เท่านั้น สคริปต์ปฏิเสธที่อยู่อื่น) ผ่านตัวแปร `OTP_TEST_DATABASE_URL` / `REMINDER_TEST_DATABASE_URL` เช่น
+  `REMINDER_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54329/otptest npm run test:reminders`
+  (`test:reminders` ต้องการฐานที่ apply ทุก migration พร้อม stand-in ของ schema `auth`; `test:otp` ใช้ฐานจาก `prisma db push` — รายละเอียดในหัวไฟล์ของแต่ละสคริปต์)
+
+---
+
+## ข้อจำกัดที่ยังอยู่
+
+- **อีเมลยังไม่ส่งจริง** — `sendEmail()` เป็น stub ที่ log ข้อความไว้ใน server console การเตือนที่ประมวลผลแล้วจึงมีสถานะ `SIMULATED` (จำลองการส่ง) ไม่ใช่ `SENT`
+- **AI** — ไม่มี `ANTHROPIC_API_KEY` จะใช้โหมดเทมเพลต (ป้าย "สร้างโดยระบบ") ; ปุ่มจัดลำดับงานด้วย AI ในหน้า `/tasks` ต้องมีคีย์ (ไม่มีโหมดเทมเพลต)
+- **การแจ้งเตือนที่ถึงเวลา** ไม่ถูกประมวลผลเองถ้าไม่เปิด `REMINDER_AUTO_PROCESS=1` — แอดมินต้องกดปุ่มบนหน้า `/reminders` (หน้าแสดงสถานะนี้ให้ทุกคนเห็น)
+- **ยังไม่มีสมัครสมาชิกแบบเปิด** (FR-01) — บัญชีถูกสร้างโดย `db:seed`
+- รายการข้อจำกัดเต็ม (รวมเรื่องที่ต้องแก้ RLS/DB) อยู่ที่ [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) หัวข้อ "สิ่งที่ยังไม่ทำ (ของจริง)"
 
 ---
 

@@ -29,6 +29,16 @@ async function createSeedAuthUser(email: string): Promise<string> {
 }
 
 async function main() {
+  // The clean slate below deletes EVERY row of every table, not just the
+  // sample data — on a shared database that wipes everyone's meetings. Make
+  // that an explicit choice instead of something one `npm run db:seed` does.
+  if (process.env.SEED_RESET_ALL !== "yes") {
+    console.error(
+      "Refusing to seed: this script deletes ALL data in the database (every table), then recreates the sample data.\n" +
+        "Only run it on a new/empty database of your own. To proceed: SEED_RESET_ALL=yes npm run db:seed"
+    );
+    process.exit(1);
+  }
   console.log("🌱 Seeding database...");
 
   // Remove any pre-existing Supabase Auth users for the 5 seed accounts
