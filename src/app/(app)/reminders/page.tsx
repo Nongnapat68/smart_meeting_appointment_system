@@ -35,15 +35,24 @@ export default function RemindersPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reasonModal, setReasonModal] = useState<ReminderRow | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
 
-  // Only decides whether to show the process-due button — the route itself
-  // still rejects non-admins with 403, so this is not the security boundary.
+  // Decides whether to show the process-due button (admin-only) and the per-row
+  // cancel button (only the meeting's organizer or an admin — mirrors the
+  // update_meeting_organizer_or_admin RLS policy). Both routes/RLS still reject
+  // anyone else, so this is not the security boundary, just the UI gate.
   useEffect(() => {
     api
-      .get<{ user: { role: string } | null }>("/api/auth/me")
-      .then((res) => setIsAdmin(res.user?.role === "ADMIN"))
-      .catch(() => setIsAdmin(false));
+      .get<{ user: { id: string; role: string } | null }>("/api/auth/me")
+      .then((res) => {
+        setIsAdmin(res.user?.role === "ADMIN");
+        setCurrentUserId(res.user?.id ?? null);
+      })
+      .catch(() => {
+        setIsAdmin(false);
+        setCurrentUserId(null);
+      });
   }, []);
 
   const load = useCallback(async () => {
@@ -284,7 +293,7 @@ export default function RemindersPage() {
                               </button>
                             </>
                           )}
-                          {r.status === "PENDING" && (
+                          {r.status === "PENDING" && (isAdmin || r.meeting.organizerId === currentUserId) && (
                             <button
                               onClick={() => cancel(r.id)}
                               disabled={busyId === r.id}

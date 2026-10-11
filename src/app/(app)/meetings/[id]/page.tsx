@@ -11,7 +11,7 @@ import { CreateTaskButton } from "@/components/tasks/CreateTaskButton";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import { SAMPLE_MODE_MODEL } from "@/lib/ai-sample-mode";
 import { getCurrentUser } from "@/lib/auth";
-import { canEditMeeting } from "@/lib/permissions";
+import { canEditMeeting, canContributeToMeeting } from "@/lib/permissions";
 import type { MeetingDetail } from "./types";
 
 export default async function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -55,6 +55,11 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
   // src/lib/permissions.ts.
   const user = await getCurrentUser();
   const canManage = canEditMeeting(meeting, user);
+  // N12: the note/decision/resource add forms are gated the same way — the
+  // insert RLS policy lets only the organizer, an invited participant or an
+  // admin add them, so a signed-in bystander sees a read-only message instead
+  // of a form that RLS would reject.
+  const canContribute = canContributeToMeeting(meeting, user);
   // PostgREST embeds AISummary as an array here ([] or [row]) despite the
   // unique meetingId, so `meeting.aiSummary` was always truthy and `.content`
   // undefined: the card said "ดู / แก้ไข" with no summary, and a real summary
@@ -68,7 +73,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
       <div className="mb-6">
         <Link href="/meetings" className="inline-flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors font-body-md text-sm">
           <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-          กลับไปที่ปฏิทิน
+          กลับไปที่การประชุม
         </Link>
       </div>
 
@@ -223,18 +228,21 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
             initialNotes={meeting.notes}
             meeting={{ organizerId: meeting.organizerId }}
             currentUser={user}
+            canContribute={canContribute}
           />
           <MeetingDecisionsCard
             meetingId={meeting.id}
             initialDecisions={meeting.decisions}
             meeting={{ organizerId: meeting.organizerId }}
             currentUser={user}
+            canContribute={canContribute}
           />
           <MeetingResourcesCard
             meetingId={meeting.id}
             initialResources={meeting.resources}
             meeting={{ organizerId: meeting.organizerId }}
             currentUser={user}
+            canContribute={canContribute}
           />
 
           {/* FR-11: notes from previous, related meetings. Renders nothing when

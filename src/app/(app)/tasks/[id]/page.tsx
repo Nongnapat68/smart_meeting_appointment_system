@@ -397,13 +397,15 @@ export default function TaskDetailPage() {
               <h3 className="font-label-md text-label-md font-semibold text-outline uppercase tracking-wider">
                 ไฟล์แนบ ({task.attachments.length})
               </h3>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="text-primary hover:bg-primary-container/10 p-1 rounded transition-colors disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[18px]">{uploading ? "hourglass_empty" : "add"}</span>
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="text-primary hover:bg-primary-container/10 p-1 rounded transition-colors disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[18px]">{uploading ? "hourglass_empty" : "add"}</span>
+                </button>
+              )}
               <input ref={fileInputRef} type="file" accept={ATTACHMENT_ACCEPT} className="hidden" onChange={handleFileChange} />
             </div>
             <div className="space-y-2">

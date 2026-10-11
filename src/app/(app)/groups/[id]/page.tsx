@@ -37,6 +37,7 @@ export default function GroupDetailPage() {
   const [showDeleteGroup, setShowDeleteGroup] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -226,7 +227,7 @@ export default function GroupDetailPage() {
                     <td className="py-4 px-6 text-right">
                       {canManage ? (
                         <button
-                          onClick={() => removeMember(m.personId)}
+                          onClick={() => setConfirmRemoveId(m.personId)}
                           disabled={removingId === m.personId}
                           className="text-outline hover:text-error transition-colors p-2 rounded-full hover:bg-error-container disabled:opacity-50"
                           title="ลบสมาชิก"
@@ -305,6 +306,22 @@ export default function GroupDetailPage() {
             loading={deleting}
             onConfirm={deleteGroup}
             onCancel={() => setShowDeleteGroup(false)}
+          />
+
+          <ConfirmDialog
+            open={confirmRemoveId !== null}
+            title="ลบสมาชิกออกจากกลุ่ม?"
+            description={`คุณต้องการลบ "${group.members.find((m) => m.personId === confirmRemoveId)?.person.name ?? "สมาชิกคนนี้"}" ออกจากกลุ่มใช่หรือไม่`}
+            confirmLabel="ลบสมาชิก"
+            icon="person_remove"
+            destructive
+            loading={removingId !== null}
+            onConfirm={() => {
+              const id = confirmRemoveId;
+              setConfirmRemoveId(null);
+              if (id) void removeMember(id);
+            }}
+            onCancel={() => setConfirmRemoveId(null)}
           />
         </>
       )}

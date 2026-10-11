@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
+import { ConfirmDialog } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Feedback";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -46,6 +47,10 @@ export function AiAssistantPanel({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // FR-15: regenerating upserts over the saved summary, so when one already
+  // exists we confirm first instead of silently replacing a result the user
+  // may have hand-edited.
+  const [confirmRegen, setConfirmRegen] = useState(false);
 
   // FR-16: Pending Issues Analysis — a separate result from FR-15's summary,
   // not persisted, recomputed on demand each time it's asked for.
@@ -67,10 +72,12 @@ export function AiAssistantPanel({
   const [agendaError, setAgendaError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Every load / meeting switch starts all three cards in their "not yet
-    // generated" state — results only appear after the user presses a button.
-    // The saved summary isn't fetched here (POST still persists it, and the
-    // meeting detail page still shows it).
+    // Every load / meeting switch starts the two derived cards (pending issues,
+    // agenda) in their "not yet generated" state — those results only appear
+    // after the user presses a button. The pre-meeting summary (FR-15) is the
+    // exception: it is persisted, so the saved text is fetched back here so the
+    // card shows the existing summary instead of "ยังไม่มีสรุป", and so the
+    // regenerate confirmation has something to guard.
     // Resetting state on meeting switch — deemed safe by design (see eslint.config.mjs).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSummary(null);
@@ -85,11 +92,38 @@ export function AiAssistantPanel({
     setAgendaAt(null);
     setAgendaSources([]);
     setAgendaError(null);
+    if (!selectedId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get<{ summary: AISummary | null }>(`/api/meetings/${selectedId}/ai-summary`);
+        if (cancelled || !res.summary) return;
+        setSummary(res.summary);
+        setContent(res.summary.content);
+      } catch {
+        // A missing/failed lookup just leaves the card in its empty state.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedId]);
 
   function selectMeeting(id: string) {
     setSelectedId(id);
     router.replace(`/ai-assistant?meetingId=${id}`, { scroll: false });
+  }
+
+  function requestGenerate() {
+    if (!selectedId || aiDisabled) return;
+    // A saved summary already exists (loaded in the effect above), so generate()
+    // would upsert over it — confirm before replacing.
+    if (summary) {
+      setConfirmRegen(true);
+      return;
+    }
+    void generate();
   }
 
   async function generate() {
@@ -223,7 +257,7 @@ export function AiAssistantPanel({
                 </div>
               </div>
               <RegenerateButton
-                onClick={generate}
+                onClick={requestGenerate}
                 loading={generating}
                 disabled={aiDisabled}
                 title={aiDisabled ? AI_DISABLED_REASON : "สร้าง/รีเฟรชสรุปใหม่"}
@@ -279,7 +313,7 @@ export function AiAssistantPanel({
                     ยังไม่มีสรุปสำหรับการประชุมนี้
                   </p>
                   <button
-                    onClick={generate}
+                    onClick={requestGenerate}
                     disabled={generating}
                     className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors inline-flex items-center gap-2 disabled:opacity-60"
                   >
@@ -421,6 +455,19 @@ export function AiAssistantPanel({
           </>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmRegen}
+        title="สร้างสรุปใหม่ทับของเดิม?"
+        description="การประชุมนี้มีสรุปที่บันทึกไว้แล้ว การสร้างใหม่จะแทนที่เนื้อหาปัจจุบัน (รวมถึงที่แก้ไขไว้)"
+        confirmLabel="สร้างใหม่"
+        icon="refresh"
+        loading={generating}
+        onConfirm={() => {
+          setConfirmRegen(false);
+          void generate();
+        }}
+        onCancel={() => setConfirmRegen(false)}
+      />
     </div>
   );
 }

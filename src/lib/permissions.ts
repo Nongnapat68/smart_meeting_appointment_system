@@ -37,6 +37,25 @@ export function canEditMeeting(meeting: { organizerId: string | null }, user: Pe
 }
 
 /**
+ * Mirrors "insert_organizer_or_participant_or_admin" on MeetingNote / Decision /
+ * RelatedResource: who may add a note, decision or resource to a meeting — an
+ * admin, the meeting's organizer, or anyone invited (a participant whose linked
+ * Person row points at the signed-in user). Editing/deleting an *existing* row
+ * is stricter (see canEditMeetingNote / canEditDecision / canEditRelatedResource).
+ */
+export function canContributeToMeeting(
+  meeting: {
+    organizerId: string | null;
+    participants?: { person?: { userId: string | null } | null }[];
+  },
+  user: PermissionUser | null
+): boolean {
+  if (!user) return false;
+  if (isAdmin(user) || meeting.organizerId === user.id) return true;
+  return (meeting.participants ?? []).some((p) => p.person?.userId === user.id);
+}
+
+/**
  * Mirrors "update_unlinked_or_owner_or_admin" on "Person": an unlinked
  * contact (userId NULL, i.e. an external person with no login) may be edited
  * by anyone, a linked one only by its owner or an admin.

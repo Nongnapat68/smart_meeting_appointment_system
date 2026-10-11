@@ -1499,6 +1499,9 @@ GRANT EXECUTE ON FUNCTION public.get_meeting_context(text) TO authenticated;
 -- which the admin-only Notification INSERT policy blocks under INVOKER —
 -- safe only because auth.uid() is checked against p_organizer_id (or
 -- is_admin()) before any table is touched. See docs/DESIGN_DECISIONS.md §5.5.
+-- B1 (20261011090000_fix_create_meeting_participants_groups): step (4) below
+-- read the group id from a non-existent "_MeetingGroups"."groupId" column,
+-- aborting every group-based create; it now reads "_MeetingGroups"."A".
 CREATE OR REPLACE FUNCTION public.create_meeting_with_participants(
   p_organizer_id uuid,
   p_title text,
@@ -1589,17 +1592,19 @@ BEGIN
   IF p_group_ids IS NOT NULL AND array_length(p_group_ids, 1) > 0 THEN
     INSERT INTO public."MeetingParticipant" (id, "meetingId", "personId", role, "rsvpStatus", source, "sourceGroupId")
     SELECT
-      gen_random_uuid()::text, v_meeting_id, m."personId",
-      CASE WHEN m."personId" = v_organizer_person_id THEN 'ORGANIZER' ELSE 'ATTENDEE' END::public."ParticipantRole",
+      gen_random_uuid()::text, v_meeting_id, g."personId",
+      CASE WHEN g."personId" = v_organizer_person_id THEN 'ORGANIZER' ELSE 'ATTENDEE' END::public."ParticipantRole",
       'PENDING'::public."RsvpStatus",
       'GROUP'::public."ParticipantSource",
       g."groupId"
     FROM (
-      SELECT DISTINCT ON (mp."personId") mp."personId", mg."groupId"
+      -- B1 fix: "_MeetingGroups" holds only "A" (ContactGroup) / "B" (Meeting);
+      -- the group id is "A", not a "groupId" column.
+      SELECT DISTINCT ON (mp."personId") mp."personId", mg."A" AS "groupId"
       FROM public."_MeetingGroups" mg
       JOIN public."ContactGroupMember" mp ON mp."groupId" = mg."A"
       WHERE mg."B" = v_meeting_id
-      ORDER BY mp."personId", mg."groupId"
+      ORDER BY mp."personId", mg."A"
     ) g
     ON CONFLICT ("meetingId", "personId") DO NOTHING;
   END IF;

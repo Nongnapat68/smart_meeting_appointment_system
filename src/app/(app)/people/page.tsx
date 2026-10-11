@@ -310,7 +310,7 @@ function AddPersonModal({
         <Field label="ชื่อ-นามสกุล" value={name} onChange={setName} required />
         <Field label="อีเมล" value={email} onChange={setEmail} type="email" required />
         <div className="grid grid-cols-2 gap-4">
-          <Field label="เบอร์โทรศัพท์" value={phone} onChange={setPhone} maxLength={10} />
+          <Field label="เบอร์โทรศัพท์" value={phone} onChange={setPhone} maxLength={20} />
           <Field label="ตำแหน่ง" value={title} onChange={setTitle} />
         </div>
         <Field label="แผนก" value={department} onChange={setDepartment} />

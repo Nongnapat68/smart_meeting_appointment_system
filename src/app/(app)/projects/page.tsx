@@ -171,6 +171,11 @@ function CreateProjectModal({
     setError(null);
     setLoading(true);
     try {
+      // <input type="date"> yields "YYYY-MM-DD", so a lexical compare is a
+      // correct date compare here.
+      if (startDate && endDate && endDate < startDate) {
+        throw new Error("วันสิ้นสุดต้องไม่ก่อนวันเริ่มต้น");
+      }
       // Hybrid migration (Projects resource) — POST create -> direct
       // .insert(). Confirmed from this very form's submit payload (no
       // memberIds field anywhere on it) that project creation never seeds

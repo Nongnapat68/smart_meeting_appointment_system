@@ -150,7 +150,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <SettingField label="ชื่อ - นามสกุล" value={name} onChange={setName} />
                 <SettingField label="อีเมล" value={user.email} onChange={() => {}} disabled type="email" />
-                <SettingField label="เบอร์โทรศัพท์" value={phone} onChange={setPhone} maxLength={10} />
+                <SettingField label="เบอร์โทรศัพท์" value={phone} onChange={setPhone} maxLength={20} />
                 <SettingField label="ตำแหน่ง" value={title} onChange={setTitle} />
                 <div className="md:col-span-2">
                   <SettingField label="แผนก" value={department} onChange={setDepartment} />

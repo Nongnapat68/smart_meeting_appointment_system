@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
+import { ConfirmDialog } from "@/components/ui/Modal";
 import { relativeTime } from "@/lib/format";
 import { dbWriteErrorMessage, isHttpUrl } from "@/lib/db-errors";
 import {
@@ -40,6 +41,8 @@ const MEETING_CONTRIBUTOR_RULE_ACTION =
 export interface MeetingContributionPermissions {
   meeting: { organizerId: string | null };
   currentUser: PermissionUser | null;
+  /** Mirrors insert_organizer_or_participant_or_admin — gates the add form. */
+  canContribute: boolean;
 }
 
 const RESOURCE_TYPE_LABEL: Record<ResourceType, string> = {
@@ -59,6 +62,7 @@ export function MeetingNotesCard({
   initialNotes,
   meeting,
   currentUser,
+  canContribute,
 }: {
   meetingId: string;
   initialNotes: NoteWithAuthor[];
@@ -101,6 +105,8 @@ export function MeetingNotesCard({
       setSaving(false);
     }
   }
+
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   async function remove(id: string) {
     setDeletingId(id);
@@ -224,7 +230,7 @@ export function MeetingNotesCard({
                           <span className="material-symbols-outlined text-[16px]">edit</span>
                         </button>
                         <button
-                          onClick={() => remove(n.id)}
+                          onClick={() => setConfirmId(n.id)}
                           disabled={deletingId === n.id}
                           title="ลบบันทึก"
                           className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
@@ -240,6 +246,7 @@ export function MeetingNotesCard({
           </div>
         ))}
       </div>
+      {canContribute ? (
       <form onSubmit={submit} className="flex gap-2 items-end">
         <textarea
           value={content}
@@ -256,6 +263,26 @@ export function MeetingNotesCard({
           {posting ? "กำลังบันทึก..." : "เพิ่ม"}
         </button>
       </form>
+      ) : (
+        <p className="font-body-md text-sm text-on-surface-variant bg-surface-container-low rounded-lg p-3">
+          เพิ่มบันทึกการประชุมได้{MEETING_CONTRIBUTOR_RULE}
+        </p>
+      )}
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="ลบบันทึกการประชุมนี้?"
+        description="การลบบันทึกไม่สามารถย้อนกลับได้"
+        confirmLabel="ลบ"
+        icon="delete"
+        destructive
+        loading={deletingId !== null}
+        onConfirm={() => {
+          const id = confirmId;
+          setConfirmId(null);
+          if (id) void remove(id);
+        }}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 }
@@ -265,6 +292,7 @@ export function MeetingDecisionsCard({
   initialDecisions,
   meeting,
   currentUser,
+  canContribute,
 }: {
   meetingId: string;
   initialDecisions: DecisionWithUser[];
@@ -304,6 +332,8 @@ export function MeetingDecisionsCard({
       setSaving(false);
     }
   }
+
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   async function remove(id: string) {
     setDeletingId(id);
@@ -423,7 +453,7 @@ export function MeetingDecisionsCard({
                           <span className="material-symbols-outlined text-[16px]">edit</span>
                         </button>
                         <button
-                          onClick={() => remove(d.id)}
+                          onClick={() => setConfirmId(d.id)}
                           disabled={deletingId === d.id}
                           title="ลบมติที่ประชุม"
                           className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
@@ -439,6 +469,7 @@ export function MeetingDecisionsCard({
           </div>
         ))}
       </div>
+      {canContribute ? (
       <form onSubmit={submit} className="flex gap-2 items-end">
         <textarea
           value={content}
@@ -455,6 +486,26 @@ export function MeetingDecisionsCard({
           {posting ? "กำลังบันทึก..." : "เพิ่ม"}
         </button>
       </form>
+      ) : (
+        <p className="font-body-md text-sm text-on-surface-variant bg-surface-container-low rounded-lg p-3">
+          บันทึกมติที่ประชุมได้{MEETING_CONTRIBUTOR_RULE}
+        </p>
+      )}
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="ลบมติที่ประชุมนี้?"
+        description="การลบมติไม่สามารถย้อนกลับได้"
+        confirmLabel="ลบ"
+        icon="delete"
+        destructive
+        loading={deletingId !== null}
+        onConfirm={() => {
+          const id = confirmId;
+          setConfirmId(null);
+          if (id) void remove(id);
+        }}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 }
@@ -464,6 +515,7 @@ export function MeetingResourcesCard({
   initialResources,
   meeting,
   currentUser,
+  canContribute,
 }: {
   meetingId: string;
   initialResources: ResourceWithUser[];
@@ -512,6 +564,8 @@ export function MeetingResourcesCard({
       setSaving(false);
     }
   }
+
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   async function remove(id: string) {
     setDeletingId(id);
@@ -673,7 +727,7 @@ export function MeetingResourcesCard({
                         <span className="material-symbols-outlined text-[16px]">edit</span>
                       </button>
                       <button
-                        onClick={() => remove(r.id)}
+                        onClick={() => setConfirmId(r.id)}
                         disabled={deletingId === r.id}
                         title="ลบเอกสารอ้างอิง"
                         className="p-1 rounded-full text-on-surface-variant hover:bg-error-container hover:text-error transition-colors disabled:opacity-50"
@@ -688,6 +742,7 @@ export function MeetingResourcesCard({
           </div>
         ))}
       </div>
+      {canContribute ? (
       <form onSubmit={submit} className="space-y-2">
         <div className="flex gap-2">
           <input
@@ -722,6 +777,26 @@ export function MeetingResourcesCard({
           </button>
         </div>
       </form>
+      ) : (
+        <p className="font-body-md text-sm text-on-surface-variant bg-surface-container-low rounded-lg p-3">
+          เพิ่มเอกสารอ้างอิงได้{MEETING_CONTRIBUTOR_RULE}
+        </p>
+      )}
+      <ConfirmDialog
+        open={confirmId !== null}
+        title="ลบเอกสารอ้างอิงนี้?"
+        description="การลบเอกสารอ้างอิงไม่สามารถย้อนกลับได้"
+        confirmLabel="ลบ"
+        icon="delete"
+        destructive
+        loading={deletingId !== null}
+        onConfirm={() => {
+          const id = confirmId;
+          setConfirmId(null);
+          if (id) void remove(id);
+        }}
+        onCancel={() => setConfirmId(null)}
+      />
     </div>
   );
 }

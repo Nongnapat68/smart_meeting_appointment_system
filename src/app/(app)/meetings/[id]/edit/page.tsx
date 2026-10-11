@@ -22,5 +22,12 @@ export default async function EditMeetingPage({ params }: { params: Promise<{ id
   const user = await getCurrentUser();
   if (!canEditMeeting(meeting, user)) redirect(`/meetings/${meeting.id}`);
 
+  // A cancelled meeting is kept only as history (its reminders are already
+  // cancelled by trg_cancel_meeting_reminders and MeetingActions.tsx hides
+  // edit/reschedule/cancel once status is CANCELLED). This page is still
+  // reachable by URL, so guard it here too and send the user back to the
+  // read-only detail page instead of an editable form.
+  if (meeting.status === "CANCELLED") redirect(`/meetings/${meeting.id}`);
+
   return <MeetingForm initial={{ meeting }} />;
 }

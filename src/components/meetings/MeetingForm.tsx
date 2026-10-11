@@ -12,6 +12,7 @@ import { DateTimeField } from "@/components/meetings/DateTimeField";
 import { toDatetimeLocalValue, formatDateTime } from "@/lib/format";
 import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { parseReminderOffsetInput, REMINDER_OFFSET_MAX_MINUTES } from "@/lib/validations";
+import { isHttpUrl } from "@/lib/db-errors";
 import type { ContactGroup, Meeting, MeetingParticipant, OnlineMeetingResource, Person, Reminder } from "@prisma/client";
 
 // FR-10 example offsets straight from the requirements doc (7d/2d/1d/1h before).
@@ -317,6 +318,13 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
 
   async function createOnlineResource() {
     if (!newResourceName.trim() || !newResourceUrl.trim()) return;
+    // Same http/https guard as the meeting's Related Resources card
+    // (MeetingContext.tsx) — the URL is rendered as a clickable link, so a
+    // javascript:/data: value must not be stored.
+    if (!isHttpUrl(newResourceUrl)) {
+      showToast("URL ต้องขึ้นต้นด้วย http:// หรือ https://", "error");
+      return;
+    }
     setCreatingResource(true);
     try {
       // Hybrid migration (OnlineMeetingResource resource) — POST create ->
@@ -456,6 +464,11 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
     e.preventDefault();
     setError(null);
     setLoading(true);
+    // If this submit creates a brand-new project (the "__new__" picker option)
+    // and the meeting RPC then fails (or the participant/email step throws),
+    // the project would be left orphaned with no meeting pointing at it — so
+    // remember its id and delete it in the catch below.
+    let createdProjectId: string | null = null;
     try {
       if (!startTime || !endTime) throw new Error("กรุณากำหนดเวลาเริ่มและเวลาสิ้นสุด");
       if (new Date(startTime) < new Date()) throw new Error("เวลาเริ่มต้องไม่เป็นอดีต (ย้อนหลัง)");
@@ -490,6 +503,7 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
           .single();
         if (dbError) throw new Error(dbError.message);
         resolvedProjectId = created.id;
+        createdProjectId = created.id;
         setProjectId(resolvedProjectId);
         setNewProjectName("");
       }
@@ -601,6 +615,17 @@ p_project_id: resolvedProjectId || null,
       }
       router.refresh();
     } catch (err) {
+      if (createdProjectId) {
+        // Best-effort rollback of a just-created project whose meeting never
+        // got created/updated — the RPC itself is atomic, but the project
+        // insert happened first and is not part of that transaction. Swallow
+        // any cleanup error so it can't mask the real failure below.
+        try {
+          await createClient().from("Project").delete().eq("id", createdProjectId);
+        } catch {
+          // ignore
+        }
+      }
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
     } finally {
       setLoading(false);

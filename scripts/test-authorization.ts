@@ -198,38 +198,12 @@ async function main() {
 
     console.log("User B attempting to mutate User A's resources (all must be rejected with 403):");
 
-    const meetingEdit = await asB(`/api/meetings/${f.meeting.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "Hijacked by B" }),
-    });
-    check("PUT /api/meetings/:id (edit another user's meeting) -> 403", meetingEdit.status === 403, `got ${meetingEdit.status}`);
-
-    const meetingCancel = await asB(`/api/meetings/${f.meeting.id}/cancel`, { method: "POST" });
-    check("POST /api/meetings/:id/cancel (another user's meeting) -> 403", meetingCancel.status === 403, `got ${meetingCancel.status}`);
-
-    const meetingReschedule = await asB(`/api/meetings/${f.meeting.id}/reschedule`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        startTime: new Date(Date.now() + 999_000).toISOString(),
-        endTime: new Date(Date.now() + 999_999).toISOString(),
-      }),
-    });
-    check("POST /api/meetings/:id/reschedule (another user's meeting) -> 403", meetingReschedule.status === 403, `got ${meetingReschedule.status}`);
-
-    // N11: DELETE /api/meetings/:id was removed from the route file (no UI
-    // ever called it — meetings are cancelled, never deleted), so the method
-    // is now gone from the endpoint entirely. The cross-user 403 it used to
-    // assert is already covered by the PUT probe above, which hits the same
-    // assertOwner() check on the same row.
-    const meetingDelete = await asB(`/api/meetings/${f.meeting.id}`, { method: "DELETE" });
-    check(
-      "DELETE /api/meetings/:id no longer exists (404/405, not an authorized delete)",
-      meetingDelete.status === 404 || meetingDelete.status === 405,
-      `got ${meetingDelete.status}`
-    );
-
+    // Only /api/tasks/:id still has a REST route: task CRUD stayed REST. The
+    // meetings / groups / projects write routes were deleted once the hybrid
+    // migration moved every caller to supabase-js + RPC, so their cross-user
+    // authorization is now enforced (and asserted) at the RLS layer by
+    // scripts/test-rls.ts, not here. This suite keeps a real API-layer IDOR
+    // probe for the one write endpoint that remained.
     const taskEdit = await asB(`/api/tasks/${f.task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -240,54 +214,28 @@ async function main() {
     const taskDelete = await asB(`/api/tasks/${f.task.id}`, { method: "DELETE" });
     check("DELETE /api/tasks/:id (another user's task) -> 403", taskDelete.status === 403, `got ${taskDelete.status}`);
 
-    const groupEdit = await asB(`/api/groups/${f.group.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Hijacked group" }),
-    });
-    check("PUT /api/groups/:id (another user's group) -> 403", groupEdit.status === 403, `got ${groupEdit.status}`);
-
-    const groupDelete = await asB(`/api/groups/${f.group.id}`, { method: "DELETE" });
-    check("DELETE /api/groups/:id (another user's group) -> 403", groupDelete.status === 403, `got ${groupDelete.status}`);
-
-    const projectEdit = await asB(`/api/projects/${f.project.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Hijacked project" }),
-    });
-    check("PUT /api/projects/:id (another user's project) -> 403", projectEdit.status === 403, `got ${projectEdit.status}`);
-
-    const projectDelete = await asB(`/api/projects/${f.project.id}`, { method: "DELETE" });
-    check("DELETE /api/projects/:id (another user's project) -> 403", projectDelete.status === 403, `got ${projectDelete.status}`);
-
     // Negative control: fully unauthenticated (no cookie at all) must get 401, not 403 —
     // proves the 403s above are specifically an *authorization* check, not just
-    // this endpoint always failing. Uses /api/tasks/:id because the meetings
-    // DELETE method was removed (see above); the task route still has one.
+    // this endpoint always failing.
     const noAuth = await fetch(`${BASE}/api/tasks/${f.task.id}`, { method: "DELETE" });
     check("DELETE /api/tasks/:id with no session -> 401 (not 403)", noAuth.status === 401, `got ${noAuth.status}`);
 
     // Positive control: the *actual* owner (User A) can still edit their own
-    // meeting — proves assertOwner isn't just denying everyone.
-    const ownerEdit = await asA(`/api/meetings/${f.meeting.id}`, {
-      method: "PUT",
+    // task — proves assertOwner isn't just denying everyone.
+    const ownerEdit = await asA(`/api/tasks/${f.task.id}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "Edited by rightful owner" }),
+      body: JSON.stringify({ status: "IN_PROGRESS" }),
     });
-    check("PUT /api/meetings/:id as the actual organizer -> 200", ownerEdit.status === 200, `got ${ownerEdit.status}`);
+    check("PATCH /api/tasks/:id as the actual owner -> 200", ownerEdit.status === 200, `got ${ownerEdit.status}`);
 
-    // Verify the DB was in fact left untouched by every rejected attempt.
-    const meetingAfter = await prisma.meeting.findUnique({ where: { id: f.meeting.id } });
-    check(
-      "Meeting title in DB reflects only A's edit, none of B's rejected attempts",
-      meetingAfter?.title === "Edited by rightful owner"
-    );
+    // Verify the DB was in fact left untouched by every rejected attempt — the
+    // status is User A's "IN_PROGRESS", never User B's "COMPLETED".
     const taskAfter = await prisma.task.findUnique({ where: { id: f.task.id } });
-    check("Task status in DB unchanged by B's rejected PATCH", taskAfter?.status === "NOT_STARTED");
-    const groupAfter = await prisma.contactGroup.findUnique({ where: { id: f.group.id } });
-    check("Group name in DB unchanged by B's rejected PUT", groupAfter?.name === "A's private group");
-    const projectAfter = await prisma.project.findUnique({ where: { id: f.project.id } });
-    check("Project name in DB unchanged by B's rejected PUT", projectAfter?.name === "A's private project");
+    check(
+      "Task status in DB reflects only A's edit, none of B's rejected attempts",
+      taskAfter?.status === "IN_PROGRESS"
+    );
 
     console.log("\nCleaning up test fixtures...");
     await cleanupFixtures(f);

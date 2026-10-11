@@ -10,7 +10,7 @@
 > (B) FR-08 (.ics generator + ปุ่มดาวน์โหลด), FR-09 (ต่อ wiring ส่งอีเมลเชิญ+แนบ .ics ตอนสร้าง/แก้ไขครบทุก call site
 > จริง แต่ `sendEmail()` ยังเป็น stub — ยังไม่ส่งอีเมลจริง), BR-13 (endpoint
 > ประมวลผล reminder ที่ถึงเวลา กันส่งซ้ำ) (C) eslint cleanup เหลือ 0 warning — ตรวจสอบจริงผ่าน `npm run build`,
-> `tsc --noEmit`, `npm run lint` (0 warning), `npm run test:authz` (16 passed) และ end-to-end ผ่าน HTTP จริง
+> `tsc --noEmit`, `npm run lint` (0 warning), `npm run test:authz` และ end-to-end ผ่าน HTTP จริง
 > (login จริง → POST/GET ทุก endpoint ใหม่ → เห็นผลใน DB จริง) ไม่ใช่แค่เดา
 > + รอบ Auth Migration/RLS/View-Function-Trigger (ล่าสุด): ย้าย login/session จาก JWT+bcrypt ของระบบเองไปเป็น
 > Supabase Auth ทั้งหมด (`User.id` ตอนนี้คือ uuid เดียวกับ `auth.users.id` ข้าม schema, `ON DELETE CASCADE`) —
@@ -28,6 +28,8 @@
 > `cancel/route.ts`) ไปเป็น DB trigger แทน — BR-13 (`process-due` endpoint) ยังคง behavior เดิมทุกประการ แค่
 > ดึง due-set ผ่าน `process_due_reminders()` แทน query ตรงๆ (ผลลัพธ์เหมือนเดิม ไม่ใช่การเปลี่ยนพฤติกรรม)
 > ดูเหตุผลการออกแบบแต่ละจุดใน `docs/DESIGN_DECISIONS.md`
+>
+> + รอบ Final audit (ล่าสุด): แก้ bug SQL `create_meeting_with_participants()` ขั้น GROUP — เดิมอ้าง `"_MeetingGroups"."groupId"` ที่ไม่มีอยู่จริง (ตาราง join implicit M:N มีแค่ `"A"`/`"B"`) ทำให้สร้างประชุมที่เลือกทั้งกลุ่มล้มเหลวทุกครั้ง; migration `20261011090000` แก้ให้อ่าน `"A"` (ดู §5.5 ใน `DESIGN_DECISIONS.md`) พร้อมลบ dead REST routes 6 ไฟล์ที่ไม่มี caller แล้ว (meetings `[id]`/`reschedule`/`cancel`, groups `[id]`, projects `[id]`, tasks `[id]/comments`) + lib `src/lib/meeting-participants.ts` — `test:authz` เขียนใหม่ให้ probe เฉพาะ `/api/tasks/[id]` ที่ยังเป็น REST route เดียว (5 passed) เพราะ authz ของ meeting/group/project ย้ายไปตรวจที่ RLS layer ผ่าน `test:rls` (34 passed) แทน รอบนี้ยังแก้/เสริมอื่นๆ: กันลบทรัพยากรโดยไม่ยืนยัน (note/decision/resource/สมาชิกกลุ่ม), จำกัดสิทธิ์เขียนตาม RLS ใน UI (ผู้จัด/ผู้เข้าร่วม/admin), `logout` ใช้ `scope: "local"`, JSON ที่ผิดรูปแบบคืน 400, ตรวจวันสิ้นสุดโปรเจกต์ ≥ วันเริ่ม, ตรวจ `OnlineMeetingResource` URL เป็น http/https, ลบโปรเจกต์กำพร้าเมื่อ create meeting ล้ม, และแก้ป้าย back-link ให้ตรงปลายทาง
 >
 > สถานะ: ✅ ทำแล้วตรงสเปก · ⚠️ ทำบางส่วนแต่ไม่ครบ · ❌ ยังไม่ได้ทำ · ➖ N/A (ยังทดสอบไม่ได้เพราะ entity ที่เกี่ยวข้องยังไม่มีอยู่ในระบบ ไม่ใช่ "ทำบางส่วน" หรือ "ไม่ได้ทำ" ในความหมายปกติ)
 >
@@ -98,7 +100,7 @@
 | BR-01 | บุคคลอยู่หลายกลุ่มได้ / กลุ่มมีหลายสมาชิก | ✅ | ไม่เปลี่ยนแปลง |
 | BR-02 | ลบคนออกจากกลุ่มไม่ทำให้ประวัติเข้าร่วมประชุมหาย | ✅ | ไม่เปลี่ยนแปลงจากรอบก่อน |
 | BR-03 | เปลี่ยนสมาชิกกลุ่มภายหลังไม่กระทบผู้เข้าร่วมประชุมเดิม | ✅ | ไม่เปลี่ยนแปลง |
-| BR-04 | ผู้เข้าร่วมมาจากหลายแหล่ง + จัดการข้อมูลซ้ำ | ✅ | ยืนยันซ้ำผ่าน UI จริงแล้ว (ไม่ใช่แค่ schema/backend พร้อมเหมือนรอบก่อน) — `resolveParticipants()` ใน `src/lib/meeting-participants.ts` เขียน `source`/`sourceGroupId` ถูกต้องทั้ง create/edit และตอนนี้ผู้ใช้ *เห็น* ผลจริงผ่านป้ายในหน้า meeting detail ด้วย ดู FR-03 |
+| BR-04 | ผู้เข้าร่วมมาจากหลายแหล่ง + จัดการข้อมูลซ้ำ | ✅ | ยืนยันซ้ำผ่าน UI จริงแล้ว (ไม่ใช่แค่ schema/backend พร้อมเหมือนรอบก่อน) — การ resolve `source`/`sourceGroupId` ทำใน SQL ของ RPC `create_meeting_with_participants`/`update_meeting_with_participants` (ไฟล์เดิม `src/lib/meeting-participants.ts` ถูกลบแล้ว) เขียนถูกต้องทั้ง create/edit (แก้ bug ขั้น GROUP ใน migration `20261011090000` — เดิม create ที่เลือกทั้งกลุ่มล้มเหลวทุกครั้ง) และตอนนี้ผู้ใช้ *เห็น* ผลจริงผ่านป้ายในหน้า meeting detail ด้วย ดู FR-03 |
 | BR-05 | Meeting แก้ไข/เลื่อน/ยกเลิกได้โดยไม่กระทบ meeting อื่น | ✅ | ไม่เปลี่ยนแปลง |
 | BR-06 | Project มีได้หลาย Meeting, Meeting ไม่จำเป็นต้องอยู่ Project | ✅ | ไม่เปลี่ยนแปลง |
 | BR-07 | Meeting ใน Project เดียวกันไม่ต้องมีผู้เข้าร่วมชุดเดียวกัน | ✅ | ไม่เปลี่ยนแปลง |

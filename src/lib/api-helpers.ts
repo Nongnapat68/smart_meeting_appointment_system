@@ -67,6 +67,14 @@ export function withApiErrors<Args extends unknown[]>(
       if (err instanceof ApiError) {
         return jsonError(err.status, err.message);
       }
+      // A request whose body isn't valid JSON (or has the wrong Content-Type)
+      // makes `await request.json()` reject with a SyntaxError deep in the
+      // handler — a client input error, so surface it as 400 rather than the
+      // generic 500 below. (No route parses JSON with JSON.parse inside a
+      // handler, so a SyntaxError here can only come from the request body.)
+      if (err instanceof SyntaxError) {
+        return jsonError(400, "รูปแบบข้อมูลไม่ถูกต้อง");
+      }
       console.error(err);
       return jsonError(500, "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง");
     }

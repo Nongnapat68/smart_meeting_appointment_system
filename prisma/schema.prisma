@@ -264,7 +264,10 @@ enum RsvpStatus {
 }
 
 // How a participant ended up on a meeting's invite list (BR-04) — resolved once
-// at creation time by resolveParticipants() in src/app/api/meetings/route.ts and
+// at creation time inside the create_meeting_with_participants() /
+// update_meeting_with_participants() SQL functions (the old resolveParticipants()
+// helper in src/lib/meeting-participants.ts and the POST /api/meetings route were
+// removed once the hybrid migration moved callers to supabase-js + RPC) and
 // never recomputed later, consistent with the snapshot behavior already
 // verified for BR-03.
 enum ParticipantSource {

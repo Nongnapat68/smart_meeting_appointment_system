@@ -80,6 +80,7 @@ export function DateTimeField({
   const [draft, setDraft] = useState<Draft>(() => draftFrom(value));
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
 
   const todayKey = dateKey(new Date());
   const effectiveMinKey = minDateKey && minDateKey > todayKey ? minDateKey : todayKey;
@@ -121,6 +122,41 @@ export function DateTimeField({
       document.removeEventListener("keydown", onKey, true);
     };
   }, [open, close]);
+
+  // The popup is ~1.5 screens tall in the worst case (month grid + time wheel +
+  // confirm button), so on short viewports (1366x768, 1280x720, phone portrait)
+  // a trigger near the bottom would push it off-screen. Horizontal placement is
+  // chosen from the trigger rect above, but the popup's own height can only be
+  // measured once it's in the DOM — so after mount we shift it up by whatever
+  // spills past the viewport bottom (clamped to the top margin) and, if it still
+  // cannot fit, cap its height and let it scroll instead of overflowing.
+  useIsomorphicLayoutEffect(() => {
+    const el = popupRef.current;
+    if (!open || !el) return;
+    el.style.transform = "";
+    el.style.maxHeight = "";
+    el.style.overflowY = "";
+    const margin = 8;
+    const vh = window.innerHeight;
+    const rect = el.getBoundingClientRect();
+    if (rect.height > vh - margin * 2) {
+      el.style.maxHeight = `${vh - margin * 2}px`;
+      el.style.overflowY = "auto";
+      const shift = rect.top - margin;
+      if (shift > 0) el.style.transform = `translateY(-${shift}px)`;
+      return;
+    }
+    const overflowBottom = rect.bottom - (vh - margin);
+    if (overflowBottom > 0) {
+      const shift = Math.min(overflowBottom, rect.top - margin);
+      if (shift > 0) {
+        el.style.transform = `translateY(-${shift}px)`;
+      } else {
+        el.style.maxHeight = `${vh - margin * 2}px`;
+        el.style.overflowY = "auto";
+      }
+    }
+  }, [open, placement]);
 
   function confirm() {
     if (!draft.key) return;
@@ -167,6 +203,7 @@ export function DateTimeField({
 
         {open && (
           <div
+            ref={popupRef}
             role="dialog"
             aria-label={`เลือกวันที่และเวลา${label}`}
             className={`absolute z-40 ${popupPosition} bg-surface-container-lowest border border-outline-variant rounded-xl shadow-lg p-4`}
