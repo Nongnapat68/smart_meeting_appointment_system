@@ -34,6 +34,7 @@ export const GET = withApiErrors(async (_request: Request, { params }: Params) =
     organizerName: meeting.organizerPerson?.name ?? null,
     organizerEmail: meeting.organizerPerson?.email ?? null,
     attendees: meeting.participants.map((p) => ({ name: p.person.name, email: p.person.email })),
+    cancelled: meeting.status === "CANCELLED",
   });
 
   return new NextResponse(ics, {

@@ -48,13 +48,26 @@ const pathname = usePathname();
   // unread row (select_owner_only RLS scopes it to this user), not from the
   // 10 rows the dropdown shows — those undercount once there are more than
   // 10 unread.
-  const refreshUnreadCount = useCallback(async () => {
-    const { count, error } = await createClient()
-      .from("Notification")
-      .select("*", { count: "exact", head: true })
-      .eq("isRead", false);
-    if (!error) setUnreadCount(count ?? 0);
-  }, []);
+  // Last count read from the database — null until the first read, so the
+  // first load never announces "new" notifications that were already there.
+  const lastUnread = useRef<number | null>(null);
+  const refreshUnreadCount = useCallback(async (): Promise<"ok" | "error" | "unauthorized"> => {
+    try {
+      const { count, error, status } = await createClient()
+        .from("Notification")
+        .select("*", { count: "exact", head: true })
+        .eq("isRead", false);
+      if (status === 401 || error?.code === "42501") return "unauthorized";
+      if (error) return "error";
+      const next = count ?? 0;
+      if (lastUnread.current !== null && next > lastUnread.current) showToast("มีการแจ้งเตือนใหม่", "info");
+      lastUnread.current = next;
+      setUnreadCount(next);
+      return "ok";
+    } catch {
+      return "error";
+    }
+  }, [showToast]);
   // Fetch-on-mount pattern deemed safe by design (see eslint.config.mjs).
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +96,55 @@ if (!error) setItems((data ?? []) as unknown as NotificationRow[]);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshUnreadCount();
   }, [pathname, refreshUnreadCount]);
+
+  // New notifications (an invite, a reminder from the auto-processor) are rows
+  // written by someone else, so nothing on this page changes when they arrive.
+  // Re-read the count every 30 s while the tab is visible: paused while hidden
+  // and re-read as soon as it is visible again, never two reads at once,
+  // backing off up to 5 min after errors, and stopped for good once the
+  // session is gone (401 / signed out).
+  useEffect(() => {
+    const BASE_MS = 30_000;
+    const MAX_MS = 5 * 60_000;
+    let delay = BASE_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let inFlight = false;
+    let stopped = false;
+    const schedule = () => {
+      clearTimeout(timer);
+      if (!stopped && document.visibilityState === "visible") timer = setTimeout(tick, delay);
+    };
+    async function tick() {
+      if (stopped || inFlight || document.visibilityState !== "visible") return;
+      inFlight = true;
+      const result = await refreshUnreadCount();
+      inFlight = false;
+      if (result === "unauthorized") {
+        stopped = true;
+        return;
+      }
+      delay = result === "ok" ? BASE_MS : Math.min(delay * 2, MAX_MS);
+      schedule();
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void tick();
+      else clearTimeout(timer);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    const { data: auth } = createClient().auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        stopped = true;
+        clearTimeout(timer);
+      }
+    });
+    schedule();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      auth.subscription.unsubscribe();
+    };
+  }, [refreshUnreadCount]);
   useEffect(() => {
     if (!open) return;
     const onMouseDown = (e: MouseEvent) => {
@@ -109,6 +171,7 @@ if (!error) setItems((data ?? []) as unknown as NotificationRow[]);
         const res = await api.post<{ unreadCount: number }>(`/api/notifications/${n.id}/read`);
         setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
         setUnreadCount(res.unreadCount);
+        lastUnread.current = res.unreadCount;
       } catch (err) {
         // Still open what was clicked; the badge keeps the real (unchanged) count.
         showToast(err instanceof Error ? err.message : "บันทึกสถานะการอ่านไม่สำเร็จ", "error");

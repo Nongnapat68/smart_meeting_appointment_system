@@ -12,6 +12,7 @@ import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import { SAMPLE_MODE_MODEL } from "@/lib/ai-sample-mode";
 import { getCurrentUser } from "@/lib/auth";
 import { canEditMeeting, canContributeToMeeting } from "@/lib/permissions";
+import { isHttpUrl } from "@/lib/db-errors";
 import type { MeetingDetail } from "./types";
 
 export default async function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -66,7 +67,13 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
   // never showed. Normalize to the single row (or null).
   const rawSummary = meeting.aiSummary as unknown;
   const aiSummary = (Array.isArray(rawSummary) ? (rawSummary[0] ?? null) : rawSummary) as MeetingDetail["aiSummary"];
-  const isLink = meeting.location?.startsWith("http");
+  const isLink = !!meeting.location && isHttpUrl(meeting.location);
+  const onlineUrl = meeting.onlineMeetingResource && isHttpUrl(meeting.onlineMeetingResource.url) ? meeting.onlineMeetingResource.url : null;
+  // "เข้าร่วม" opens the meeting's online link: the reusable online meeting
+  // link first, else a location that is itself an http(s) URL. A meeting with
+  // neither (e.g. a room name) gets no button — it used to render an <a> with
+  // no href that did nothing when clicked.
+  const joinUrl = onlineUrl ?? (isLink ? meeting.location : null);
 
   return (
     <main className="md:ml-0 p-container-margin md:p-8 max-w-6xl mx-auto">
@@ -130,22 +137,26 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                   </div>
                   <div>
                     <p className="text-xs text-outline">ลิงก์ประชุมออนไลน์</p>
-                    <a
-                      className="font-medium text-primary hover:underline flex items-center gap-1"
-                      href={meeting.onlineMeetingResource.url}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {meeting.onlineMeetingResource.name}
-                      <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                    </a>
+                    {onlineUrl ? (
+                      <a
+                        className="font-medium text-primary hover:underline flex items-center gap-1"
+                        href={onlineUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {meeting.onlineMeetingResource.name}
+                        <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                      </a>
+                    ) : (
+                      <p className="font-medium text-on-surface">{meeting.onlineMeetingResource.name}</p>
+                    )}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          <MeetingActions meeting={meeting} canManage={canManage} />
+          <MeetingActions meeting={meeting} canManage={canManage} joinUrl={joinUrl} />
         </div>
       </div>
 
@@ -202,7 +213,9 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
           <div className="bg-surface-container-lowest rounded-xl p-card-padding border border-outline-variant/30">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-headline-md text-headline-md text-on-surface">งานที่เกี่ยวข้อง ({meeting.tasks.length})</h3>
-              <CreateTaskButton defaultMeetingId={meeting.id} defaultProjectId={meeting.project?.id ?? null} />
+              {/* Same people who may add notes/decisions here (canContribute): admin, organizer,
+                  participants. UI only — RLS insert_own_as_creator on Task is unchanged. */}
+              {canContribute && <CreateTaskButton defaultMeetingId={meeting.id} defaultProjectId={meeting.project?.id ?? null} />}
             </div>
             {meeting.tasks.length === 0 ? (
               <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีงานจากการประชุมนี้</p>

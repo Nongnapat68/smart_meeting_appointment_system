@@ -23,6 +23,8 @@ export interface IcsMeetingInput {
   organizerName: string | null;
   organizerEmail: string | null;
   attendees: IcsAttendee[];
+  /** A cancelled meeting is exported with STATUS:CANCELLED so a calendar app shows it as cancelled. */
+  cancelled?: boolean;
 }
 
 function formatIcsDate(d: Date): string {
@@ -40,19 +42,35 @@ function escapeIcsText(text: string): string {
     .replace(/\r?\n/g, "\\n");
 }
 
+// RFC 5545 §3.2: a parameter value containing ":", ";" or "," must be
+// quoted (backslash escapes are for TEXT values only); DQUOTE can't appear in it.
+function quoteParam(value: string): string {
+  return `"${value.replace(/"/g, "'").replace(/\r?\n/g, " ")}"`;
+}
+
 // RFC 5545 §3.1: content lines longer than 75 octets must be folded —
-// continued on the next line with a single leading space.
-function foldLine(line: string): string {
-  if (line.length <= 75) return line;
+// continued on the next line with a single leading space. Counted in UTF-8
+// octets, not characters: a Thai character is 3 octets, so a 75-character
+// Thai title used to produce a 225-octet line. Never splits a character.
+const encoder = new TextEncoder();
+export function foldLine(line: string): string {
   const parts: string[] = [];
-  let rest = line;
-  parts.push(rest.slice(0, 75));
-  rest = rest.slice(75);
-  while (rest.length > 0) {
-    parts.push(" " + rest.slice(0, 74));
-    rest = rest.slice(74);
+  let current = "";
+  let octets = 0;
+  for (const ch of line) {
+    const size = encoder.encode(ch).length;
+    // continuation lines carry one leading space, so they hold 74 octets
+    const limit = parts.length === 0 ? 75 : 74;
+    if (octets + size > limit) {
+      parts.push(current);
+      current = "";
+      octets = 0;
+    }
+    current += ch;
+    octets += size;
   }
-  return parts.join("\r\n");
+  parts.push(current);
+  return parts.map((p, i) => (i === 0 ? p : " " + p)).join("\r\n");
 }
 
 export function generateIcs(input: IcsMeetingInput): string {
@@ -71,12 +89,12 @@ export function generateIcs(input: IcsMeetingInput): string {
     input.description ? `DESCRIPTION:${escapeIcsText(input.description)}` : null,
     input.location ? `LOCATION:${escapeIcsText(input.location)}` : null,
     input.organizerEmail
-      ? `ORGANIZER;CN=${escapeIcsText(input.organizerName ?? input.organizerEmail)}:mailto:${input.organizerEmail}`
+      ? `ORGANIZER;CN=${quoteParam(input.organizerName ?? input.organizerEmail)}:mailto:${input.organizerEmail}`
       : null,
     ...input.attendees.map(
-      (a) => `ATTENDEE;CN=${escapeIcsText(a.name)};ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:${a.email}`
+      (a) => `ATTENDEE;CN=${quoteParam(a.name)};ROLE=REQ-PARTICIPANT;RSVP=TRUE:mailto:${a.email}`
     ),
-    "STATUS:CONFIRMED",
+    input.cancelled ? "STATUS:CANCELLED" : "STATUS:CONFIRMED",
     "END:VEVENT",
     "END:VCALENDAR",
   ];

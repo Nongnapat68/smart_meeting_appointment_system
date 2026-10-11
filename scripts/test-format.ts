@@ -9,6 +9,9 @@
  *      itself under each TZ and compares, so npm run test:format is one
  *      self-contained command.
  *
+ * Also covers the phone-format rule and the .ics builder (src/lib/ics.ts):
+ * UTC times, escaping, octet-based line folding for Thai text, STATUS.
+ *
  * Run with:
  *   npm run test:format
  *
@@ -25,6 +28,7 @@ import {
   parseLocalAsBangkok,
 } from "@/lib/format";
 import { isValidPhone, PHONE_FORMAT_MESSAGE, personSchema, updatePersonSchema, updateProfileSchema } from "@/lib/validations";
+import { foldLine, generateIcs } from "@/lib/ics";
 
 const INSTANT = new Date("2026-10-20T03:00:00Z"); // 10:00 Asia/Bangkok
 
@@ -104,6 +108,30 @@ check(
 );
 check("updateProfileSchema accepts a seeded phone and null", updateProfileSchema.safeParse({ name: "x", phone: "081-234-5680" }).success && updateProfileSchema.safeParse({ name: "x", phone: null }).success);
 check("personSchema / updatePersonSchema reject a bad phone", !personSchema.safeParse({ name: "x", email: "a@b.co", phone: "abc" }).success && !updatePersonSchema.safeParse({ phone: "abc" }).success);
+
+console.log("\n[.ics] FR-08 calendar file (RFC 5545)");
+const icsInput = {
+  uid: "zz-ics-1",
+  title: "ประชุมทบทวนความคืบหน้าโครงการวิจัย AI Lab และพิจารณางบประมาณประจำปี; ครั้งที่ 2, ห้อง A",
+  description: "วาระ 1\nวาระ 2; ตรวจ, \\ ทาง",
+  startTime: INSTANT,
+  endTime: new Date("2026-10-20T04:30:00Z"),
+  location: "ห้องประชุมออนไลน์ A, ชั้น 3",
+  organizerName: "สมชาย ใจดี",
+  organizerEmail: "somchai@smartmeeting.dev",
+  attendees: [{ name: 'Doe, John; "JJ"', email: "john@example.com" }],
+};
+const ics = generateIcs(icsInput);
+const icsLines = ics.split("\r\n");
+const unfolded = ics.replace(/\r\n /g, "");
+check(".ics has VCALENDAR/VEVENT and a stable UID", ics.startsWith("BEGIN:VCALENDAR\r\n") && ics.includes("BEGIN:VEVENT") && ics.includes("END:VEVENT") && unfolded.includes("UID:zz-ics-1@smart-meeting-appointment-system"));
+check(".ics times are UTC (10:00 Bangkok → 030000Z)", unfolded.includes("DTSTART:20261020T030000Z") && unfolded.includes("DTEND:20261020T043000Z"));
+check(".ics every line ≤ 75 UTF-8 octets (Thai is 3 octets per character)", icsLines.every((l) => Buffer.byteLength(l, "utf8") <= 75), String(Math.max(...icsLines.map((l) => Buffer.byteLength(l, "utf8")))));
+check(".ics folding never splits a character and unfolds back to the escaped Thai title", !ics.includes("�") && unfolded.includes("SUMMARY:ประชุมทบทวนความคืบหน้าโครงการวิจัย AI Lab และพิจารณางบประมาณประจำปี\\; ครั้งที่ 2\\, ห้อง A"));
+check(".ics escapes ; , \\ and newlines in TEXT", unfolded.includes("DESCRIPTION:วาระ 1\\nวาระ 2\\; ตรวจ\\, \\\\ ทาง") && unfolded.includes("LOCATION:ห้องประชุมออนไลน์ A\\, ชั้น 3"));
+check(".ics quotes CN parameters instead of backslash-escaping them", unfolded.includes(`ATTENDEE;CN="Doe, John; 'JJ'";ROLE=REQ-PARTICIPANT`) && unfolded.includes(`ORGANIZER;CN="สมชาย ใจดี":mailto:somchai@smartmeeting.dev`));
+check(".ics STATUS:CONFIRMED normally, STATUS:CANCELLED for a cancelled meeting", unfolded.includes("STATUS:CONFIRMED") && generateIcs({ ...icsInput, cancelled: true }).includes("STATUS:CANCELLED"));
+check(".ics short lines are left alone", foldLine("SUMMARY:x") === "SUMMARY:x");
 
 console.log(`\n${passed} passed, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);

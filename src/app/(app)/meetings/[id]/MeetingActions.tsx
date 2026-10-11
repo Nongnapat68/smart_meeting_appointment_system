@@ -11,7 +11,16 @@ import { DateTimeField } from "@/components/meetings/DateTimeField";
 import { parseLocalAsBangkok, toDatetimeLocalValue } from "@/lib/format";
 import type { MeetingWithStringDates } from "./types";
 
-export function MeetingActions({ meeting, canManage }: { meeting: MeetingWithStringDates; canManage: boolean }) {
+export function MeetingActions({
+  meeting,
+  canManage,
+  joinUrl,
+}: {
+  meeting: MeetingWithStringDates;
+  canManage: boolean;
+  /** The meeting's online link (http/https only, see page.tsx); null = no "เข้าร่วม" button. */
+  joinUrl: string | null;
+}) {
   const router = useRouter();
   const { showToast } = useToast();
   const [showReschedule, setShowReschedule] = useState(false);
@@ -19,7 +28,6 @@ export function MeetingActions({ meeting, canManage }: { meeting: MeetingWithStr
   const [cancelling, setCancelling] = useState(false);
 
   const isCancelled = meeting.status === "CANCELLED";
-  const isLink = meeting.location?.startsWith("http");
 
   async function handleCancel() {
     setCancelling(true);
@@ -99,12 +107,12 @@ export function MeetingActions({ meeting, canManage }: { meeting: MeetingWithStr
                 </button>
               </>
             )}
-            {meeting.location && (
+            {joinUrl && (
               <a
-                href={isLink ? meeting.location! : undefined}
-                target={isLink ? "_blank" : undefined}
-                rel={isLink ? "noreferrer" : undefined}
-                className={`px-5 py-2.5 rounded-lg bg-primary text-on-primary hover:opacity-90 transition-all font-body-md font-medium shadow-[0_2px_8px_rgba(53,37,205,0.3)] flex items-center gap-2 ml-2 ${!isLink ? "cursor-default opacity-70" : ""}`}
+                href={joinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 py-2.5 rounded-lg bg-primary text-on-primary hover:opacity-90 transition-all font-body-md font-medium shadow-[0_2px_8px_rgba(53,37,205,0.3)] flex items-center gap-2 ml-2"
               >
                 <span className="material-symbols-outlined text-[18px]">login</span>
                 เข้าร่วม
