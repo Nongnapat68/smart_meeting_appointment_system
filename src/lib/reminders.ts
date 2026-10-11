@@ -2,6 +2,7 @@ import type { Prisma, Reminder } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { ApiError } from "@/lib/api-helpers";
+import { formatDateTime } from "@/lib/format";
 
 // Sending a reminder and recording the outcome — shared by
 // POST /api/reminders/process-due and POST /api/reminders/[id]/retry, which
@@ -34,7 +35,7 @@ async function deliver(reminder: ReminderWithRecipients): Promise<"SENT" | "SIMU
       await sendEmail({
         to: p.person.email,
         subject: `แจ้งเตือนการประชุม: ${reminder.meeting.title}`,
-        text: `การประชุม "${reminder.meeting.title}" จะเริ่มเวลา ${reminder.meeting.startTime.toLocaleString("th-TH")}`,
+        text: `การประชุม "${reminder.meeting.title}" จะเริ่มเวลา ${formatDateTime(reminder.meeting.startTime)}`,
       })
     );
   }

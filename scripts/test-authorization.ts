@@ -229,6 +229,54 @@ async function main() {
     });
     check("PATCH /api/tasks/:id as the actual owner -> 200", ownerEdit.status === 200, `got ${ownerEdit.status}`);
 
+    // Task input validation (ข้อ 3.4): a bad due date and a dangling meetingId
+    // were both a 500 (invalid Date / P2003) before — they must now be a clean
+    // 400, and a blank reference must be treated as "no reference" (201).
+    console.log("\nPOST /api/tasks input validation (must not 500):");
+    const createdTaskIds: string[] = [];
+
+    const badDate = await asA("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "task with a bad date", dueDate: "not-a-date" }),
+    });
+    check("POST /api/tasks dueDate='not-a-date' -> 400", badDate.status === 400, `got ${badDate.status}`);
+
+    const badRef = await asA("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "task with a dangling meeting", meetingId: "does-not-exist-id" }),
+    });
+    check("POST /api/tasks meetingId ที่ไม่มีจริง -> 400 (ไม่ใช่ 500)", badRef.status === 400, `got ${badRef.status}`);
+
+    const blankRef = await asA("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "task with blank refs", meetingId: "   ", projectId: "" }),
+    });
+    check("POST /api/tasks meetingId/projectId ช่องว่าง -> 201", blankRef.status === 201, `got ${blankRef.status}`);
+    if (blankRef.status === 201) {
+      const created = await blankRef.json();
+      createdTaskIds.push(created.task.id);
+      check(
+        "ช่องว่างถูกเก็บเป็น null (ไม่ใช่สตริงว่าง)",
+        created.task.meetingId === null && created.task.projectId === null,
+        `meetingId=${JSON.stringify(created.task.meetingId)} projectId=${JSON.stringify(created.task.projectId)}`
+      );
+    }
+
+    const goodRef = await asA("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "task linked to a real meeting", meetingId: f.meeting.id }),
+    });
+    check("POST /api/tasks meetingId ที่มีจริง -> 201", goodRef.status === 201, `got ${goodRef.status}`);
+    if (goodRef.status === 201) {
+      const created = await goodRef.json();
+      createdTaskIds.push(created.task.id);
+    }
+    if (createdTaskIds.length) await prisma.task.deleteMany({ where: { id: { in: createdTaskIds } } });
+
     // Verify the DB was in fact left untouched by every rejected attempt — the
     // status is User A's "IN_PROGRESS", never User B's "COMPLETED".
     const taskAfter = await prisma.task.findUnique({ where: { id: f.task.id } });

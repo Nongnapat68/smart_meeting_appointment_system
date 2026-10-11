@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner } from "@/components/ui/Feedback";
 import { DateTimeField } from "@/components/meetings/DateTimeField";
-import { toDatetimeLocalValue, formatDateTime } from "@/lib/format";
+import { toDatetimeLocalValue, formatDateTime, parseLocalAsBangkok, nextHourLocalValue } from "@/lib/format";
 import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { parseReminderOffsetInput, REMINDER_OFFSET_MAX_MINUTES } from "@/lib/validations";
 import { isHttpUrl } from "@/lib/db-errors";
@@ -34,15 +34,17 @@ function offsetLabel(minutes: number): string {
   return `${minutes} นาทีก่อน`;
 }
 
+// B8: the form's "YYYY-MM-DDTHH:mm" wall clock is Asia/Bangkok time, never
+// the browser's — nextHourLocalValue() computes the next whole Bangkok hour
+// and parseLocalAsBangkok() reads the picked value back as +07:00, so the
+// stored instant is identical whether the client renders in UTC, UTC+7 or
+// anything else (this also stops the server/client hydration mismatch).
 function defaultStartValue(): string {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return toDatetimeLocalValue(d);
+  return nextHourLocalValue();
 }
 
 function defaultEndValue(startLocal: string): string {
-  return toDatetimeLocalValue(new Date(new Date(startLocal).getTime() + 60 * 60 * 1000));
+  return toDatetimeLocalValue(new Date(parseLocalAsBangkok(startLocal).getTime() + 60 * 60 * 1000));
 }
 
 function datePartOf(local: string): string {
@@ -416,7 +418,7 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
 
   function isOffsetTaken(minutes: number): boolean {
     if (!startTime) return false;
-    return existingScheduledAts.has(new Date(startTime).getTime() - minutes * 60 * 1000);
+    return existingScheduledAts.has(parseLocalAsBangkok(startTime).getTime() - minutes * 60 * 1000);
   }
 
   async function addExistingMeetingReminder(minutes: number) {
@@ -455,7 +457,7 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
     setStartTime(v);
     setEndTime((prev) => {
       if (!prev) return prev;
-      if (new Date(prev) <= new Date(v)) return defaultEndValue(v);
+      if (parseLocalAsBangkok(prev).getTime() <= parseLocalAsBangkok(v).getTime()) return defaultEndValue(v);
       return prev;
     });
   }
@@ -471,10 +473,11 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
     let createdProjectId: string | null = null;
     try {
       if (!startTime || !endTime) throw new Error("กรุณากำหนดเวลาเริ่มและเวลาสิ้นสุด");
-      if (new Date(startTime) < new Date()) throw new Error("เวลาเริ่มต้องไม่เป็นอดีต (ย้อนหลัง)");
-      if (new Date(endTime) <= new Date(startTime)) throw new Error("เวลาสิ้นสุดต้องมาหลังเวลาเริ่ม");
-      const startIso = new Date(startTime).toISOString();
-      const endIso = new Date(endTime).toISOString();
+      if (parseLocalAsBangkok(startTime).getTime() < Date.now()) throw new Error("เวลาเริ่มต้องไม่เป็นอดีต (ย้อนหลัง)");
+      if (parseLocalAsBangkok(endTime).getTime() <= parseLocalAsBangkok(startTime).getTime())
+        throw new Error("เวลาสิ้นสุดต้องมาหลังเวลาเริ่ม");
+      const startIso = parseLocalAsBangkok(startTime).toISOString();
+      const endIso = parseLocalAsBangkok(endTime).toISOString();
       const participantPersonIds = selectedPeople.map((p) => p.id);
       const groupIds = selectedGroups.map((g) => g.id);
 

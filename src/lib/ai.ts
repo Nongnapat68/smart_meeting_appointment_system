@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { ApiError } from "@/lib/api-helpers";
+import { formatDate, formatDateTime } from "@/lib/format";
 
 const MODEL = "claude-opus-5";
 
@@ -89,7 +90,7 @@ export async function generateMeetingSummary(input: MeetingSummaryInput): Promis
 
   const context = [
     `หัวข้อการประชุม: ${input.title}`,
-    `เวลา: ${input.startTime.toLocaleString("th-TH")} - ${input.endTime.toLocaleString("th-TH")}`,
+    `เวลา: ${formatDateTime(input.startTime)} - ${formatDateTime(input.endTime)}`,
     input.location ? `สถานที่/ลิงก์: ${input.location}` : null,
     input.organizerName ? `ผู้จัดประชุม: ${input.organizerName}` : null,
     input.participantNames.length
@@ -101,13 +102,13 @@ export async function generateMeetingSummary(input: MeetingSummaryInput): Promis
       ? `งาน (tasks) ที่เกี่ยวข้องกับโปรเจกต์/ประชุมนี้:\n${input.relatedTasks
           .map(
             (t) =>
-              `- [${t.status}] ${t.title}${t.dueDate ? ` (กำหนดส่ง ${t.dueDate.toLocaleDateString("th-TH")})` : ""}`
+              `- [${t.status}] ${t.title}${t.dueDate ? ` (กำหนดส่ง ${formatDate(t.dueDate)})` : ""}`
           )
           .join("\n")}`
       : null,
     input.pastMeetings.length
       ? `การประชุมก่อนหน้าของโปรเจกต์/กลุ่มเดียวกัน:\n${input.pastMeetings
-          .map((m) => `- ${m.title} (${m.startTime.toLocaleDateString("th-TH")})`)
+          .map((m) => `- ${m.title} (${formatDate(m.startTime)})`)
           .join("\n")}`
       : null,
     input.pastDecisions.length
@@ -178,14 +179,14 @@ export async function generatePendingIssuesAnalysis(input: PendingIssuesInput): 
     input.projectName ? `โปรเจกต์: ${input.projectName}` : null,
     input.overdueTasks.length
       ? `งานที่เลยกำหนดส่งแล้วแต่ยังไม่เสร็จ:\n${input.overdueTasks
-          .map((t) => `- [${t.status}, priority ${t.priority}] ${t.title} (กำหนดส่ง ${t.dueDate.toLocaleDateString("th-TH")})`)
+          .map((t) => `- [${t.status}, priority ${t.priority}] ${t.title} (กำหนดส่ง ${formatDate(t.dueDate)})`)
           .join("\n")}`
       : "งานที่เลยกำหนดส่งแล้วแต่ยังไม่เสร็จ: ไม่มี",
     input.openTasks.length
       ? `งานอื่นที่ยังไม่เสร็จ (ยังไม่เลยกำหนด):\n${input.openTasks
           .map(
             (t) =>
-              `- [${t.status}, priority ${t.priority}] ${t.title}${t.dueDate ? ` (กำหนดส่ง ${t.dueDate.toLocaleDateString("th-TH")})` : ""}`
+              `- [${t.status}, priority ${t.priority}] ${t.title}${t.dueDate ? ` (กำหนดส่ง ${formatDate(t.dueDate)})` : ""}`
           )
           .join("\n")}`
       : null,
@@ -248,7 +249,7 @@ export async function generateAgendaSuggestion(input: AgendaSuggestionInput): Pr
     input.projectName ? `โปรเจกต์: ${input.projectName}` : null,
     input.overdueTasks.length
       ? `งานที่เลยกำหนดส่งแล้วแต่ยังไม่เสร็จ:\n${input.overdueTasks
-          .map((t) => `- ${t.title} (กำหนดส่ง ${t.dueDate.toLocaleDateString("th-TH")})`)
+          .map((t) => `- ${t.title} (กำหนดส่ง ${formatDate(t.dueDate)})`)
           .join("\n")}`
       : null,
     input.openTasks.length
@@ -304,7 +305,7 @@ export async function generateTaskSchedule(tasks: TaskForScheduling[]): Promise<
     .map(
       (t, i) =>
         `${i + 1}. [${t.priority}] ${t.title} — สถานะ: ${t.status}${
-          t.dueDate ? `, กำหนดส่ง: ${t.dueDate.toLocaleDateString("th-TH")}` : ""
+          t.dueDate ? `, กำหนดส่ง: ${formatDate(t.dueDate)}` : ""
         }${t.projectName ? `, โปรเจกต์: ${t.projectName}` : ""}`
     )
     .join("\n");

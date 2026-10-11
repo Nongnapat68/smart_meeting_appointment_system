@@ -133,6 +133,8 @@ model ContactGroup {
   // (MeetingParticipant.sourceGroupId) — kept even if the group is later deleted
   // (see MeetingParticipant.sourceGroupId onDelete: SetNull).
   participantSources MeetingParticipant[] @relation("ParticipantSourceGroup")
+
+  @@index([createdById])
 }
 
 enum GroupRole {
@@ -180,6 +182,8 @@ model Project {
   members     ProjectMember[]
   meetings    Meeting[]
   tasks       Task[]
+
+  @@index([managerId])
 }
 
 model ProjectMember {
@@ -250,6 +254,9 @@ model Meeting {
   @@index([status])
   @@index([startTime])
   @@index([onlineMeetingResourceId])
+  @@index([organizerId])
+  @@index([organizerPersonId])
+  @@index([projectId])
 }
 
 enum ParticipantRole {
@@ -318,6 +325,7 @@ model MeetingNote {
   updatedAt DateTime @updatedAt
 
   @@index([meetingId])
+  @@index([authorId])
 }
 
 model Decision {
@@ -334,6 +342,7 @@ model Decision {
   // project" requirement) — no separate projectId here, so a decision can
   // never point to a different project than its own meeting does.
   @@index([meetingId])
+  @@index([decidedById])
 }
 
 enum ResourceType {
@@ -354,6 +363,7 @@ model RelatedResource {
   createdAt DateTime     @default(now())
 
   @@index([meetingId])
+  @@index([addedById])
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +387,7 @@ model OnlineMeetingResource {
   meetings    Meeting[]
 
   @@index([name])
+  @@index([createdById])
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +437,10 @@ model Task {
   @@index([status])
   @@index([assigneeId])
   @@index([dueDate])
+  @@index([assigneePersonId])
+  @@index([createdById])
+  @@index([projectId])
+  @@index([meetingId])
 }
 
 model TaskComment {
@@ -438,6 +453,7 @@ model TaskComment {
   createdAt DateTime @default(now())
 
   @@index([taskId])
+  @@index([authorId])
 }
 
 model TaskAttachment {

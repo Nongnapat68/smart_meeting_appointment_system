@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { User } from "@prisma/client";
+import { Prisma, type User } from "@prisma/client";
 import { ZodError, type ZodType } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -74,6 +74,18 @@ export function withApiErrors<Args extends unknown[]>(
       // handler, so a SyntaxError here can only come from the request body.)
       if (err instanceof SyntaxError) {
         return jsonError(400, "รูปแบบข้อมูลไม่ถูกต้อง");
+      }
+      // Common Prisma write errors that are the *caller's* fault, not a server
+      // bug: a foreign key that points at a non-existent row (P2003, e.g. a
+      // task created with an unknown meetingId) is a 400, and an update/delete
+      // that matched no row (P2025) is a 404 — instead of the generic 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === "P2003") {
+          return jsonError(400, "ข้อมูลอ้างอิงไม่ถูกต้อง (ไม่พบรหัสที่อ้างถึง)");
+        }
+        if (err.code === "P2025") {
+          return jsonError(404, "ไม่พบข้อมูลที่ต้องการ");
+        }
       }
       console.error(err);
       return jsonError(500, "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง");

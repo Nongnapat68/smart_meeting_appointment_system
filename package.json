@@ -17,7 +17,8 @@
     "test:otp": "tsx scripts/test-otp.ts",
     "test:reminders": "tsx scripts/test-reminders.ts",
     "test:uploads": "tsx scripts/test-uploads.ts",
-    "test:redirect": "tsx scripts/test-open-redirect.ts"
+    "test:redirect": "tsx scripts/test-open-redirect.ts",
+    "test:format": "tsx scripts/test-format.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

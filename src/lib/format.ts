@@ -11,9 +11,42 @@ const THAI_TIMEZONE = "Asia/Bangkok";
 // "YYYY-MM-DDTHH:mm" strings a datetime input produces.
 const NAIVE_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 
+// The local form a <input type="datetime-local"> / DateTimeField renders.
+const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+
 export function parseDbTimestamp(value: Date | string): Date {
   if (typeof value !== "string") return value;
   return new Date(NAIVE_DATETIME.test(value) ? `${value.replace(" ", "T")}Z` : value);
+}
+
+// Asia/Bangkok wall-clock parts of an instant. The timeZone option pins the
+// answer to +07:00 regardless of the server or browser timezone, so every
+// readout agrees no matter which machine runs the render.
+function bangkokParts(date: Date): { y: number; mo: number; d: number; h: number; min: number } {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: THAI_TIMEZONE,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const out: Record<string, number> = {};
+  for (const part of fmt.formatToParts(date)) {
+    if (part.type !== "literal") out[part.type] = Number(part.value);
+  }
+  return { y: out.year ?? NaN, mo: out.month ?? NaN, d: out.day ?? NaN, h: out.hour ?? NaN, min: out.minute ?? NaN };
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// The "YYYY-MM-DDTHH:mm" wall clock (the app's own datetime-input format) is
+// Bangkok local time, never the browser's — forcing the +07:00 offset on parse
+// keeps the stored TIMESTAMP and every readback consistent across timezones.
+export function parseLocalAsBangkok(localValue: string): Date {
+  if (!LOCAL_DATETIME.test(localValue)) return new Date(NaN);
+  return new Date(`${localValue}:00+07:00`);
 }
 
 /**
@@ -58,12 +91,12 @@ export function isPast(endTime: Date | string, now: Date = new Date()): boolean 
 
 export function formatDate(date: Date | string): string {
   const d = parseDbTimestamp(date);
-  return d.toLocaleDateString(THAI_LOCALE, { day: "numeric", month: "short", year: "numeric" });
+  return d.toLocaleDateString(THAI_LOCALE, { timeZone: THAI_TIMEZONE, day: "numeric", month: "short", year: "numeric" });
 }
 
 export function formatTime(date: Date | string): string {
   const d = parseDbTimestamp(date);
-  return d.toLocaleTimeString(THAI_LOCALE, { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString(THAI_LOCALE, { timeZone: THAI_TIMEZONE, hour: "2-digit", minute: "2-digit" });
 }
 
 export function formatDateTime(date: Date | string): string {
@@ -76,12 +109,12 @@ export function formatTimeRange(start: Date | string, end: Date | string): strin
 
 export function dayShortLabel(date: Date | string): string {
   const d = parseDbTimestamp(date);
-  return d.toLocaleDateString(THAI_LOCALE, { weekday: "short" });
+  return d.toLocaleDateString(THAI_LOCALE, { timeZone: THAI_TIMEZONE, weekday: "short" });
 }
 
 export function dayNumber(date: Date | string): number {
   const d = parseDbTimestamp(date);
-  return d.getDate();
+  return bangkokParts(d).d;
 }
 
 export function relativeTime(date: Date | string): string {
@@ -99,7 +132,23 @@ export function relativeTime(date: Date | string): string {
 }
 
 export function toDatetimeLocalValue(date: Date | string): string {
-  const d = parseDbTimestamp(date);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const p = bangkokParts(parseDbTimestamp(date));
+  return `${p.y}-${pad(p.mo)}-${pad(p.d)}T${pad(p.h)}:${pad(p.min)}`;
+}
+
+/** Today's calendar key ("YYYY-MM-DD") in Asia/Bangkok — not the client tz. */
+export function bangkokTodayKey(now: Date = new Date()): string {
+  const p = bangkokParts(now);
+  return `${p.y}-${pad(p.mo)}-${pad(p.d)}`;
+}
+
+/**
+ * The next whole hour in Asia/Bangkok as a datetime-local value — used as the
+ * default start time for new meetings, so server (UTC) and client (any tz)
+ * renders agree and /meetings/new doesn't hydration-mismatch.
+ */
+export function nextHourLocalValue(now: Date = new Date()): string {
+  const p = bangkokParts(now);
+  const topOfHour = `${p.y}-${pad(p.mo)}-${pad(p.d)}T${pad(p.h)}:00`;
+  return toDatetimeLocalValue(new Date(parseLocalAsBangkok(topOfHour).getTime() + 60 * 60 * 1000));
 }

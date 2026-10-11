@@ -6,6 +6,27 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const email = () => z.string().trim().min(1, "กรุณากรอกอีเมล").regex(EMAIL_RE, "รูปแบบอีเมลไม่ถูกต้อง");
 const nonEmpty = (msg: string) => z.string().trim().min(1, msg);
 
+// Optional reference (meetingId/projectId/…): trim and treat a blank string as
+// "absent" (null), so an empty id never reaches Prisma and trips a foreign-key
+// constraint (which would otherwise surface as a 500).
+const optionalRefId = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .transform((v) => (v ? v : null));
+
+// Optional date with the same blank-to-null rule, plus a format check so a
+// bogus string is rejected as 400 "รูปแบบวันที่ไม่ถูกต้อง" instead of being
+// written to the DB as an Invalid Date.
+const optionalDate = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .transform((v) => (v ? v : null))
+  .refine((v) => v === null || !Number.isNaN(new Date(v).getTime()), "รูปแบบวันที่ไม่ถูกต้อง");
+
 // --- Auth -------------------------------------------------------------
 
 export const loginSchema = z.object({
@@ -253,10 +274,10 @@ export const taskSchema = z.object({
   description: z.string().trim().optional().nullable(),
   status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]).default("NOT_STARTED"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
-  dueDate: z.string().trim().optional().nullable(),
-  assigneePersonId: z.string().trim().optional().nullable(),
-  projectId: z.string().trim().optional().nullable(),
-  meetingId: z.string().trim().optional().nullable(),
+  dueDate: optionalDate,
+  assigneePersonId: optionalRefId,
+  projectId: optionalRefId,
+  meetingId: optionalRefId,
 });
 
 // Spelled out rather than taskSchema.partial(): in Zod 4 .partial() keeps each
@@ -267,10 +288,10 @@ export const updateTaskSchema = z.object({
   description: z.string().trim().optional().nullable(),
   status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
-  dueDate: z.string().trim().optional().nullable(),
-  assigneePersonId: z.string().trim().optional().nullable(),
-  projectId: z.string().trim().optional().nullable(),
-  meetingId: z.string().trim().optional().nullable(),
+  dueDate: optionalDate,
+  assigneePersonId: optionalRefId,
+  projectId: optionalRefId,
+  meetingId: optionalRefId,
 });
 
 export const taskCommentSchema = z.object({

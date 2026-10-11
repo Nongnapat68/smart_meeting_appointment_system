@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { formatDate } from "@/lib/format";
+import { formatDate, bangkokTodayKey, nextHourLocalValue } from "@/lib/format";
 
 const ROW_HEIGHT = 32;
 const VISIBLE_ROWS = 3;
@@ -43,7 +43,7 @@ function parseLocal(v: string): { key: string; hour: number; minute: number } | 
 }
 
 function monthTitle(d: Date): string {
-  return d.toLocaleDateString("th-TH", { month: "long", year: "numeric" });
+  return d.toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", month: "long", year: "numeric" });
 }
 
 interface Draft {
@@ -55,10 +55,11 @@ interface Draft {
 function draftFrom(value: string): Draft {
   const parsed = parseLocal(value);
   if (parsed) return parsed;
-  const next = new Date();
-  next.setMinutes(0, 0, 0);
-  next.setHours(next.getHours() + 1);
-  return { key: null, hour: next.getHours(), minute: 0 };
+  // B8: "วันนี้" and the suggested next hour are Asia/Bangkok wall clock, so
+  // the picker doesn't depend on the browser's timezone (and server/client
+  // renders agree).
+  const hour = Number(nextHourLocalValue().slice(11, 13));
+  return { key: null, hour, minute: 0 };
 }
 
 type Placement = "right" | "left" | "bottom";
@@ -82,7 +83,7 @@ export function DateTimeField({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const todayKey = dateKey(new Date());
+  const todayKey = bangkokTodayKey();
   const effectiveMinKey = minDateKey && minDateKey > todayKey ? minDateKey : todayKey;
   const parsed = parseLocal(value);
 

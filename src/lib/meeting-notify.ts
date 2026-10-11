@@ -1,5 +1,6 @@
 import { sendEmail } from "@/lib/email";
 import { generateIcs } from "@/lib/ics";
+import { formatTimeRange } from "@/lib/format";
 
 export interface MeetingForNotify {
   id: string;
@@ -43,7 +44,7 @@ export async function notifyParticipantsByEmail(
 
   const text = [
     `${subjectPrefix}: "${meeting.title}"`,
-    `เวลา: ${meeting.startTime.toLocaleString("th-TH")} - ${meeting.endTime.toLocaleString("th-TH")}`,
+    `เวลา: ${formatTimeRange(meeting.startTime, meeting.endTime)}`,
     location ? `สถานที่/ลิงก์: ${location}` : null,
     meeting.description ? `\nรายละเอียด:\n${meeting.description}` : null,
     "\nไฟล์ปฏิทิน (.ics) แนบมาพร้อมนี้ — เปิดเพื่อเพิ่มลงปฏิทินของคุณ",

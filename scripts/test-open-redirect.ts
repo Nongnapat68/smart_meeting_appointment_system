@@ -25,7 +25,7 @@ function check(label: string, condition: boolean, detail?: string) {
   }
 }
 
-const allowed = ["/dashboard", "/meetings/42", "/meetings/42?tab=notes", "/groups/a/b", "/", "/?x=1"];
+const allowed = ["/dashboard", "/tasks?x=1", "/meetings/42", "/meetings/42?tab=notes", "/groups/a/b", "/", "/?x=1"];
 for (const value of allowed) {
   const got = safeNextPath(value);
   check(`keeps same-site path ${JSON.stringify(value)}`, got === value, `got ${JSON.stringify(got)}`);
@@ -44,6 +44,26 @@ const blocked = [
   "http://evil.example/x",
   "javascript:alert(1)",
   "///evil.example",
+  // Control characters interfere with the browser's own normalization before
+  // navigation: a tab/newline is stripped, so "/\t/evil.com" becomes the
+  // protocol-relative "//evil.com". Reject them raw AND percent-encoded.
+  "/\t/evil.com",
+  "/\n/evil.com",
+  "/\r/evil.com",
+  `/${String.fromCharCode(0x1f)}/evil.com`,
+  `/${String.fromCharCode(0x7f)}/evil.com`,
+  // Encoded ("%09" etc. survive into the URL as-is until the browser decodes).
+  "/%09/evil.com",
+  "/%0A/evil.com",
+  "/%0D/evil.com",
+  "/%00/evil.com",
+  // Encoded backslash variants of "/\\evil.com".
+  "/%5Cevil.com",
+  "/%5c%5cevil.com",
+  // Percent-encoding that turns a bare "/" into "//" (protocol-relative).
+  "/%2f%2fevil.com",
+  // Malformed percent-encoding has no safe interpretation.
+  "/%zz/evil.com",
 ];
 for (const value of blocked) {
   const got = safeNextPath(value as string | undefined | null);

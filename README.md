@@ -32,6 +32,7 @@ Tailwind CSS 4 · [Anthropic API](https://docs.anthropic.com/) (Claude) สำ�
 git clone https://github.com/Nongnapat68/smart_meeting_appointment_system.git
 cd smart_meeting_appointment_system
 npm install
+npx prisma generate    # ดูขั้นตอน 2. ด้านล่าง — ต้องรันหลังติดตั้ง dependencies เสมอ
 ```
 
 ### 1. ตั้งค่า environment variables

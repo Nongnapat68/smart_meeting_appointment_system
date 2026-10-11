@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog } from "@/components/ui/Modal";
 import { Spinner } from "@/components/ui/Feedback";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, parseDbTimestamp } from "@/lib/format";
 import { SAMPLE_MODE_MODEL, type AiResultMode } from "@/lib/ai-sample-mode";
 import type { AISummary, MeetingStatus, MeetingType } from "@prisma/client";
 
@@ -502,8 +502,13 @@ function RegenerateButton({
 /** Shows when a result was produced, so each re-run is visibly confirmed even when the text is unchanged. */
 function LastUpdated({ at }: { at: Date | string | null }) {
   if (!at) return null;
-  const d = new Date(at);
-  const time = d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const d = parseDbTimestamp(at);
+  const time = d.toLocaleTimeString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
   return <p className="font-label-md text-label-md text-on-surface-variant mb-2">อัปเดตล่าสุด {formatDate(d)} {time}</p>;
 }
 
