@@ -146,7 +146,15 @@ function EditPersonModal({
       const supabase = createClient();
       const { data, error: dbError } = await supabase
         .from("Person")
-        .update({ name, phone, title, department, status, updatedAt: new Date().toISOString() })
+        // B19: blank optional fields are stored as NULL, not "".
+        .update({
+          name: name.trim(),
+          phone: phone.trim() || null,
+          title: title.trim() || null,
+          department: department.trim() || null,
+          status,
+          updatedAt: new Date().toISOString(),
+        })
         .eq("id", person.id)
         .select()
         .maybeSingle();

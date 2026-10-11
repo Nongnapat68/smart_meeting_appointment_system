@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Avatar } from "@/components/ui/Avatar";
-import { formatDateTime, formatTime } from "@/lib/format";
+import { formatDateTimeRange } from "@/lib/format";
 import { meetingStatusBadge, participantSourceBadge, StatusBadge, taskStatusBadge } from "@/components/ui/StatusBadge";
 import { MeetingActions } from "./MeetingActions";
 import { MeetingDecisionsCard, MeetingNotesCard, MeetingResourcesCard } from "./MeetingContext";
@@ -46,7 +46,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
   if (error) throw new Error(error.message);
   if (!meeting) notFound();
 
-  const badge = meetingStatusBadge(meeting.status);
+  const badge = meetingStatusBadge(meeting.status, meeting.endTime);
   // N12: everyone can read a meeting (select_all_authenticated), but only the
   // organizer or an admin may change it (update_organizer_or_admin), so the
   // edit / reschedule / cancel controls are only rendered for them. Before
@@ -101,7 +101,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                 <div>
                   <p className="text-xs text-outline">วันที่และเวลา</p>
                   <p className="font-medium text-on-surface">
-                    {formatDateTime(meeting.startTime)} - {formatTime(meeting.endTime)}
+                    {formatDateTimeRange(meeting.startTime, meeting.endTime)}
                   </p>
                 </div>
               </div>

@@ -18,8 +18,16 @@ export default async function DashboardPage() {
         where: { assigneeId: user.id, status: { in: ["NOT_STARTED", "IN_PROGRESS"] } },
       }),
       prisma.notification.count({ where: { userId: user.id, isRead: false } }),
+      // N9: "ตารางสัปดาห์นี้" is the user's own schedule — meetings they organize
+      // or are invited to (an admin oversees everything, so sees all of them).
       prisma.meeting.findMany({
-        where: { startTime: { gte: now, lte: weekAhead }, status: { not: "CANCELLED" } },
+        where: {
+          startTime: { gte: now, lte: weekAhead },
+          status: { not: "CANCELLED" },
+          ...(user.role === "ADMIN"
+            ? {}
+            : { OR: [{ organizerId: user.id }, { participants: { some: { person: { userId: user.id } } } }] }),
+        },
         orderBy: { startTime: "asc" },
         take: 5,
       }),
@@ -156,7 +164,7 @@ export default async function DashboardPage() {
                 </p>
               )}
               {weeklyMeetings.map((m) => {
-                const badge = meetingStatusBadge(m.status);
+                const badge = meetingStatusBadge(m.status, m.endTime);
                 return (
                   <Link
                     key={m.id}

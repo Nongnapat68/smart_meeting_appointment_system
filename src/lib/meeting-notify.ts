@@ -1,6 +1,6 @@
 import { sendEmail } from "@/lib/email";
 import { generateIcs } from "@/lib/ics";
-import { formatTimeRange } from "@/lib/format";
+import { formatDateTimeRange } from "@/lib/format";
 
 export interface MeetingForNotify {
   id: string;
@@ -11,7 +11,9 @@ export interface MeetingForNotify {
   location: string | null;
   onlineMeetingResource: { url: string } | null;
   organizerPerson: { name: string; email: string } | null;
-  participants: { person: { name: string; email: string } }[];
+  participants: {
+    person: { name: string; email: string; user?: { emailNotifications: boolean } | null };
+  }[];
 }
 
 /**
@@ -44,7 +46,7 @@ export async function notifyParticipantsByEmail(
 
   const text = [
     `${subjectPrefix}: "${meeting.title}"`,
-    `เวลา: ${formatTimeRange(meeting.startTime, meeting.endTime)}`,
+    `เวลา: ${formatDateTimeRange(meeting.startTime, meeting.endTime)}`,
     location ? `สถานที่/ลิงก์: ${location}` : null,
     meeting.description ? `\nรายละเอียด:\n${meeting.description}` : null,
     "\nไฟล์ปฏิทิน (.ics) แนบมาพร้อมนี้ — เปิดเพื่อเพิ่มลงปฏิทินของคุณ",
@@ -52,8 +54,13 @@ export async function notifyParticipantsByEmail(
     .filter((l) => l !== null)
     .join("\n");
 
+  // The .ics above still lists every attendee; only the *sending* skips a
+  // participant whose account turned "การแจ้งเตือนผ่านอีเมล" off in Settings
+  // (external contacts have no account and always get the invite).
+  const recipients = meeting.participants.filter((p) => p.person.user?.emailNotifications !== false);
+
   await Promise.all(
-    meeting.participants.map((p) =>
+    recipients.map((p) =>
       sendEmail({
         to: p.person.email,
         subject: `${subjectPrefix}: ${meeting.title}`,

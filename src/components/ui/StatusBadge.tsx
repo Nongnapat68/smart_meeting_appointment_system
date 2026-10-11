@@ -1,3 +1,5 @@
+import { isPast } from "@/lib/format";
+
 const VARIANTS = {
   success: "bg-secondary-container/30 text-on-secondary-container",
   warning: "bg-tertiary-container/20 text-tertiary-container",
@@ -29,11 +31,15 @@ export function StatusBadge({
 
 // --- Domain-specific mappers so call sites don't repeat this switch logic ---
 
-export function meetingStatusBadge(status: string) {
+// N8: pass endTime and a PENDING meeting whose end is already behind us reads
+// "ผ่านไปแล้ว" instead of "รอดำเนินการ". Display only — Meeting.status in the
+// DB is left exactly as the organizer set it.
+export function meetingStatusBadge(status: string, endTime?: Date | string) {
   switch (status) {
     case "ACTIVE":
       return { label: "ยืนยันแล้ว", variant: "success" as const };
     case "PENDING":
+      if (endTime && isPast(endTime)) return { label: "ผ่านไปแล้ว", variant: "neutral" as const };
       return { label: "รอดำเนินการ", variant: "warning" as const };
     case "COMPLETED":
       return { label: "เสร็จสิ้น", variant: "success" as const };
@@ -79,13 +85,13 @@ export function reminderStatusBadge(status: string) {
 export function projectStatusBadge(status: string) {
   switch (status) {
     case "ACTIVE":
-      return { label: "Active", variant: "success" as const };
+      return { label: "กำลังดำเนินการ", variant: "success" as const };
     case "PENDING":
-      return { label: "Pending", variant: "warning" as const };
+      return { label: "รอเริ่ม", variant: "warning" as const };
     case "DELAYED":
-      return { label: "Delayed", variant: "error" as const };
+      return { label: "ล่าช้า", variant: "error" as const };
     case "COMPLETED":
-      return { label: "Completed", variant: "success" as const };
+      return { label: "เสร็จสิ้น", variant: "success" as const };
     default:
       return { label: status, variant: "neutral" as const };
   }

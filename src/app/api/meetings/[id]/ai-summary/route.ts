@@ -22,7 +22,7 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
   const meeting = await prisma.meeting.findUnique({
     where: { id },
     include: {
-      organizer: { select: { name: true } },
+      organizer: { select: { name: true, inAppNotifications: true } },
       project: { select: { id: true, name: true } },
       participants: { include: { person: true } },
       resources: true,
@@ -96,7 +96,8 @@ export const POST = withApiErrors(async (_request: Request, { params }: Params) 
 
   // Let the organizer see it show up in the dashboard activity feed / notifications.
   // Skipped in sample mode — this notification announces an AI result.
-  if (meeting.organizerId && !sampleMode) {
+  // Settings "การแจ้งเตือนในระบบ" off -> no in-app row for this user.
+  if (meeting.organizerId && !sampleMode && meeting.organizer?.inAppNotifications !== false) {
     await prisma.notification.create({
       data: {
         userId: meeting.organizerId,

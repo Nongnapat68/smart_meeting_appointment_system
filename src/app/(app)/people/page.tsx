@@ -44,17 +44,20 @@ export default function PeoplePage() {
         .retry(false);
       if (signal) query = query.abortSignal(signal);
       if (!includeInactive) query = query.eq("status", "ACTIVE");
-      if (q) {
+      // B19: surrounding spaces (e.g. a pasted " สมชาย ") are not part of the
+      // search; whitespace-only means "no search".
+      const term = q.trim();
+      if (term) {
         // Same 3-field OR search GET /api/people used to do (name/email/department
         // "contains"). orContainsAny() quotes the pattern (so a typed comma
         // isn't read as another filter) and escapes % _ \ * " so they match literally.
-        query = query.or(orContainsAny(["name", "email", "department"], q));
+        query = query.or(orContainsAny(["name", "email", "department"], term));
       }
       const { data: items, count, error: dbError } = await query;
       if (signal?.aborted) return; // a newer search replaced this one
       if (dbError) {
         console.error("people search failed", dbError);
-        throw new Error(q ? "ค้นหาไม่สำเร็จ กรุณาลองคำค้นหาอื่น" : "โหลดข้อมูลผู้ติดต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+        throw new Error(term ? "ค้นหาไม่สำเร็จ กรุณาลองคำค้นหาอื่น" : "โหลดข้อมูลผู้ติดต่อไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
       }
 
       // Stats are always unfiltered (independent of `q`), same as the old route.
@@ -89,7 +92,7 @@ if (!signal?.aborted) setLoading(false);
     <div className="p-container-margin max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h2 className="font-headline-lg text-headline-lg text-on-background">ผู้คน (Contacts)</h2>
+          <h2 className="font-headline-lg text-headline-lg text-on-background">ผู้ติดต่อ</h2>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">
             จัดการรายชื่อผู้ติดต่อทั้งภายในและภายนอกสถาบัน
           </p>
@@ -256,7 +259,6 @@ function AddPersonModal({
   const [phone, setPhone] = useState("");
   const [title, setTitle] = useState("");
   const [department, setDepartment] = useState("");
-  const [type, setType] = useState<"INTERNAL" | "EXTERNAL">("EXTERNAL");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -269,15 +271,20 @@ function AddPersonModal({
       // client-side-only default) and Person.updatedAt has no DB default
       // either (@updatedAt is Prisma-managed, not a DB trigger) — both must
       // be supplied explicitly on a direct insert.
+      //
+      // B19: a contact added here is always EXTERNAL — INTERNAL means "has a
+      // login" (Person.userId set when the account is provisioned, see
+      // prisma/seed.ts), and nothing links a hand-made row to an account later.
+      // Blank optional fields are stored as NULL, not "".
       const supabase = createClient();
       const { error: dbError } = await supabase.from("Person").insert({
         id: crypto.randomUUID(),
-        name,
-        email,
-        phone,
-        title,
-        department,
-        type,
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim() || null,
+        title: title.trim() || null,
+        department: department.trim() || null,
+        type: "EXTERNAL",
         status: "ACTIVE",
         updatedAt: new Date().toISOString(),
       });
@@ -314,17 +321,9 @@ function AddPersonModal({
           <Field label="ตำแหน่ง" value={title} onChange={setTitle} />
         </div>
         <Field label="แผนก" value={department} onChange={setDepartment} />
-        <div className="space-y-1">
-          <label className="font-label-md text-label-md text-on-surface-variant block">ประเภท</label>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value as "INTERNAL" | "EXTERNAL")}
-            className="w-full px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest font-body-md text-body-md"
-          >
-            <option value="EXTERNAL">บุคคลภายนอก</option>
-            <option value="INTERNAL">ผู้ใช้งานในระบบ (ยังไม่มีบัญชี)</option>
-          </select>
-        </div>
+        <p className="font-label-md text-label-md text-on-surface-variant">
+          ผู้ติดต่อที่เพิ่มที่นี่จะเป็น &quot;บุคคลภายนอก&quot; — ผู้ใช้งานในระบบจะมีรายชื่อผู้ติดต่อของตนเองอัตโนมัติเมื่อสร้างบัญชี
+        </p>
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-outline-variant font-label-md">
             ยกเลิก

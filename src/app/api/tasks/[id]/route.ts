@@ -42,11 +42,19 @@ export const PATCH = withApiErrors(async (request: Request, { params }: Params) 
   let assigneeId: string | null | undefined = undefined;
   if (body.assigneePersonId !== undefined) {
     const assigneePerson = body.assigneePersonId
-      ? await prisma.person.findUnique({ where: { id: body.assigneePersonId } })
+      ? await prisma.person.findUnique({
+          where: { id: body.assigneePersonId },
+          include: { user: { select: { inAppNotifications: true } } },
+        })
       : null;
     assigneeId = assigneePerson?.userId ?? null;
 
-    if (assigneePerson?.userId && assigneePerson.userId !== existing.assigneeId && assigneePerson.userId !== user.id) {
+    if (
+      assigneePerson?.userId &&
+      assigneePerson.userId !== existing.assigneeId &&
+      assigneePerson.userId !== user.id &&
+      assigneePerson.user?.inAppNotifications !== false
+    ) {
       await prisma.notification.create({
         data: {
           userId: assigneePerson.userId,

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 import { AiAssistantPanel } from "./AiAssistantPanel";
 
 export default async function AiAssistantPage({
@@ -8,12 +9,15 @@ export default async function AiAssistantPage({
 }) {
   const { meetingId } = await searchParams;
 
-  const meetings = await prisma.meeting.findMany({
-    where: { status: { not: "CANCELLED" } },
-    orderBy: { startTime: "desc" },
-    take: 30,
-    select: { id: true, title: true, startTime: true, status: true, type: true },
-  });
+  const [user, meetings] = await Promise.all([
+    getCurrentUser(),
+    prisma.meeting.findMany({
+      where: { status: { not: "CANCELLED" } },
+      orderBy: { startTime: "desc" },
+      take: 30,
+      select: { id: true, title: true, startTime: true, status: true, type: true, organizerId: true },
+    }),
+  ]);
 
   return (
     <div className="p-container-margin max-w-6xl mx-auto">
@@ -26,7 +30,11 @@ export default async function AiAssistantPage({
           เลือกการประชุมเพื่อสร้างสรุปข้อมูลก่อนการประชุมด้วย AI
         </p>
       </div>
-      <AiAssistantPanel meetings={meetings} initialMeetingId={meetingId} />
+      <AiAssistantPanel
+        meetings={meetings}
+        initialMeetingId={meetingId}
+        currentUser={user ? { id: user.id, role: user.role } : null}
+      />
     </div>
   );
 }

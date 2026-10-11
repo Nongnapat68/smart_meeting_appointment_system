@@ -16,9 +16,9 @@
 -- `20260911140000_...process_due_reminders_function`,
 -- `20260911150000_...get_meeting_context_function`,
 -- `20260911160000_...cancel_meeting_reminders_trigger`, plus every later
--- migration through `20261005090000_narrow_update_delete_and_attachment_url`).
+-- migration through `20261011120000_reschedule_meeting_procedure`).
 --
--- Snapshot taken 2026-10-11 (28 migrations). Objects added by the later
+-- Snapshot taken 2026-10-11 (32 migrations). Objects added by the later
 -- migrations are all present below and flagged with the migration that owns
 -- them, so this file stays reviewable against `prisma/migrations/`.
 --
@@ -54,7 +54,18 @@
 --     impersonation, and 20261003140000_insert_attribution_owner_only
 --     replaced five `WITH CHECK (true)` attribution policies (ContactGroup,
 --     Project, Meeting, OnlineMeetingResource, Person).
---   - 2 views (`upcoming_meetings`, `overdue_action_items`), 12 functions,
+--     20261011100000_tighten_update_with_check_and_attachment_path then bound
+--     the MeetingNote/Decision/RelatedResource UPDATE WITH CHECK to the new
+--     meetingId and made the TaskAttachment path check wildcard-free.
+--     The 72 policies sit on 19 tables; "PasswordResetOtp" has RLS with no
+--     policy (deny-all for the API roles).
+--   - 14 extra foreign-key indexes and the TRUNCATE/TRIGGER/REFERENCES revoke
+--     for anon/authenticated (20261011110000).
+--   - 2 views (`upcoming_meetings`, `overdue_action_items`), 11 application
+--     functions in `public` (pg_proc shows 12: the 12th is Supabase's own
+--     platform function `rls_auto_enable()`, excluded below), 1 stored
+--     procedure `private.reschedule_meeting_proc` (prokind 'p', schema
+--     `private`, 20261011120000 — section 7),
 --     and 3 triggers (`trg_cancel_meeting_reminders` on `Meeting`,
 --     `trg_prevent_task_creator_change` on `Task`,
 --     `trg_prevent_user_role_self_escalation` on `"User"`), added for
@@ -86,7 +97,8 @@
 --   3. CREATE INDEX (everything except the indexes PRIMARY KEY creates implicitly)
 --   4. ALTER TABLE ... ADD CONSTRAINT (every FK, added after all tables exist)
 --   5. RLS: 2 helper functions, then GRANT + CREATE POLICY + ENABLE RLS per table
---   6. Views, Functions, Trigger (requirements.md §8 items 4/7/9/14, BR-14)
+--   6. Views, Functions (+ schema private and its stored procedure), Trigger
+--      (requirements.md §8 items 4/7/9/14, BR-14)
 -- =============================================================================
 
 
@@ -435,6 +447,26 @@ CREATE INDEX "TaskComment_taskId_idx" ON "TaskComment" ("taskId");
 CREATE UNIQUE INDEX "User_email_key" ON "User" (email);
 CREATE INDEX "_MeetingGroups_B_index" ON "_MeetingGroups" ("B");
 
+-- 20261011110000_add_fk_indexes_and_revoke_ddl_privileges: one index for each
+-- of the 14 foreign-key columns that had none (FKs already led by a PK/unique
+-- index — "User".id, _MeetingGroups."A", MeetingParticipant."meetingId" — are
+-- not duplicated). Names follow Prisma's @@index default, matching
+-- prisma/schema.prisma. After this, no FK in public lacks a supporting index.
+CREATE INDEX "ContactGroup_createdById_idx" ON "ContactGroup" ("createdById");
+CREATE INDEX "Decision_decidedById_idx" ON "Decision" ("decidedById");
+CREATE INDEX "Meeting_organizerId_idx" ON "Meeting" ("organizerId");
+CREATE INDEX "Meeting_organizerPersonId_idx" ON "Meeting" ("organizerPersonId");
+CREATE INDEX "Meeting_projectId_idx" ON "Meeting" ("projectId");
+CREATE INDEX "MeetingNote_authorId_idx" ON "MeetingNote" ("authorId");
+CREATE INDEX "OnlineMeetingResource_createdById_idx" ON "OnlineMeetingResource" ("createdById");
+CREATE INDEX "Project_managerId_idx" ON "Project" ("managerId");
+CREATE INDEX "RelatedResource_addedById_idx" ON "RelatedResource" ("addedById");
+CREATE INDEX "Task_assigneePersonId_idx" ON "Task" ("assigneePersonId");
+CREATE INDEX "Task_createdById_idx" ON "Task" ("createdById");
+CREATE INDEX "Task_meetingId_idx" ON "Task" ("meetingId");
+CREATE INDEX "Task_projectId_idx" ON "Task" ("projectId");
+CREATE INDEX "TaskComment_authorId_idx" ON "TaskComment" ("authorId");
+
 
 -- =============================================================================
 -- 4. FOREIGN KEYS — added after every table exists. Includes the one
@@ -483,12 +515,26 @@ ALTER TABLE "AISummary" ADD CONSTRAINT "AISummary_meetingId_fkey" FOREIGN KEY ("
 
 -- =============================================================================
 -- 5. ROW LEVEL SECURITY — 2 SECURITY DEFINER helper functions + 72 policies
---    across all 20 tables. Verbatim from
---    prisma/migrations/20260911120000_enable_rls_policies/migration.sql
---    (already applied to and verified against the live database — see
---    scripts/test-rls.ts and that migration's own header for the full
---    design rationale). Reproduced here in full, not summarized, so this
+--    across 19 tables. RLS is enabled on all 20 tables; the 20th,
+--    "PasswordResetOtp", deliberately has no policy at all (= no access for
+--    anon/authenticated — only the server's Prisma connection touches it).
+--    The policy set was first created by
+--    prisma/migrations/20260911120000_enable_rls_policies/migration.sql and
+--    has since been replaced in place by later migrations (each one is named
+--    in a comment above the policy it changed, the latest being
+--    20261011100000_tighten_update_with_check_and_attachment_path); what is
+--    shown is the live pg_policies state as of 2026-10-11, verified by
+--    scripts/test-rls.ts. Reproduced here in full, not summarized, so this
 --    file alone is enough to rebuild the database from nothing.
+--
+--    Table privileges (20261011110000_add_fk_indexes_and_revoke_ddl_privileges):
+--    anon/authenticated keep only SELECT/INSERT/UPDATE/DELETE (all RLS-gated);
+--    the non-RLS TRUNCATE, TRIGGER and REFERENCES grants the Supabase
+--    bootstrap gives them are revoked, now and for future tables:
+--
+--      REVOKE TRUNCATE, TRIGGER, REFERENCES ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+--      ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+--        REVOKE TRUNCATE, TRIGGER, REFERENCES ON TABLES FROM anon, authenticated;
 -- =============================================================================
 
 -- ------------------------------------------------------------------
@@ -796,6 +842,13 @@ CREATE POLICY "insert_organizer_or_participant_or_admin" ON public."MeetingNote"
 -- no longer open to every participant — only the row's own author, the
 -- meeting's organizer, or an admin (the INSERT policy above still lets any
 -- participant add).
+-- 20261011100000_tighten_update_with_check_and_attachment_path: WITH CHECK is
+-- evaluated against the NEW row, so it now mirrors the INSERT rule bound to
+-- the NEW meetingId (admin, organizer of the new meeting, or the author who
+-- also participates in it) — an author can no longer move a note into a
+-- meeting she does not belong to. Inside his own meeting the organizer may
+-- still set authorId to someone else, exactly as INSERT already allows
+-- (docs/DESIGN_DECISIONS.md §5.8).
 CREATE POLICY "update_author_or_organizer_or_admin" ON public."MeetingNote"
   FOR UPDATE TO authenticated
   USING (
@@ -806,7 +859,7 @@ CREATE POLICY "update_author_or_organizer_or_admin" ON public."MeetingNote"
   WITH CHECK (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR "authorId" = (select auth.uid())
+    OR ("authorId" = (select auth.uid()) AND (select public.is_meeting_participant("meetingId")))
   );
 
 CREATE POLICY "delete_author_or_organizer_or_admin" ON public."MeetingNote"
@@ -840,6 +893,7 @@ CREATE POLICY "insert_organizer_or_participant_or_admin" ON public."Decision"
 
 -- 20261005090000_narrow_update_delete_and_attachment_url: same narrowing as
 -- MeetingNote — author (decidedById), organizer, or admin only.
+-- 20261011100000: WITH CHECK bound to the NEW meetingId (same as MeetingNote).
 CREATE POLICY "update_author_or_organizer_or_admin" ON public."Decision"
   FOR UPDATE TO authenticated
   USING (
@@ -850,7 +904,7 @@ CREATE POLICY "update_author_or_organizer_or_admin" ON public."Decision"
   WITH CHECK (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR "decidedById" = (select auth.uid())
+    OR ("decidedById" = (select auth.uid()) AND (select public.is_meeting_participant("meetingId")))
   );
 
 CREATE POLICY "delete_author_or_organizer_or_admin" ON public."Decision"
@@ -884,6 +938,7 @@ CREATE POLICY "insert_organizer_or_participant_or_admin" ON public."RelatedResou
 
 -- 20261005090000_narrow_update_delete_and_attachment_url: same narrowing as
 -- MeetingNote — author (addedById), organizer, or admin only.
+-- 20261011100000: WITH CHECK bound to the NEW meetingId (same as MeetingNote).
 CREATE POLICY "update_author_or_organizer_or_admin" ON public."RelatedResource"
   FOR UPDATE TO authenticated
   USING (
@@ -894,7 +949,7 @@ CREATE POLICY "update_author_or_organizer_or_admin" ON public."RelatedResource"
   WITH CHECK (
     (select public.is_admin())
     OR EXISTS (SELECT 1 FROM public."Meeting" m WHERE m.id = "meetingId" AND m."organizerId" = (select auth.uid()))
-    OR "addedById" = (select auth.uid())
+    OR ("addedById" = (select auth.uid()) AND (select public.is_meeting_participant("meetingId")))
   );
 
 CREATE POLICY "delete_author_or_organizer_or_admin" ON public."RelatedResource"
@@ -1017,6 +1072,9 @@ CREATE POLICY "select_all_authenticated" ON public."TaskAttachment"
 -- under the task's own upload prefix — the only path that inserts attachments
 -- (POST /api/tasks/[id]/attachments, via Prisma) always writes
 -- '/uploads/tasks/<taskId>/<uuid>-<name>.<ext>'.
+-- 20261011100000_tighten_update_with_check_and_attachment_path: the prefix
+-- test is a literal starts_with() (the old LIKE let a "%" or "_" inside
+-- taskId act as a wildcard) and any ".." path segment is refused.
 CREATE POLICY "insert_task_assignee_or_creator_or_admin" ON public."TaskAttachment"
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -1027,7 +1085,9 @@ CREATE POLICY "insert_task_assignee_or_creator_or_admin" ON public."TaskAttachme
         WHERE t.id = "taskId" AND (t."assigneeId" = (select auth.uid()) OR t."createdById" = (select auth.uid()))
       )
     )
-    AND "fileUrl" LIKE '/uploads/tasks/' || "taskId" || '/%'
+    AND starts_with("fileUrl", '/uploads/tasks/' || "taskId" || '/')
+    AND "fileUrl" NOT LIKE '%/../%'
+    AND "fileUrl" NOT LIKE '%/..'
   );
 
 CREATE POLICY "update_admin_only" ON public."TaskAttachment"
@@ -1237,7 +1297,11 @@ GRANT SELECT ON public.overdue_action_items TO authenticated;
 
 
 -- =============================================================================
--- 7. FUNCTIONS (11) — the 2 SECURITY DEFINER RLS helpers in section 5, plus
+-- 7. FUNCTIONS (11 application functions in public; with the 2 trigger guards
+--    of section 8 and the 2 RLS helpers of section 5 counted in that total)
+--    + 1 STORED PROCEDURE (private.reschedule_meeting_proc, behind the
+--    reschedule_meeting() wrapper below — 20261011120000). Contents: the 2
+--    SECURITY DEFINER RLS helpers in section 5, plus
 --    requirements.md §8 items 7 and 14, plus the hybrid-migration RPCs added
 --    afterward (create_meeting_with_participants, update_project_with_members,
 --    update_meeting_with_participants, reschedule_meeting — see
@@ -1288,55 +1352,42 @@ GRANT EXECUTE ON FUNCTION public.process_due_reminders() TO authenticated;
 
 
 -- ---------------------------------------------------------------------
--- reschedule_meeting(...) — atomic replacement for the two separate
--- supabase-js writes the meeting reschedule dialog used to make
--- (UPDATE "Meeting" then UPDATE "Reminder"), and a fix for what the second
--- write did: it set every still-PENDING reminder to a fixed "30 minutes
--- before the new start", wiping whatever offsets the organizer had picked.
+-- reschedule_meeting(...) — FR-04 "เลื่อนนัด" (MeetingActions.tsx calls
+-- supabase.rpc("reschedule_meeting")). Moves the meeting (status POSTPONED)
+-- and shifts every PENDING reminder by exactly how far the meeting moved, so
+-- "1 day before" stays "1 day before the new start"; a shifted reminder that
+-- lands in the past becomes CANCELLED. SENT/FAILED/CANCELLED rows are left
+-- alone. Organizer-or-admin, not cancelled, end after start, start not in
+-- the past (logic introduced by 20261002100000_reschedule_meeting_function).
 --
--- "Reminder" has no offset column — only "scheduledAt" — so the offset is
--- kept by shifting each PENDING reminder by exactly how far the meeting moved
--- (new start - old start): "1 day before" stays "1 day before the new start".
--- That makes atomicity matter: if the meeting update committed but the
--- reminder shift didn't, the next reschedule would compute its delta from the
--- already-moved start and the reminders could never be corrected. The old
--- start is read under FOR UPDATE so two concurrent reschedules can't both
--- shift reminders from the same stale start.
+-- STORED PROCEDURE + WRAPPER (20261011120000_reschedule_meeting_procedure):
+-- PostgREST can only call functions, so the logic now lives in a real
+-- CREATE PROCEDURE in the non-exposed schema "private" (prokind = p, no
+-- privileges for anon/authenticated) and public.reschedule_meeting() is a
+-- thin SECURITY DEFINER function (prokind = f, same signature, return type
+-- and EXECUTE grant as before) that CALLs it and returns its OUT row.
+-- Behaviour was verified identical before/after on a scratch database (rows,
+-- reminders, error messages and SQLSTATEs) — see DESIGN_DECISIONS §5.10 for
+-- why SECURITY DEFINER here does not widen access.
 --
--- SENT/FAILED/CANCELLED reminders are history and are left alone. A shifted
--- reminder can land in the past (e.g. "2 days before" when the meeting moves
--- to tomorrow) — those are set to CANCELLED rather than staying PENDING, so
--- the next process_due run doesn't fire them all at once as a burst.
---
--- The same checks the dialog makes client-side are repeated here because
--- supabase-js callers can skip the UI: organizer-or-admin, end after start,
--- start not in the past (20261003130000). A cancelled meeting can't be
--- rescheduled — that would silently flip it back to POSTPONED while
--- trg_cancel_meeting_reminders has already cancelled its reminders.
---
--- SECURITY INVOKER: "Meeting"'s update_organizer_or_admin and "Reminder"'s
--- update_meeting_organizer_or_admin RLS policies already gate both writes;
--- the explicit organizer check only turns a silent 0-row update into a clear
--- error message. Timestamps are TIMESTAMP (no time zone) holding UTC, like
--- every other column here, so "now" is compared as UTC too.
---
--- Verbatim from
--- prisma/migrations/20261002100000_reschedule_meeting_function.
-CREATE OR REPLACE FUNCTION public.reschedule_meeting(
+-- Verbatim from prisma/migrations/20261011120000_reschedule_meeting_procedure.
+CREATE SCHEMA IF NOT EXISTS private;
+REVOKE ALL ON SCHEMA private FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE PROCEDURE private.reschedule_meeting_proc(
   p_meeting_id text,
   p_start_time timestamp,
-  p_end_time timestamp
+  p_end_time timestamp,
+  OUT p_meeting public."Meeting"
 )
-RETURNS public."Meeting"
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
-AS $$
+AS $procedure$
 DECLARE
   v_organizer_id uuid;
   v_status public."MeetingStatus";
   v_old_start timestamp;
-  v_meeting public."Meeting";
 BEGIN
   SELECT "organizerId", status INTO v_organizer_id, v_status
   FROM public."Meeting" WHERE id = p_meeting_id;
@@ -1369,7 +1420,7 @@ BEGIN
       status = 'POSTPONED',
       "updatedAt" = now()
   WHERE id = p_meeting_id
-  RETURNING * INTO v_meeting;
+  RETURNING * INTO p_meeting;
 
   -- SET expressions all read the pre-update row, so status is decided from
   -- the same shifted time scheduledAt is being set to.
@@ -1382,15 +1433,36 @@ BEGIN
       END
   WHERE "meetingId" = p_meeting_id
     AND status = 'PENDING';
+END;
+$procedure$;
 
+COMMENT ON PROCEDURE private.reschedule_meeting_proc(text, timestamp, timestamp, public."Meeting") IS
+  'Stored procedure behind public.reschedule_meeting(): moves a meeting (status POSTPONED) and shifts its PENDING reminders by the same delta (CANCELLED if the shifted time is already past), in the caller''s transaction. Organizer-or-admin, not cancelled, end after start, start not in the past. Not callable by anon/authenticated directly - only via the public wrapper. See 20261011120000_reschedule_meeting_procedure.';
+
+REVOKE ALL ON PROCEDURE private.reschedule_meeting_proc(text, timestamp, timestamp, public."Meeting") FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.reschedule_meeting(
+  p_meeting_id text,
+  p_start_time timestamp,
+  p_end_time timestamp
+)
+RETURNS public."Meeting"
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_meeting public."Meeting";
+BEGIN
+  CALL private.reschedule_meeting_proc(p_meeting_id, p_start_time, p_end_time, v_meeting);
   RETURN v_meeting;
 END;
-$$;
+$function$;
 
 COMMENT ON FUNCTION public.reschedule_meeting(text, timestamp, timestamp) IS
-  'Atomically moves a meeting to new start/end (status POSTPONED) and shifts every PENDING Reminder by the same delta, so each reminder keeps its original offset from the meeting start; a shifted reminder that would fall in the past is set to CANCELLED instead. Organizer or admin only; rejects cancelled meetings, end <= start, and a start in the past. SECURITY INVOKER — RLS on Meeting/Reminder gates both writes.';
+  'RPC called by MeetingActions.tsx ("เลื่อนเวลา"). Thin wrapper: CALLs the stored procedure private.reschedule_meeting_proc() and returns the updated Meeting row - same signature, return type and grants as before 20261011120000. SECURITY DEFINER only so it may call into the private schema; the procedure makes the organizer-or-admin check itself (see that migration).';
 
-REVOKE ALL ON FUNCTION public.reschedule_meeting(text, timestamp, timestamp) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.reschedule_meeting(text, timestamp, timestamp) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.reschedule_meeting(text, timestamp, timestamp) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.get_meeting_context(p_meeting_id text)
@@ -2134,16 +2206,24 @@ ALTER TABLE public."RelatedResource"
 -- update_meeting_with_participants()), reschedule_meeting(), the two
 -- Sprint-2 trigger guards, the RelatedResource URL CHECK,
 -- "PasswordResetOtp".attempts + its (userId, createdAt) index, the SIMULATED
--- reminder status, the two triggers, the six re-pointed INSERT policies, and
+-- reminder status, the two triggers, the five re-pointed INSERT policies, and
 -- the nine policies narrowed by 20261005090000_narrow_update_delete_and_attachment_url
 -- (the six MeetingNote/Decision/RelatedResource UPDATE/DELETE guards, the two
--- OnlineMeetingResource guards, the one TaskAttachment INSERT fileUrl check).
--- All are real, currently deployed objects on the live `public` schema via
+-- OnlineMeetingResource guards, the one TaskAttachment INSERT fileUrl check),
+-- the four policies re-tightened by 20261011100000, the 14 FK indexes and
+-- privilege revoke of 20261011110000, and the private schema + stored
+-- procedure of 20261011120000.
+-- All are real, currently deployed objects on the live database via
 -- their own migrations, and each was cross-checked against the live catalog on
--- 2026-10-11 (pg_policies = 72, pg_proc = 12 incl. the 1 platform function,
--- pg_trigger = 3, pg_constraint CHECK = 1, all matching this file
--- one-for-one). They were just never re-run through the fresh-schema replay
--- described above. The two RPCs the app calls on every meeting create/edit
+-- 2026-10-11 (pg_policies = 72 on 19 tables, pg_proc in public = 12 functions
+-- incl. the 1 platform function, pg_proc in private = 1 procedure,
+-- pg_trigger = 3, pg_constraint CHECK = 1, FKs without an index = 0, all
+-- matching this file one-for-one). They were not re-run through the
+-- fresh-schema replay described above; instead, on 2026-10-11 the full
+-- prisma/migrations chain (all 32) was replayed into an empty local scratch
+-- PostgreSQL with stand-ins for auth.users/auth.uid() and the anon/
+-- authenticated roles (72 policies, 11 functions + the procedure created
+-- without error). The two RPCs the app calls on every meeting create/edit
 -- are load-bearing in production.
 -- See docs/deliverables/DATA_DICTIONARY.md and ER_DIAGRAM.md for narrative
 -- documentation of every table/enum/relationship, and QUERIES.sql for the

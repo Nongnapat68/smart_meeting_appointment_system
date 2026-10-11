@@ -58,7 +58,10 @@ export const POST = withApiErrors(async (request: Request) => {
   // contact with no login). When the assigned person has a linked account,
   // both point at the same person.
   const assigneePerson = body.assigneePersonId
-    ? await prisma.person.findUnique({ where: { id: body.assigneePersonId } })
+    ? await prisma.person.findUnique({
+        where: { id: body.assigneePersonId },
+        include: { user: { select: { inAppNotifications: true } } },
+      })
     : null;
 
   const task = await prisma.task.create({
@@ -70,7 +73,8 @@ export const POST = withApiErrors(async (request: Request) => {
     },
   });
 
-  if (assigneePerson?.userId && assigneePerson.userId !== user.id) {
+  // Settings "การแจ้งเตือนในระบบ" off -> no in-app row for the assignee.
+  if (assigneePerson?.userId && assigneePerson.userId !== user.id && assigneePerson.user?.inAppNotifications !== false) {
     await prisma.notification.create({
       data: {
         userId: assigneePerson.userId,

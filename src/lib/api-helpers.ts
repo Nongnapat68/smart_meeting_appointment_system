@@ -49,9 +49,15 @@ export function parseBody<T>(schema: ZodType<T>, data: unknown): T {
   return result.data;
 }
 
+// Every custom message in lib/validations.ts is Thai and already names the
+// field ("รหัสผ่านต้องมี...") — prefixing the internal key ("newPassword: ...")
+// only leaks the API's field names into the UI. The key is kept for Zod's own
+// generic (English) messages, where it is the only hint of which field failed.
+const THAI_RE = /[฀-๿]/;
+
 function formatZodError(error: ZodError): string {
   return error.issues
-    .map((i) => `${i.path.join(".") || "value"}: ${i.message}`)
+    .map((i) => (THAI_RE.test(i.message) ? i.message : `${i.path.join(".") || "value"}: ${i.message}`))
     .join("; ");
 }
 

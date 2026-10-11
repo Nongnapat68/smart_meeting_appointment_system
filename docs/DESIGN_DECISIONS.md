@@ -186,7 +186,7 @@ Schema ของ `Reminder` ไม่ต้องแก้ (`meetingId` ไม�
 
 ### 5.8 ทำไมการแก้ไข/ลบ MeetingNote / Decision / RelatedResource ถึงแคบลงมาเป็น author-or-organizer-or-admin และ OnlineMeetingResource แคบลงเป็น creator-or-admin (Sprint-3, ข้อ 13/12/11)
 
-> Migration: `20261005090000_narrow_update_delete_and_attachment_url` — งาน Ultra-review ข้อ 13, ข้อ 12, ข้อ 11; ดู `docs/GAP_ANALYSIS.md` (FR-09) กับ `scripts/test-rls.ts` (assertions 10–15) ประกอบ
+> Migration: `20261005090000_narrow_update_delete_and_attachment_url` — งาน Ultra-review ข้อ 13, ข้อ 12, ข้อ 11; ดู `docs/GAP_ANALYSIS.md` (FR-09) กับ `scripts/test-rls.ts` (assertions 10–14) ประกอบ
 
 **ทางเลือกที่พิจารณา**: (ก) ปล่อย UPDATE/DELETE ของทั้ง 3 ตารางตามเดิม (ใครเป็น participant ของการประชุมนั้นก็แก้/ลบของคนอื่นได้) กับ (ข) ให้สิทธิ์เฉพาะแอดมิน, ผู้จัดประชุม, หรือผู้เขียนแถวนั้นเอง (ตามคอลัมน์ attribution ที่ INSERT policy ของ Sprint-2 บังคับเจตนารมณ์ไว้แล้ว)
 
@@ -197,3 +197,41 @@ Schema ของ `Reminder` ไม่ต้องแก้ (`meetingId` ไม�
 **Person ไม่ถูกแก้ (บันทึกเป็น known limitation แทน)**: ข้อ 12 ในกรณี OnlineMeetingResource ทำได้เพราะมีคอลัมน์ `createdById` แต่ `Person` ไม่มีคอลัมน์ creator ให้ผูกสิทธิ์ — มีเพียง `userId` (owner) ซึ่ง policy เดิม `update_unlinked_or_owner_or_admin` ใช้อยู่แล้ว ("ผู้ที่ไม่ได้ link กับ user ภายใน (`userId IS NULL`) แก้ไขได้โดยทุกคน") ทางแก้เต็มรูปแบบต้องเพิ่มคอลัมน์ attribution ใหม่ + migration แบบ add-column-uuid พร้อม backfill — เป็น schema change ที่ออกนอก scope ของรอบนี้ จึงเลือกบันทึกเป็นข้อจำกัดที่ทราบไว้ตรงนี้และใน `docs/GAP_ANALYSIS.md` (FR-09) แทน
 
 **ข้อ 11** ยังถูกปิดใน migration เดียวกัน: `TaskAttachment` INSERT รับ fileUrl ใดก็ได้ → ตรวจเพิ่มว่า `fileUrl` ต้องขึ้นต้นด้วย `/uploads/tasks/<taskId>/` (เดียวกับที่ `POST /api/tasks/[id]/attachments` สร้างจริงผ่าน Prisma) — ไม่มีผลต่อ route เดิมและ live rows เดิมก็สอดคล้องอยู่แล้ว (ตรวจก่อน apply: 1 row, ตรง prefix)
+
+**อัปเดต 2026-10-11 — WITH CHECK ของ UPDATE ผูกกับ `meetingId` ใหม่** (migration `20261011100000_tighten_update_with_check_and_attachment_path`, test-rls assertions 14c–14h, 15, 16): `USING` ของ UPDATE ตัดสินว่าแก้ *แถวเดิม* ได้ไหม แต่ `WITH CHECK` เดิมใช้เงื่อนไขชุดเดียวกัน (admin / ผู้จัดของประชุม / ผู้เขียน) กับ *แถวใหม่* — ผู้เขียนจึงเปลี่ยน `meetingId` ของบันทึก/มติ/เอกสารของตัวเองไปไว้ในประชุมที่ตัวเองไม่ได้เป็นผู้เข้าร่วมได้ ตอนนี้ WITH CHECK ใช้กติกาเดียวกับ INSERT แต่ผูกกับ `meetingId` ใหม่: admin, ผู้จัดของประชุมใหม่, หรือ (ผู้เขียนยังเป็นตัวเอง **และ** เป็นผู้เข้าร่วมของประชุมใหม่) — **trade-off ที่ยอมรับ**: ภายในประชุมของตัวเอง ผู้จัดยังตั้งคอลัมน์ผู้เขียน (`authorId`/`decidedById`/`addedById`) เป็นคนอื่นได้ เพราะ INSERT policy อนุญาตแบบเดียวกันอยู่แล้ว (เงื่อนไข organizer ไม่ได้ผูก attribution) การปิดตรงนี้ต้องเพิ่ม trigger เฉพาะ ซึ่งเกินขอบเขตและไม่มี UI ที่ทำเช่นนั้น; จำนวน policy ยังเป็น 72 เท่าเดิม — ส่วน `TaskAttachment` INSERT เปลี่ยนจาก `LIKE '/uploads/tasks/' || "taskId" || '/%'` (ซึ่ง `%`/`_` ใน taskId กลายเป็น wildcard) เป็น `starts_with()` แบบตัวอักษรตรงตัว และปฏิเสธ path ที่มี segment `..`
+
+### 5.9 Index ของ foreign key ที่ขาด + ถอนสิทธิ์ TRUNCATE/TRIGGER/REFERENCES จาก anon/authenticated
+
+> Migration: `20261011110000_add_fk_indexes_and_revoke_ddl_privileges`
+
+**Index**: ตรวจ `pg_constraint` (FK ใน schema public) เทียบกับ `pg_index` แล้วพบ FK 14 คอลัมน์ที่ไม่มี index นำหน้า (เช่น `Meeting.organizerId`, `Task.meetingId`, `MeetingNote.authorId`) — ทำให้ทั้ง policy ที่ join ผ่านคอลัมน์เหล่านี้และการลบแถวแม่ (ON DELETE SET NULL/RESTRICT) ต้อง seq scan ตารางลูก จึงเพิ่ม index ทั้ง 14 ตัวด้วยชื่อเดียวกับ `@@index` ที่ Prisma ตั้งให้ (เพิ่มใน `prisma/schema.prisma` ด้วย ไม่ให้ drift) FK ที่มี PK/unique index นำหน้าอยู่แล้ว (`User.id`, `_MeetingGroups."A"`, `MeetingParticipant.meetingId`) ไม่สร้างซ้ำ — หลัง apply ตรวจแล้ว FK ที่ไม่มี index = 0
+
+**สิทธิ์**: Supabase แจก TRUNCATE/TRIGGER/REFERENCES บนทุกตารางให้ `anon`/`authenticated` มาตั้งแต่ bootstrap — สามสิทธิ์นี้ **ไม่ผ่าน RLS** (TRUNCATE ล้างตารางได้ทั้งตารางโดยไม่สน policy) และแอปไม่เคยใช้ (supabase-js/PostgREST ใช้แค่ SELECT/INSERT/UPDATE/DELETE ซึ่งคงไว้ตามเดิม) จึง `REVOKE` ออกทั้งของเดิมและ `ALTER DEFAULT PRIVILEGES FOR ROLE postgres` สำหรับตารางใหม่ — **ข้อจำกัดที่ทราบ**: default privileges ของ role `supabase_admin` (role ของแพลตฟอร์ม) ไม่ได้แก้ เพราะโปรเจกต์สร้าง object ด้วย `postgres` เท่านั้น ตาราง/ฟังก์ชันที่ migration สร้างจึงไม่โดนผลนั้น
+
+### 5.10 Stored Procedure จริง: `private.reschedule_meeting_proc` + wrapper `public.reschedule_meeting`
+
+> Migration: `20261011120000_reschedule_meeting_procedure`; caller จริง: ปุ่ม "เลื่อนเวลา" ใน `src/app/(app)/meetings/[id]/MeetingActions.tsx` (`supabase.rpc("reschedule_meeting")`)
+
+**ทำไมต้องมี procedure + wrapper**: โจทย์ต้องการ Stored Procedure (`CREATE PROCEDURE`, `prokind = 'p'`) แต่ PostgREST/`supabase.rpc()` เรียกได้เฉพาะ function — จึงย้ายตรรกะทั้งก้อนไปไว้ใน procedure ที่ schema `private` (ไม่อยู่ใน schema ที่ PostgREST เปิด: public, graphql_public; anon/authenticated ไม่มี USAGE) แล้วให้ `public.reschedule_meeting()` เดิมเหลือแค่ `CALL` procedure แล้วคืนแถวที่ได้จาก OUT parameter — ชื่อ, argument, return type และ grant (`authenticated` เท่านั้น) เหมือนเดิมทุกอย่าง UI ไม่ต้องแก้ ไม่มี `COMMIT/ROLLBACK` ใน procedure (ถูกเรียกจาก function ซึ่งอยู่ใน transaction ของผู้เรียก)
+
+**เลือก `reschedule_meeting` เพราะ**: เป็น RPC ที่มี caller จริงจาก UI (เอกสารรุ่นก่อนเขียนว่า "ยังไม่มี caller" ซึ่งไม่ถูก — `MeetingActions.tsx` เรียกตัวนี้), เขียน 2 ตาราง (`Meeting` + `Reminder`) ใน transaction เดียว, คืนค่าแถวเดียว, ตรวจสิทธิ์ในตัวอยู่แล้ว และไม่ใช่ trigger/policy function หรือ `create_meeting_with_participants` (ซึ่งโจทย์ยกเว้น)
+
+**SECURITY DEFINER โดยพฤติกรรมไม่เปลี่ยน**: ฟังก์ชันเดิมเป็น SECURITY INVOKER (พึ่ง RLS) แต่เมื่อ authenticated ไม่มีสิทธิ์ใน `private` แล้ว wrapper/procedure จึงต้องเป็น DEFINER (owner `postgres` ซึ่ง BYPASSRLS) — ตรวจแล้วไม่เปิดสิทธิ์เพิ่ม เพราะ RLS ที่ของเดิมพึ่งมีแค่ (1) `Meeting` SELECT `select_all_authenticated` = `true` (ทุกคนเห็นทุกประชุมอยู่แล้ว ข้อความ "ไม่พบการประชุมนี้" จึงเหมือนเดิม) (2) `Meeting` UPDATE `update_organizer_or_admin` และ (3) `Reminder` UPDATE `update_meeting_organizer_or_admin` ซึ่งเป็นเงื่อนไขเดียวกับที่ body ตรวจเองก่อนเขียนใดๆ (`organizerId = auth.uid() OR is_admin()` ไม่งั้น RAISE 42501) — `auth.uid()` อ่านจาก JWT claim ของผู้เรียก (GUC) ไม่เปลี่ยนตาม DEFINER และทั้งสองตัวตั้ง `search_path = ''`
+
+**พิสูจน์**: บนฐานข้อมูล scratch ที่ apply migration ครบ รัน 12 เคสก่อนและหลังแทนที่ (ผู้จัด, admin, เลื่อนจนบาง reminder เลยเวลา, ผู้เข้าร่วมที่ไม่ใช่ผู้จัด, คนนอก, ไม่มี JWT, ประชุมที่ยกเลิก, เวลาเริ่มในอดีต, end ≤ start, เวลาเป็น NULL, id ไม่มีจริง, role anon) ทุกเคสอยู่ใน transaction แล้ว ROLLBACK — แถว Meeting ที่คืน, สถานะ/เวลาของ reminder ทุกแถว, จำนวน Notification และ SQLSTATE/ข้อความ error ตรงกันทั้ง 12 เคส; บนระบบจริงตรวจ `pg_proc` (wrapper `f`, procedure `p`), `has_function_privilege`/`has_schema_privilege` ของ anon/authenticated = false และ `scripts/test-rls.ts` assertions 17a–17d (เรียก `private` ผ่าน PostgREST ได้ `PGRST106`, ผู้ที่ไม่ใช่ผู้จัดได้ 42501 ข้อความเดิม, ผู้จัดเลื่อนได้)
+
+### 5.11 ผู้จัดประชุมไม่ถูกใส่เป็นผู้เข้าร่วมอัตโนมัติ (B23)
+
+`create_meeting_with_participants()` เก็บผู้จัดไว้ที่ `Meeting.organizerId`/`organizerPersonId` และใส่เป็นแถว `MeetingParticipant` (role ORGANIZER) **เฉพาะเมื่อ** ผู้จัดถูกเลือกมาเองหรืออยู่ในกลุ่มที่เพิ่มทั้งกลุ่ม — ตั้งใจไม่ "แอบ" เพิ่มแถวให้ เพราะ `MeetingParticipant` คือรายชื่อผู้ถูกเชิญตาม FR-03/BR-04 (มี `source` บอกที่มา) การเพิ่มเองจะสร้างแถวที่ไม่มีแหล่งที่มาจริงและทำให้นับผู้เข้าร่วมเพี้ยน สิทธิ์ของผู้จัดทั้งหมด (แก้/เลื่อน/ยกเลิก, บันทึก/มติ, AI) ตรวจจาก `organizerId` อยู่แล้วจึงไม่ต้องพึ่งแถวนี้
+
+### 5.12 ตาราง `User` อ่านได้ทุกแถวโดยผู้ใช้ที่ login (โดยออกแบบ)
+
+policy `select_all_authenticated` บน `"User"` เป็น `USING (true)` — ทุกหน้าที่แสดงชื่อผู้จัด/ผู้รับผิดชอบงาน/ผู้เขียนบันทึก (join ผ่าน supabase-js) ต้องอ่านชื่อของผู้ใช้อื่นได้ ข้อมูลในตารางเป็นข้อมูลโปรไฟล์ภายในองค์กร (ชื่อ อีเมล ตำแหน่ง แผนก) ไม่มีรหัสผ่าน (อยู่ที่ `auth.users`) การเขียนถูกจำกัดที่ `update_self_or_admin` + trigger `trg_prevent_user_role_self_escalation` กันยกระดับ role ตัวเอง
+
+### 5.13 การตัดสินใจรอบ 2026-10-11: "จดจำฉัน" (B14), ผู้ติดต่อ INTERNAL (B19), สวิตช์การแจ้งเตือน
+
+**B14 "จดจำการเข้าสู่ระบบ"** — checkbox ส่งค่า `remember` ไปแต่ไม่มีโค้ดใดใช้ cookie ของ Supabase เป็น persistent เสมอ และถูกเขียนใหม่จาก 3 ที่ (route login, proxy ตอน refresh token, supabase-js ฝั่ง browser ตอน auto-refresh) การทำให้ "ไม่ติ๊ก = session cookie" ต้องคุม `maxAge` ให้ตรงกันทั้ง 3 ทาง ไม่มั่นใจ 100% ว่าไม่ทำให้ login/refresh พัง จึง**เอา checkbox และพารามิเตอร์ `remember` ออก** (ไม่ใช่ requirement ใน FR ใด; client เก่าที่ยังส่ง `remember` มาไม่พังเพราะ Zod ตัด key ที่ไม่รู้จักทิ้ง)
+
+**B19 ผู้ติดต่อ** — `Person.type = INTERNAL` หมายถึงบุคคลที่มีบัญชีผู้ใช้ (`userId` ถูกผูกตอนสร้างบัญชี ดู `prisma/seed.ts`) และไม่มีโค้ดใดผูก Person ที่สร้างด้วยมือเข้ากับบัญชีภายหลัง ฟอร์ม "เพิ่มผู้ติดต่อ" จึงสร้างได้เฉพาะ EXTERNAL (ตัวเลือก "ผู้ใช้งานในระบบ (ยังไม่มีบัญชี)" ถูกเอาออก) ช่องที่ว่างบันทึกเป็น NULL และช่องค้นหาตัดช่องว่าง — แถวเดิม "สมทรง แซ่ตั้ง" (INTERNAL, ไม่มีบัญชี, INACTIVE, "อดีตผู้ช่วยวิจัย") เป็นข้อมูล seed ที่ตั้งใจไว้ จึงไม่แก้ไขในฐานข้อมูล
+
+**สวิตช์การแจ้งเตือนในหน้าตั้งค่า** — เดิม `User.emailNotifications`/`inAppNotifications` ถูกเก็บแต่ไม่มีโค้ดใดอ่าน ตอนนี้: อีเมลเชิญ/อัปเดต (`notifyParticipantsByEmail`) และอีเมล reminder (`processDueReminders`/retry) ข้ามผู้เข้าร่วมที่เป็นผู้ใช้และปิดอีเมลไว้ (บุคคลภายนอกได้รับเสมอ, ไฟล์ .ics ยังระบุผู้เข้าร่วมครบ, อีเมล OTP รีเซ็ตรหัสผ่านไม่ขึ้นกับสวิตช์เพราะผู้ใช้ขอเอง); การแจ้งเตือนในระบบที่สร้างจากโค้ดแอป (`TASK_ASSIGNED` ใน `/api/tasks`, `AI_SUMMARY_READY`) ไม่ถูกสร้างให้ผู้ที่ปิดไว้ — **ข้อจำกัดที่ทราบ**: `MEETING_INVITE` ถูกสร้างภายใน RPC `create_meeting_with_participants()` การให้เคารพสวิตช์ต้องแก้ body ของ RPC (เปลี่ยนพฤติกรรมของ contract ที่ UI พึ่ง) จึงไม่แก้ในรอบนี้

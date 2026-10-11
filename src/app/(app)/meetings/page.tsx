@@ -163,7 +163,7 @@ export default function MeetingsPage() {
               </thead>
               <tbody className="divide-y divide-outline-variant/50">
                 {data.items.map((m) => {
-                  const badge = meetingStatusBadge(m.status);
+                  const badge = meetingStatusBadge(m.status, m.endTime);
                   const isCancelled = m.status === "CANCELLED";
                   return (
                     <tr key={m.id} className={`hover:bg-surface-container-low/30 transition-colors group ${isCancelled ? "opacity-75" : ""}`}>

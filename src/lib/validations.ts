@@ -8,31 +8,46 @@ const nonEmpty = (msg: string) => z.string().trim().min(1, msg);
 
 // Optional reference (meetingId/projectId/…): trim and treat a blank string as
 // "absent" (null), so an empty id never reaches Prisma and trips a foreign-key
-// constraint (which would otherwise surface as a 500).
-const optionalRefId = z
+// constraint (which would otherwise surface as a 500). Ids are Prisma cuids or
+// RPC-generated uuids, so anything outside [A-Za-z0-9_-] is rejected up front;
+// a well-formed id that doesn't exist is turned into a 400 by withApiErrors
+// (Prisma P2003).
+const REF_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const refIdString = z
   .string()
   .trim()
-  .optional()
-  .nullable()
-  .transform((v) => (v ? v : null));
+  .refine((v) => v === "" || REF_ID_RE.test(v), "รหัสอ้างอิงไม่ถูกต้อง");
 
-// Optional date with the same blank-to-null rule, plus a format check so a
-// bogus string is rejected as 400 "รูปแบบวันที่ไม่ถูกต้อง" instead of being
-// written to the DB as an Invalid Date.
-const optionalDate = z
+// Task.dueDate is a calendar date ("YYYY-MM-DD", what <input type="date">
+// sends — see isPastDue in lib/format.ts), so only that shape is accepted and
+// it must be a real day (2026-02-30 is rejected, not rolled over to March).
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const dateString = z
   .string()
   .trim()
-  .optional()
-  .nullable()
-  .transform((v) => (v ? v : null))
-  .refine((v) => v === null || !Number.isNaN(new Date(v).getTime()), "รูปแบบวันที่ไม่ถูกต้อง");
+  .refine((v) => {
+    if (v === "") return true;
+    if (!DATE_ONLY_RE.test(v)) return false;
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)");
+
+// Create: absent or blank -> null.
+const blankToNull = (v: string | null | undefined) => (v ? v : null);
+// Update (PATCH): an absent key stays undefined ("leave unchanged") — only an
+// explicit blank/null clears the column.
+const blankToNullKeepAbsent = (v: string | null | undefined) => (v === undefined ? undefined : v ? v : null);
+
+const optionalRefId = refIdString.optional().nullable().transform(blankToNull);
+const optionalDate = dateString.optional().nullable().transform(blankToNull);
+const patchRefId = refIdString.optional().nullable().transform(blankToNullKeepAbsent);
+const patchDate = dateString.optional().nullable().transform(blankToNullKeepAbsent);
 
 // --- Auth -------------------------------------------------------------
 
 export const loginSchema = z.object({
   email: email(),
   password: z.string().min(1, "กรุณากรอกรหัสผ่าน"),
-  remember: z.boolean().optional().default(false),
 });
 
 export const forgotPasswordSchema = z.object({
@@ -288,10 +303,10 @@ export const updateTaskSchema = z.object({
   description: z.string().trim().optional().nullable(),
   status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
-  dueDate: optionalDate,
-  assigneePersonId: optionalRefId,
-  projectId: optionalRefId,
-  meetingId: optionalRefId,
+  dueDate: patchDate,
+  assigneePersonId: patchRefId,
+  projectId: patchRefId,
+  meetingId: patchRefId,
 });
 
 export const taskCommentSchema = z.object({

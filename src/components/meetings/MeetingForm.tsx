@@ -9,7 +9,13 @@ import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner } from "@/components/ui/Feedback";
 import { DateTimeField } from "@/components/meetings/DateTimeField";
-import { toDatetimeLocalValue, formatDateTime, parseLocalAsBangkok, nextHourLocalValue } from "@/lib/format";
+import {
+  toDatetimeLocalValue,
+  formatDateTime,
+  parseLocalAsBangkok,
+  nextHourLocalValue,
+  parseDbTimestamp,
+} from "@/lib/format";
 import { reminderStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
 import { parseReminderOffsetInput, REMINDER_OFFSET_MAX_MINUTES } from "@/lib/validations";
 import { isHttpUrl } from "@/lib/db-errors";
@@ -33,6 +39,8 @@ function offsetLabel(minutes: number): string {
   if (minutes % 60 === 0) return `${minutes / 60} ชั่วโมงก่อน`;
   return `${minutes} นาทีก่อน`;
 }
+
+const PAST_OFFSET_MESSAGE = "เวลาแจ้งเตือนนี้เลยไปแล้ว กรุณาเลือกระยะเวลาที่สั้นลง หรือเลื่อนเวลาเริ่มประชุม";
 
 // B8: the form's "YYYY-MM-DDTHH:mm" wall clock is Asia/Bangkok time, never
 // the browser's — nextHourLocalValue() computes the next whole Bangkok hour
@@ -117,6 +125,13 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
   const [offsetError, setOffsetError] = useState<string | null>(null);
   const [existingReminders, setExistingReminders] = useState<Reminder[]>([]);
   const [addingReminder, setAddingReminder] = useState(false);
+  // "Now" for the past-reminder check (B17), ticking so a preset that slips
+  // into the past while the form stays open is flagged without a reload.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // BR-04: only participants that were picked directly (or joined as a raw
   // external email, which becomes a real Person the same way) live in this
@@ -375,6 +390,10 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
       setOffsetError(`มีการแจ้งเตือน "${offsetLabel(minutes)}" อยู่แล้ว`);
       return;
     }
+    if (isOffsetPast(minutes)) {
+      setOffsetError(PAST_OFFSET_MESSAGE);
+      return;
+    }
     setReminderOffsets((prev) => [...prev, minutes].sort((a, b) => a - b));
     setNewOffsetInput("");
     setOffsetError(null);
@@ -414,11 +433,36 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
   // reschedule, where reschedule_meeting() cancels a reminder at its old
   // instant rather than moving it - so an offset's meaning genuinely depends on
   // the current start time.
-  const existingScheduledAts = new Set(existingReminders.map((r) => new Date(r.scheduledAt).getTime()));
+  // B17: same status filter as the route — a CANCELLED (or SIMULATED) reminder
+  // at that instant doesn't block re-adding it, so it mustn't grey the preset
+  // out or be reported as "already exists" here either.
+  const existingScheduledAts = new Set(
+    existingReminders
+      .filter((r) => r.status === "PENDING" || r.status === "SENT" || r.status === "FAILED")
+      .map((r) => parseDbTimestamp(r.scheduledAt).getTime())
+  );
+
+  // The instant offsets are counted back from: on edit the route uses the
+  // *saved* start time (an unsaved change in the form doesn't move reminders
+  // until "บันทึก"), on create the RPC uses the start time being submitted.
+  const reminderBaseMs =
+    isEdit && initial
+      ? parseDbTimestamp(initial.meeting.startTime).getTime()
+      : startTime
+        ? parseLocalAsBangkok(startTime).getTime()
+        : NaN;
 
   function isOffsetTaken(minutes: number): boolean {
-    if (!startTime) return false;
-    return existingScheduledAts.has(parseLocalAsBangkok(startTime).getTime() - minutes * 60 * 1000);
+    if (Number.isNaN(reminderBaseMs)) return false;
+    return existingScheduledAts.has(reminderBaseMs - minutes * 60 * 1000);
+  }
+
+  // B17: a reminder whose time has already passed is rejected by POST
+  // /api/reminders (edit) and stored as CANCELLED by the create RPC — so the
+  // form says so up front instead of letting it happen silently.
+  function isOffsetPast(minutes: number): boolean {
+    if (Number.isNaN(reminderBaseMs)) return false;
+    return reminderBaseMs - minutes * 60 * 1000 <= nowMs;
   }
 
   async function addExistingMeetingReminder(minutes: number) {
@@ -426,6 +470,10 @@ const [startTime, setStartTime] = useState(initial ? toDatetimeLocalValue(initia
     // Greying out a taken preset is only a hint (a stale render, or a custom
     // offset typed in by hand, can still collide), so the guard that actually
     // decides lives here as well as in the route.
+    if (isOffsetPast(minutes)) {
+      showToast(PAST_OFFSET_MESSAGE, "error");
+      return;
+    }
     if (isOffsetTaken(minutes)) {
       showToast("การประชุมนี้มีการแจ้งเตือนที่เวลาเดียวกันอยู่แล้ว กรุณาเลือกระยะเวลาที่ต่างกัน", "error");
       return;
@@ -885,9 +933,13 @@ p_project_id: resolvedProjectId || null,
                   {reminderOffsets.map((m) => (
                     <span
                       key={m}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary-container text-on-primary-container text-sm"
+                      title={isOffsetPast(m) ? PAST_OFFSET_MESSAGE : undefined}
+                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm ${
+                        isOffsetPast(m) ? "bg-error-container text-on-error-container" : "bg-primary-container text-on-primary-container"
+                      }`}
                     >
                       {offsetLabel(m)}
+                      {isOffsetPast(m) && <span className="text-xs">(เลยเวลาแล้ว — จะไม่ถูกส่ง)</span>}
                       <button
                         type="button"
                         onClick={() => removeReminderOffset(m)}
@@ -907,10 +959,13 @@ p_project_id: resolvedProjectId || null,
                     <button
                       key={p.minutes}
                       type="button"
+                      disabled={isOffsetPast(p.minutes)}
+                      title={isOffsetPast(p.minutes) ? PAST_OFFSET_MESSAGE : undefined}
                       onClick={() => addReminderOffset(p.minutes)}
-                      className="px-3 py-1.5 rounded-full border border-outline-variant text-xs font-label-md text-on-surface-variant hover:bg-surface-container-low"
+                      className="px-3 py-1.5 rounded-full border border-outline-variant text-xs font-label-md text-on-surface-variant hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       + {p.label}
+                      {isOffsetPast(p.minutes) && " (เลยเวลาแล้ว)"}
                     </button>
                   ))}
                 </div>
@@ -952,11 +1007,13 @@ p_project_id: resolvedProjectId || null,
                     <button
                       key={p.minutes}
                       type="button"
-                      disabled={addingReminder}
+                      disabled={addingReminder || isOffsetPast(p.minutes)}
+                      title={isOffsetPast(p.minutes) ? PAST_OFFSET_MESSAGE : undefined}
                       onClick={() => addExistingMeetingReminder(p.minutes)}
-                      className="px-3 py-1.5 rounded-full border border-outline-variant text-xs font-label-md text-on-surface-variant hover:bg-surface-container-low disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-full border border-outline-variant text-xs font-label-md text-on-surface-variant hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       + {p.label}
+                      {isOffsetPast(p.minutes) && " (เลยเวลาแล้ว)"}
                     </button>
                   ))}
                 </div>

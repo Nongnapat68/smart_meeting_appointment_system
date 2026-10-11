@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog, Modal } from "@/components/ui/Modal";
 import { ErrorBanner } from "@/components/ui/Feedback";
 import { DateTimeField } from "@/components/meetings/DateTimeField";
-import { toDatetimeLocalValue } from "@/lib/format";
+import { parseLocalAsBangkok, toDatetimeLocalValue } from "@/lib/format";
 import type { MeetingWithStringDates } from "./types";
 
 export function MeetingActions({ meeting, canManage }: { meeting: MeetingWithStringDates; canManage: boolean }) {
@@ -166,17 +166,23 @@ function RescheduleModal({
     setLoading(true);
     try {
       // Same checks as MeetingForm.tsx's handleSubmit (the RPC repeats them).
+      // B8: the pickers hold Asia/Bangkok wall clock (toDatetimeLocalValue
+      // above), so they are read back as +07:00 — new Date(local) would use
+      // the browser's timezone and shift the meeting outside UTC+7.
       if (!startTime || !endTime) throw new Error("กรุณากำหนดเวลาเริ่มและเวลาสิ้นสุด");
-      if (new Date(startTime) < new Date()) throw new Error("เวลาเริ่มต้องไม่เป็นอดีต (ย้อนหลัง)");
-      if (new Date(endTime) <= new Date(startTime)) throw new Error("เวลาสิ้นสุดต้องมาหลังเวลาเริ่ม");
+      const start = parseLocalAsBangkok(startTime);
+      const end = parseLocalAsBangkok(endTime);
+      if (start.getTime() < Date.now()) throw new Error("เวลาเริ่มต้องไม่เป็นอดีต (ย้อนหลัง)");
+      if (end.getTime() <= start.getTime()) throw new Error("เวลาสิ้นสุดต้องมาหลังเวลาเริ่ม");
 
       // One atomic RPC moves the meeting and shifts every PENDING reminder by
       // the same delta, so each keeps its original offset (e.g. "1 day
-      // before") — see prisma/migrations/20261002100000_reschedule_meeting_function.
+      // before") — see prisma/migrations/20261002100000_reschedule_meeting_function
+      // and the procedure it now calls (20261011120000_reschedule_meeting_procedure).
       const { error: rpcError } = await createClient().rpc("reschedule_meeting", {
         p_meeting_id: meeting.id,
-        p_start_time: new Date(startTime).toISOString(),
-        p_end_time: new Date(endTime).toISOString(),
+        p_start_time: start.toISOString(),
+        p_end_time: end.toISOString(),
       });
       if (rpcError) throw new Error(rpcError.message);
 

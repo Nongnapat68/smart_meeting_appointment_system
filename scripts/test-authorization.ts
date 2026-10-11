@@ -221,13 +221,48 @@ async function main() {
     check("DELETE /api/tasks/:id with no session -> 401 (not 403)", noAuth.status === 401, `got ${noAuth.status}`);
 
     // Positive control: the *actual* owner (User A) can still edit their own
-    // task — proves assertOwner isn't just denying everyone.
+    // task — proves assertOwner isn't just denying everyone. The task is
+    // linked to a meeting/project/due date first, so the partial PATCH below
+    // also proves an omitted key means "unchanged", not "clear it" (ข้อ 3.4).
+    await prisma.task.update({
+      where: { id: f.task.id },
+      data: { meetingId: f.meeting.id, projectId: f.project.id, dueDate: new Date("2026-12-01T00:00:00Z") },
+    });
     const ownerEdit = await asA(`/api/tasks/${f.task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "IN_PROGRESS" }),
     });
     check("PATCH /api/tasks/:id as the actual owner -> 200", ownerEdit.status === 200, `got ${ownerEdit.status}`);
+    const afterPartial = await prisma.task.findUnique({ where: { id: f.task.id } });
+    check(
+      "PATCH {status} only keeps meetingId/projectId/dueDate (omitted = unchanged)",
+      afterPartial?.meetingId === f.meeting.id &&
+        afterPartial?.projectId === f.project.id &&
+        afterPartial?.dueDate?.toISOString() === "2026-12-01T00:00:00.000Z",
+      JSON.stringify({ meetingId: afterPartial?.meetingId, projectId: afterPartial?.projectId, dueDate: afterPartial?.dueDate })
+    );
+
+    const patchBadDate = await asA(`/api/tasks/${f.task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dueDate: "2026-02-30" }),
+    });
+    check("PATCH /api/tasks/:id dueDate='2026-02-30' -> 400", patchBadDate.status === 400, `got ${patchBadDate.status}`);
+
+    const patchBadRef = await asA(`/api/tasks/${f.task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: "does-not-exist-id" }),
+    });
+    check("PATCH /api/tasks/:id projectId ที่ไม่มีจริง -> 400 (ไม่ใช่ 500)", patchBadRef.status === 400, `got ${patchBadRef.status}`);
+
+    const patchMissing = await asA(`/api/tasks/does-not-exist-id`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "IN_PROGRESS" }),
+    });
+    check("PATCH /api/tasks/<ไม่มีจริง> -> 404", patchMissing.status === 404, `got ${patchMissing.status}`);
 
     // Task input validation (ข้อ 3.4): a bad due date and a dangling meetingId
     // were both a 500 (invalid Date / P2003) before — they must now be a clean

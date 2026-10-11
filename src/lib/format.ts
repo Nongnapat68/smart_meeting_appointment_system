@@ -103,8 +103,24 @@ export function formatDateTime(date: Date | string): string {
   return `${formatDate(date)} • ${formatTime(date)}`;
 }
 
+/** True when both instants fall on the same Asia/Bangkok calendar day. */
+function sameBangkokDay(a: Date | string, b: Date | string): boolean {
+  const pa = bangkokParts(parseDbTimestamp(a));
+  const pb = bangkokParts(parseDbTimestamp(b));
+  return pa.y === pb.y && pa.mo === pb.mo && pa.d === pb.d;
+}
+
+// Shown next to a separately-rendered start date, so a same-day meeting is
+// just "HH:mm - HH:mm"; a meeting that runs past midnight names the end date
+// too ("20:15 - 21 ต.ค. 2569 • 10:12") instead of a bare, misleading
+// "20:15 - 10:12".
 export function formatTimeRange(start: Date | string, end: Date | string): string {
-  return `${formatTime(start)} - ${formatTime(end)}`;
+  return `${formatTime(start)} - ${sameBangkokDay(start, end) ? formatTime(end) : formatDateTime(end)}`;
+}
+
+// Self-contained range with the start date (for emails / standalone text).
+export function formatDateTimeRange(start: Date | string, end: Date | string): string {
+  return `${formatDateTime(start)} - ${sameBangkokDay(start, end) ? formatTime(end) : formatDateTime(end)}`;
 }
 
 export function dayShortLabel(date: Date | string): string {

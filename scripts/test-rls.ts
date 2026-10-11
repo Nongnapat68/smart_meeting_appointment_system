@@ -146,6 +146,36 @@ async function setupFixtures() {
     data: { meetingId: siriMeeting.id, content: "[test-rls] note in siriporn's meeting", authorId: siriporn.id },
   });
 
+  // Migration 20261011100000 (UPDATE WITH CHECK bound to the NEW meetingId):
+  // a second meeting of somchai's that siriporn is NOT invited to, plus a
+  // decision/resource siriporn authored in f.meeting — so an author trying to
+  // move her own row into a meeting she doesn't belong to can be tested on
+  // all three tables, and so siriporn can play "outsider" for rows there.
+  const outsiderMeeting = await prisma.meeting.create({
+    data: {
+      title: "[test-rls] somchai's meeting without siriporn",
+      type: "SINGLE",
+      status: "PENDING",
+      startTime: new Date(Date.now() + 3600_000),
+      endTime: new Date(Date.now() + 7200_000),
+      organizerId: somchai.id,
+    },
+  });
+  const noteInOutsiderMeeting = await prisma.meetingNote.create({
+    data: { meetingId: outsiderMeeting.id, content: "[test-rls] note where siriporn is an outsider", authorId: somchai.id },
+  });
+  const decisionBySiriporn = await prisma.decision.create({
+    data: { meetingId: meeting.id, content: "[test-rls] decision by siriporn", decidedById: siriporn.id },
+  });
+  const resourceBySiriporn = await prisma.relatedResource.create({
+    data: {
+      meetingId: meeting.id,
+      title: "[test-rls] resource by siriporn",
+      url: "https://example.com/siriporn",
+      addedById: siriporn.id,
+    },
+  });
+
   // Online rooms (ข้อ 12): one owned by somchai, one unclaimed (createdById
   // NULL) — the unclaimed one must now be admin-only instead of first-come.
   const roomBySomchai = await prisma.onlineMeetingResource.create({
@@ -173,6 +203,18 @@ async function setupFixtures() {
       mimeType: "text/plain",
     },
   });
+  // A second task (target of a cross-task fileUrl) and two tasks whose ids
+  // carry LIKE wildcards — the old '/uploads/tasks/' || taskId || '/%'
+  // pattern let "%" match any folder and "_" any single character.
+  const otherTask = await prisma.task.create({
+    data: { title: "[test-rls] other task", projectId: project.id, createdById: somchai.id },
+  });
+  const wildPercentTask = await prisma.task.create({
+    data: { id: `rlswild%${Date.now()}`, title: "[test-rls] % task", projectId: project.id, createdById: siriporn.id },
+  });
+  const wildUnderscoreTask = await prisma.task.create({
+    data: { id: `rls_wild_${Date.now()}`, title: "[test-rls] _ task", projectId: project.id, createdById: siriporn.id },
+  });
 
   return {
     somchai,
@@ -188,6 +230,13 @@ async function setupFixtures() {
     roomBySomchai,
     roomUnclaimed,
     task,
+    outsiderMeeting,
+    noteInOutsiderMeeting,
+    decisionBySiriporn,
+    resourceBySiriporn,
+    otherTask,
+    wildPercentTask,
+    wildUnderscoreTask,
   };
 }
 
@@ -606,7 +655,9 @@ async function main() {
     check(
       "14a. siriporn cannot insert a TaskAttachment with an off-site fileUrl",
       !!badAttachment.error && evilRows === 0,
-      badAttachment.error ? `insert unexpectedly succeeded (${evilRows} rows)` : "insert returned no error"
+      badAttachment.error
+        ? `insert returned an error but ${evilRows} row(s) were written anyway`
+        : "insert unexpectedly succeeded (no error)"
     );
     const goodAttachment = await asSiriporn
       .from("TaskAttachment")
@@ -624,11 +675,193 @@ async function main() {
       !goodAttachment.error && goodAttachment.data?.length === 1,
       goodAttachment.error?.message ?? `rows=${goodAttachment.data?.length}`
     );
+
+    // 14c-14f. Migration 20261011100000 — the path check is a literal
+    // starts_with (no LIKE wildcards) and rejects any ".." segment.
+    const attachmentCases: { label: string; taskId: string; fileUrl: string }[] = [
+      {
+        label: "14c. fileUrl under ANOTHER task's folder is rejected",
+        taskId: f.task.id,
+        fileUrl: `/uploads/tasks/${f.otherTask.id}/x.txt`,
+      },
+      {
+        label: "14d. fileUrl climbing out with a '/../' segment is rejected",
+        taskId: f.task.id,
+        fileUrl: `/uploads/tasks/${f.task.id}/../${f.otherTask.id}/x.txt`,
+      },
+      {
+        label: "14e. fileUrl ending in '/..' is rejected",
+        taskId: f.task.id,
+        fileUrl: `/uploads/tasks/${f.task.id}/..`,
+      },
+      {
+        label: "14f. a '%' in taskId is not a wildcard (other task's folder rejected)",
+        taskId: f.wildPercentTask.id,
+        fileUrl: `/uploads/tasks/${f.wildPercentTask.id.replace("%", "ANYTHING")}/x.txt`,
+      },
+      {
+        label: "14g. a '_' in taskId is not a wildcard (look-alike folder rejected)",
+        taskId: f.wildUnderscoreTask.id,
+        fileUrl: `/uploads/tasks/${f.wildUnderscoreTask.id.replaceAll("_", "X")}/x.txt`,
+      },
+    ];
+    for (const ac of attachmentCases) {
+      const res = await asSiriporn
+        .from("TaskAttachment")
+        .insert({ id: crypto.randomUUID(), taskId: ac.taskId, fileName: "probe.txt", fileUrl: ac.fileUrl, fileSize: 1, mimeType: "text/plain" })
+        .select("id");
+      const written = await prisma.taskAttachment.count({ where: { taskId: ac.taskId, fileUrl: ac.fileUrl } });
+      check(ac.label, !!res.error && written === 0, res.error ? `error but ${written} row(s) written` : "insert unexpectedly succeeded");
+    }
+    const wildOk = await asSiriporn
+      .from("TaskAttachment")
+      .insert({
+        id: crypto.randomUUID(),
+        taskId: f.wildUnderscoreTask.id,
+        fileName: "ok.txt",
+        fileUrl: `/uploads/tasks/${f.wildUnderscoreTask.id}/ok.txt`,
+        fileSize: 1,
+        mimeType: "text/plain",
+      })
+      .select("id");
+    check(
+      "14h. the task's own folder still works even when its id contains '_'",
+      !wildOk.error && wildOk.data?.length === 1,
+      wildOk.error?.message ?? `rows=${wildOk.data?.length}`
+    );
+
+    // 15. Migration 20261011100000 — an author may not MOVE her row into a
+    // meeting she does not belong to (UPDATE WITH CHECK is evaluated against
+    // the NEW meetingId). A WITH CHECK violation is a real error (42501),
+    // unlike the silent 0-row filter of USING.
+    const moves: { table: "MeetingNote" | "Decision" | "RelatedResource"; id: string }[] = [
+      { table: "MeetingNote", id: f.noteBySiriporn.id },
+      { table: "Decision", id: f.decisionBySiriporn.id },
+      { table: "RelatedResource", id: f.resourceBySiriporn.id },
+    ];
+    for (const mv of moves) {
+      const res = await asSiriporn.from(mv.table).update({ meetingId: f.outsiderMeeting.id }).eq("id", mv.id).select("id");
+      const stillIn =
+        mv.table === "MeetingNote"
+          ? (await prisma.meetingNote.findUniqueOrThrow({ where: { id: mv.id } })).meetingId
+          : mv.table === "Decision"
+            ? (await prisma.decision.findUniqueOrThrow({ where: { id: mv.id } })).meetingId
+            : (await prisma.relatedResource.findUniqueOrThrow({ where: { id: mv.id } })).meetingId;
+      check(
+        `15. author siriporn cannot move her ${mv.table} into a meeting she is not in`,
+        !!res.error && stillIn === f.meeting.id,
+        res.error ? `error but row now in ${stillIn}` : `update succeeded (rows=${res.data?.length}), row now in ${stillIn}`
+      );
+    }
+
+    // 16. Edit/delete rights after the tightening: organizer keeps rights over
+    // participants' rows in his own meeting; the author can delete her own;
+    // an outsider can neither edit nor delete.
+    const { data: orgEditSiriDecision, error: orgEditSiriDecisionErr } = await asSomchai
+      .from("Decision")
+      .update({ content: "[test-rls] decision by siriporn (edited by organizer)" })
+      .eq("id", f.decisionBySiriporn.id)
+      .select("id");
+    check(
+      "16a. organizer somchai can edit a participant's decision in his meeting (1 row)",
+      !orgEditSiriDecisionErr && orgEditSiriDecision?.length === 1,
+      orgEditSiriDecisionErr?.message ?? `rows=${orgEditSiriDecision?.length}`
+    );
+    const { data: authorDelDecision, error: authorDelDecisionErr } = await asSiriporn
+      .from("Decision")
+      .delete()
+      .eq("id", f.decisionBySiriporn.id)
+      .select("id");
+    check(
+      "16b. author siriporn can delete her own decision (1 row, gone)",
+      !authorDelDecisionErr &&
+        authorDelDecision?.length === 1 &&
+        (await prisma.decision.count({ where: { id: f.decisionBySiriporn.id } })) === 0,
+      authorDelDecisionErr?.message ?? `rows=${authorDelDecision?.length}`
+    );
+    const { data: orgDelResource, error: orgDelResourceErr } = await asSomchai
+      .from("RelatedResource")
+      .delete()
+      .eq("id", f.resourceBySiriporn.id)
+      .select("id");
+    check(
+      "16c. organizer somchai can delete a participant's resource in his meeting (1 row, gone)",
+      !orgDelResourceErr &&
+        orgDelResource?.length === 1 &&
+        (await prisma.relatedResource.count({ where: { id: f.resourceBySiriporn.id } })) === 0,
+      orgDelResourceErr?.message ?? `rows=${orgDelResource?.length}`
+    );
+    const { data: outsiderEdit, error: outsiderEditErr } = await asSiriporn
+      .from("MeetingNote")
+      .update({ content: "[test-rls] outsider edit" })
+      .eq("id", f.noteInOutsiderMeeting.id)
+      .select("id");
+    const { data: outsiderDel, error: outsiderDelErr } = await asSiriporn
+      .from("MeetingNote")
+      .delete()
+      .eq("id", f.noteInOutsiderMeeting.id)
+      .select("id");
+    const outsiderNote = await prisma.meetingNote.findUnique({ where: { id: f.noteInOutsiderMeeting.id } });
+    check(
+      "16d. outsider siriporn can neither edit nor delete a note in a meeting she is not in (0 rows, unchanged)",
+      !outsiderEditErr &&
+        !outsiderDelErr &&
+        (outsiderEdit?.length ?? 0) === 0 &&
+        (outsiderDel?.length ?? 0) === 0 &&
+        outsiderNote?.content === "[test-rls] note where siriporn is an outsider",
+      outsiderEditErr?.message ?? outsiderDelErr?.message ?? `edit=${outsiderEdit?.length} del=${outsiderDel?.length}`
+    );
+
+    // 17. Migration 20261011120000 — the stored procedure behind
+    // reschedule_meeting() lives in the private schema, which PostgREST does
+    // not expose: an authenticated token cannot reach it directly, while the
+    // public wrapper still enforces "organizer or admin" with the same error.
+    const viaPrivate = await asSiriporn.schema("private").rpc("reschedule_meeting_proc", {
+      p_meeting_id: f.meeting.id,
+      p_start_time: new Date(Date.now() + 86400_000).toISOString(),
+      p_end_time: new Date(Date.now() + 90000_000).toISOString(),
+    });
+    check(
+      "17a. authenticated cannot call private.reschedule_meeting_proc through PostgREST",
+      !!viaPrivate.error,
+      "call unexpectedly succeeded"
+    );
+    console.log("   raw:", JSON.stringify(viaPrivate.error));
+    const viaPublicName = await asSiriporn.rpc("reschedule_meeting_proc" as never, {} as never);
+    check("17b. no public RPC named reschedule_meeting_proc exists", !!viaPublicName.error, "call unexpectedly succeeded");
+    const notOrganizer = await asSiriporn.rpc("reschedule_meeting", {
+      p_meeting_id: f.meeting.id,
+      p_start_time: new Date(Date.now() + 86400_000).toISOString(),
+      p_end_time: new Date(Date.now() + 90000_000).toISOString(),
+    });
+    const meetingAfterRpc = await prisma.meeting.findUniqueOrThrow({ where: { id: f.meeting.id } });
+    check(
+      "17c. wrapper reschedule_meeting still rejects a non-organizer with 42501 and the same message",
+      notOrganizer.error?.code === "42501" &&
+        notOrganizer.error.message === "เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่เลื่อนเวลาการประชุมนี้ได้" &&
+        meetingAfterRpc.status === "PENDING",
+      JSON.stringify(notOrganizer.error)
+    );
+    const newStart = new Date(Date.now() + 2 * 86400_000);
+    newStart.setUTCSeconds(0, 0);
+    const byOrganizer = await asSomchai.rpc("reschedule_meeting", {
+      p_meeting_id: f.meeting.id,
+      p_start_time: newStart.toISOString(),
+      p_end_time: new Date(newStart.getTime() + 3600_000).toISOString(),
+    });
+    const meetingMoved = await prisma.meeting.findUniqueOrThrow({ where: { id: f.meeting.id } });
+    check(
+      "17d. organizer reschedules through the wrapper (row returned, status POSTPONED, start moved)",
+      !byOrganizer.error && meetingMoved.status === "POSTPONED" && meetingMoved.startTime.getTime() === newStart.getTime(),
+      byOrganizer.error?.message ?? `status=${meetingMoved.status} start=${meetingMoved.startTime.toISOString()}`
+    );
   } finally {
     console.log("\nCleaning up test fixtures...");
     await cleanupFixtures(f);
-    await asSomchai.auth.signOut();
-    await asSiriporn.auth.signOut();
+    // scope "local": only this script's own sessions — the default ("global")
+    // would also sign the demo accounts out of every real browser (B15).
+    await asSomchai.auth.signOut({ scope: "local" });
+    await asSiriporn.auth.signOut({ scope: "local" });
     await prisma.$disconnect();
   }
 

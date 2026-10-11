@@ -15,7 +15,11 @@ import { formatDateTime } from "@/lib/format";
 // false record in the database.
 
 export const reminderWithRecipients = {
-  meeting: { include: { participants: { include: { person: true } } } },
+  meeting: {
+    include: {
+      participants: { include: { person: { include: { user: { select: { emailNotifications: true } } } } } },
+    },
+  },
 } satisfies Prisma.ReminderInclude;
 
 export type ReminderWithRecipients = Prisma.ReminderGetPayload<{ include: typeof reminderWithRecipients }>;
@@ -30,7 +34,10 @@ export const SEND_FAILURE_REASON = "ไม่สามารถส่งอี�
  */
 async function deliver(reminder: ReminderWithRecipients): Promise<"SENT" | "SIMULATED"> {
   const outcomes = [];
-  for (const p of reminder.meeting.participants) {
+  // A participant whose linked account turned "การแจ้งเตือนผ่านอีเมล" off in
+  // Settings is skipped; external contacts (no account) always get the email.
+  const recipients = reminder.meeting.participants.filter((p) => p.person.user?.emailNotifications !== false);
+  for (const p of recipients) {
     outcomes.push(
       await sendEmail({
         to: p.person.email,

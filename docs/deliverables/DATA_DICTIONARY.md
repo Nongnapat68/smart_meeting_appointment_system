@@ -49,7 +49,7 @@ Reminders: [Reminder](#reminder)
 Notifications: [Notification](#notification)
 AI: [AISummary](#aisummary)
 Join table: [_MeetingGroups](#_meetinggroups-implicit-m-n-join-table)
-Database objects added on top of tables: [Views](#views-2), [Functions](#functions-11), [Trigger](#trigger-3)
+Database objects added on top of tables: [Views](#views-2), [Functions](#functions-11), [Stored Procedure](#stored-procedure-1), [Trigger](#trigger-3)
 
 ---
 
@@ -137,7 +137,7 @@ OTP สำหรับ flow "ลืมรหัสผ่าน" — 1 ผู้�
 | `icon` | TEXT | ❌ | `'group'` | | ชื่อ Material Symbol ที่ใช้แสดงไอคอนกลุ่ม |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
 | `updatedAt` | TIMESTAMP(3) | ❌ | auto | | |
-| `createdById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้สร้างกลุ่ม |
+| `createdById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้สร้างกลุ่ม |
 
 **FK ขาเข้า**: `ContactGroupMember.groupId`, `MeetingParticipant.sourceGroupId`, ตาราง join `_MeetingGroups`
 
@@ -173,7 +173,7 @@ Join entity ระหว่าง `ContactGroup` ↔ `Person` (many-to-many ท�
 | `endDate` | TIMESTAMP(3) | ✅ | `null` | | |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
 | `updatedAt` | TIMESTAMP(3) | ❌ | auto | | |
-| `managerId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้จัดการโครงการ — มีสิทธิ์แก้ไข/ลบโครงการ (`assertOwner`) |
+| `managerId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้จัดการโครงการ — มีสิทธิ์แก้ไข/ลบโครงการ (`assertOwner`) |
 
 **FK ขาเข้า**: `ProjectMember.projectId`, `Meeting.projectId`, `Task.projectId`
 
@@ -203,7 +203,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `id` | TEXT (cuid) | ❌ | — | PK | |
 | `name` | TEXT | ❌ | — | indexed | ชื่อที่จำง่าย เช่น "Zoom Room B — ทีมวิจัย AI Lab" |
 | `url` | TEXT | ❌ | — | | URL ห้องประชุม (เช่น Teams/Zoom/Google Meet ที่สร้างไว้นอกระบบ) |
-| `createdById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้สร้างลิงก์นี้ — มีสิทธิ์แก้ไข/ลบ |
+| `createdById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้สร้างลิงก์นี้ — มีสิทธิ์แก้ไข/ลบ |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
 | `updatedAt` | TIMESTAMP(3) | ❌ | auto | | แก้ไขที่นี่จุดเดียว มีผลกับทุก meeting ที่อ้างอิงทันที (BR-10) |
 
@@ -229,9 +229,9 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `location` | TEXT | ✅ | `null` | | ชื่อห้องประชุมจริง หรือลิงก์แบบ text ที่พิมพ์เอง (ไม่ผ่าน `OnlineMeetingResource`) |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
 | `updatedAt` | TIMESTAMP(3) | ❌ | auto | | |
-| `organizerId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้จัดประชุม (บัญชีที่ login) |
-| `organizerPersonId` | TEXT | ✅ | `null` | **FK** → `Person.id`, `onDelete: SetNull` | ผู้จัดประชุมในฐานะ contact record |
-| `projectId` | TEXT | ✅ | `null` | **FK** → `Project.id`, `onDelete: Restrict` | `null` ได้ตาม BR-06 (meeting ไม่จำเป็นต้องอยู่ project) — Restrict: ลบ project ได้เฉพาะเมื่อไม่มี meeting/task ผูกอยู่ (กันประวัติหาย BR-17) |
+| `organizerId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้จัดประชุม (บัญชีที่ login) |
+| `organizerPersonId` | TEXT | ✅ | `null` | **FK** → `Person.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้จัดประชุมในฐานะ contact record |
+| `projectId` | TEXT | ✅ | `null` | **FK** → `Project.id`, `onDelete: Restrict`, indexed (`20261011110000`) | `null` ได้ตาม BR-06 (meeting ไม่จำเป็นต้องอยู่ project) — Restrict: ลบ project ได้เฉพาะเมื่อไม่มี meeting/task ผูกอยู่ (กันประวัติหาย BR-17) |
 | `onlineMeetingResourceId` | TEXT | ✅ | `null` | **FK** → `OnlineMeetingResource.id`, `onDelete: SetNull`, indexed | ลิงก์ประชุมออนไลน์แบบใช้ซ้ำได้ (FR-07) |
 
 **FK ขาเข้า**: `MeetingParticipant.meetingId`, `Reminder.meetingId`, `MeetingNote.meetingId`, `Decision.meetingId`, `RelatedResource.meetingId`, `Task.meetingId`, `AISummary.meetingId`, ตาราง join `_MeetingGroups`
@@ -267,7 +267,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `id` | TEXT (cuid) | ❌ | — | PK | |
 | `meetingId` | TEXT | ❌ | — | **FK** → `Meeting.id`, `onDelete: Cascade`, indexed | |
 | `content` | TEXT | ❌ | — | | เนื้อหาบันทึก |
-| `authorId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้บันทึก |
+| `authorId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้บันทึก |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
 | `updatedAt` | TIMESTAMP(3) | ❌ | auto | | |
 
@@ -284,7 +284,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `id` | TEXT (cuid) | ❌ | — | PK | |
 | `meetingId` | TEXT | ❌ | — | **FK** → `Meeting.id`, `onDelete: Cascade`, indexed | |
 | `content` | TEXT | ❌ | — | เนื้อหามติ |
-| `decidedById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้บันทึกมติ |
+| `decidedById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้บันทึกมติ |
 | `decidedAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | เวลาตัดสินใจ |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | เวลาบันทึกเข้าระบบ (แยกจาก `decidedAt` เผื่อบันทึกย้อนหลัง) |
 
@@ -303,7 +303,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `title` | TEXT | ❌ | — | | ชื่อ resource |
 | `url` | TEXT | ❌ | — | | ลิงก์ไปยังไฟล์/เอกสาร |
 | `type` | `"ResourceType"` (enum) | ❌ | `'LINK'` | | ค่าที่เป็นไปได้: `LINK`, `DOCUMENT`, `FILE` |
-| `addedById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้เพิ่ม |
+| `addedById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้เพิ่ม |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
 
 **RLS (`schema.sql` §5)**: select — everyone logged in · insert — participant/organizer/admin ตั้ง `addedById` เป็นตัวเอง · update/delete — เฉพาะผู้เพิ่ม (`addedById`) หรือผู้จัดประชุม หรือ admin (`update/delete_author_or_organizer_or_admin`, migration `20261005090000_narrow_update_delete_and_attachment_url` — ข้อ 13)
@@ -326,10 +326,10 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 | `updatedAt` | TIMESTAMP(3) | ❌ | auto | | |
 | `completedAt` | TIMESTAMP(3) | ✅ | `null` | | เวลาที่ทำเสร็จจริง |
 | `assigneeId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed | ผู้รับผิดชอบ (บัญชี login) |
-| `assigneePersonId` | TEXT | ✅ | `null` | **FK** → `Person.id`, `onDelete: SetNull` | ผู้รับผิดชอบในฐานะ contact (รองรับ external assignee) |
-| `createdById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | ผู้สร้างงาน |
-| `projectId` | TEXT | ✅ | `null` | **FK** → `Project.id`, `onDelete: Restrict` | ลบ project ที่ยังมี task ผูกอยู่ไม่ได้ |
-| `meetingId` | TEXT | ✅ | `null` | **FK** → `Meeting.id`, `onDelete: SetNull` | การประชุมต้นทาง (FR-14: "การประชุมต้นทาง") |
+| `assigneePersonId` | TEXT | ✅ | `null` | **FK** → `Person.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้รับผิดชอบในฐานะ contact (รองรับ external assignee) |
+| `createdById` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | ผู้สร้างงาน |
+| `projectId` | TEXT | ✅ | `null` | **FK** → `Project.id`, `onDelete: Restrict`, indexed (`20261011110000`) | ลบ project ที่ยังมี task ผูกอยู่ไม่ได้ |
+| `meetingId` | TEXT | ✅ | `null` | **FK** → `Meeting.id`, `onDelete: SetNull`, indexed (`20261011110000`) | การประชุมต้นทาง (FR-14: "การประชุมต้นทาง") |
 
 **FK ขาเข้า**: `TaskComment.taskId`, `TaskAttachment.taskId`
 
@@ -343,7 +343,7 @@ Join entity ระหว่าง `Project` ↔ `Person` (many-to-many)
 |---|---|---|---|---|---|
 | `id` | TEXT (cuid) | ❌ | — | PK | |
 | `taskId` | TEXT | ❌ | — | **FK** → `Task.id`, `onDelete: Cascade`, indexed | |
-| `authorId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull` | |
+| `authorId` | **UUID** | ✅ | `null` | **FK** → `User.id`, `onDelete: SetNull`, indexed (`20261011110000`) | |
 | `content` | TEXT | ❌ | — | | |
 | `createdAt` | TIMESTAMP(3) | ❌ | `CURRENT_TIMESTAMP` | | |
 
@@ -486,7 +486,7 @@ Verified live via `SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortor
 | `create_meeting_with_participants(p_organizer_id uuid, p_title text, p_start_time timestamp, p_end_time timestamp, p_description text, p_type text, p_status text, p_location text, p_project_id text, p_online_meeting_resource_id text, p_participant_person_ids text[], p_group_ids text[], p_external_emails text[], p_reminder_offset_minutes int[])` | Hybrid migration รอบ Meeting — create (แทน `POST /api/meetings` เดิม, **มีใช้งานจริงแล้ว** ผ่าน `MeetingForm.tsx` — เรียก RPC ตรงด้วย supabase-js) | `"Meeting"` | **DEFINER** | สร้าง `Meeting` + `MeetingParticipant` (DIRECT > GROUP > EXTERNAL ตามลำดับความสำคัญเดียวกับที่ route เดิมทำ) + `Reminder` ต่อ offset ที่ขอ + `Notification` ต่อผู้ใช้ภายในที่ถูกเชิญทุกคน (ยกเว้นผู้จัดเอง) ในฟังก์ชันเดียว (rollback อัตโนมัติถ้าล้มเหลวจุดใดจุดหนึ่ง) ตรวจสิทธิ์เป็นจุดแรกสุดก่อนแตะตารางใดๆ (`auth.uid()` ต้องไม่ NULL — ข้อความ `'กรุณาเข้าสู่ระบบก่อนใช้งาน'` — และต้องเป็น `p_organizer_id` เองหรือ admin); **N6**: ปฏิเสธ `p_start_time` ที่อยู่ในอดีต (ข้อความ `'เวลาเริ่มต้องเป็นอนาคต...'`); **N7**: reminder ที่ offset ทำให้ `scheduledAt` ตกไปในอดีตถูกบันทึกเป็น `CANCELLED` แทน `PENDING` (กัน `process_due_reminders()` ยิงอีเมลทันที); **FR-10**: offset ซ้ำใน `p_reminder_offset_minutes` สร้าง reminder แถวเดียวต่อค่า (track ด้วย `v_seen_offsets`); **B1** (migration `20261011090000`): ขั้น GROUP อ่าน group id จาก `"_MeetingGroups"."A"` (ตาราง join มีแค่คอลัมน์ `A`/`B` ไม่มี `"groupId"` — เดิมอ้าง `"groupId"` ทำให้ create ที่เลือกทั้งกลุ่มล้มเหลวทุกครั้ง) เป็น `SECURITY DEFINER` เพราะต้อง insert `Notification` ให้ผู้ใช้อื่นซึ่ง MEMBER ธรรมดาไม่มีสิทธิ์ insert ตรงๆ ตาม RLS (`insert_admin_only`) ดู `docs/DESIGN_DECISIONS.md` §5.5 |
 | `update_project_with_members(p_project_id text, p_name text, p_description text, p_status text, p_start_date timestamp, p_end_date timestamp, p_member_person_ids text[])` | Hybrid migration รอบ Projects (โครงสร้างพร้อมใช้แทนขั้นตอน replace-member ของ `PUT /api/projects/[id]` เดิม) | `"Project"` | INVOKER | Full-replace (ไม่ใช่ partial PATCH): update field ที่แก้ไขได้ของ `Project` ทั้งหมดก่อน แล้วลบ `ProjectMember` เดิมทั้งหมดของ project นั้นแล้ว insert ชุดใหม่จาก `p_member_person_ids` ในฟังก์ชันเดียว (rollback อัตโนมัติถ้า personId ปลอมชนกับ FK `ProjectMember_personId_fkey`) เป็น `SECURITY INVOKER` เพราะ `update_manager_or_admin` policy ของ `Project` เองบล็อกผู้เรียกที่ไม่ใช่ manager/admin ได้อยู่แล้วตั้งแต่ UPDATE แรก ไม่ต้องข้าม RLS ของใคร — **ยังไม่มี route/UI ใดเรียกใช้จริงในตอนนี้** (`projects/page.tsx` มีแค่ list+create, `projects/[id]/page.tsx` เป็น read-only Server Component ที่ยังอ่านผ่าน Prisma โดยตรง) สร้างไว้เป็น infrastructure รอ hybrid-migration รอบแก้ไขโปรเจกต์ในอนาคต ดู `docs/DESIGN_DECISIONS.md` §5.6 |
 | `update_meeting_with_participants(p_meeting_id text, p_title text, p_start_time timestamp, p_end_time timestamp, p_description text, p_type text, p_status text, p_location text, p_project_id text, p_online_meeting_resource_id text, p_participant_person_ids text[], p_group_ids text[], p_external_emails text[])` | Hybrid migration รอบ Meeting — edit (แทน `PUT /api/meetings/[id]` เดิม, **มีใช้งานจริงแล้ว** ผ่าน `MeetingForm.tsx`) | `"Meeting"` | INVOKER | (1) UPDATE field ของ `Meeting` (title/description/type/status/start/end/location/projectId/onlineMeetingResourceId); (2) **N4** — เลื่อน reminder ที่ยัง `PENDING` ทุกแถวด้วย delta เดียวกับที่เวลาเริ่มเปลี่ยน เพื่อคง "ก่อนเริ่ม X นาที" และแถวที่เลื่อนแล้วตกไปในอดีตตั้งเป็น `CANCELLED` (SENT/SIMULATED/FAILED/CANCELLED ไม่แตะ); (3) **N6** — ปฏิเสธ `p_start_time` ที่อยู่ในอดีต; (4) ถ้า `p_group_ids` ไม่ NULL replace `_MeetingGroups`; (5) ถ้าพารามิเตอร์ participant-related ตัวใดตัวหนึ่งไม่ NULL จะ **diff** กับ `MeetingParticipant` ที่มีอยู่ — resolve external email เป็น Person (reuse ถ้ามีอยู่แล้วโดยไม่อัปเดตแถวคนอื่น), คำนวณ "wanted" list (DIRECT > GROUP > EXTERNAL, organizer เป็น DIRECT เสมอ), เก็บ rsvp/role ของแถว GROUP ที่ยังต้องการไว้แล้วสร้างใหม่, ลบเฉพาะแถวที่ไม่อยู่ใน wanted และ insert เฉพาะที่ขาด (ไม่ delete-all/insert-all) ทั้งหมดในฟังก์ชันเดียว (rollback อัตโนมัติถ้าล้มเหลวจุดใดจุดหนึ่ง) เป็น `SECURITY INVOKER` เพราะไม่มี insert ที่ผู้เรียกทำเองไม่ได้ — `update_organizer_or_admin` ของ `Meeting` และ RLS ของ `MeetingParticipant`/`_MeetingGroups` คุมครบ มีเช็คสิทธิ์ตรงกับ `organizerId` เดิมของ meeting (เปลี่ยนตัวผู้จัดไม่ได้) ไม่แตะ `Notification` ดู `docs/DESIGN_DECISIONS.md` §5.7 |
-| `reschedule_meeting(p_meeting_id text, p_start_time timestamp, p_end_time timestamp)` | การเลื่อนนัดหมาย (postpone) / BR-11 | `"Meeting"` | INVOKER | อัปเดต start/end ของ meeting (สถานะเป็น `POSTPONED`) และเลื่อน reminder ที่ยัง `PENDING` ทุกรายการด้วย delta เดียวกัน (คง offset เดิม; รายการที่ตกไปในอดีตเป็น `CANCELLED`) ทำได้โดย organizer หรือ admin เท่านั้น และปฏิเสธ meeting ที่ `CANCELLED` แล้ว, `end <= start`, และ start ในอดีต (N6) **ยังไม่มี route/UI ใดเรียกใช้จริงในตอนนี้** (route `POST /api/meetings/[id]/reschedule` ถูกลบในงาน ข้อ 20) เป็น `SECURITY INVOKER` — RLS ของ `Meeting`/`Reminder` คุมทั้งสองฝั่ง |
+| `reschedule_meeting(p_meeting_id text, p_start_time timestamp, p_end_time timestamp)` | การเลื่อนนัดหมาย (postpone) / FR-04 / BR-05 / BR-11 — **มีใช้งานจริง**: ปุ่ม "เลื่อนเวลา" ใน `src/app/(app)/meetings/[id]/MeetingActions.tsx` (`supabase.rpc("reschedule_meeting")`) | `"Meeting"` | **DEFINER** (wrapper) | ตั้งแต่ migration `20261011120000_reschedule_meeting_procedure` เป็น **wrapper บางๆ** ที่ `CALL private.reschedule_meeting_proc(...)` แล้วคืนแถว `Meeting` ที่ได้จาก OUT parameter — ชื่อ/argument/return type/grant (`authenticated` เท่านั้น) เหมือนเดิม UI จึงไม่ต้องแก้ ตรรกะทั้งหมดอยู่ใน procedure (ดูหัวข้อ Stored Procedure ด้านล่าง): อัปเดต start/end (สถานะ `POSTPONED`) และเลื่อน reminder ที่ยัง `PENDING` ด้วย delta เดียวกัน (คง offset เดิม; ที่ตกไปในอดีตเป็น `CANCELLED`) เฉพาะ organizer หรือ admin ปฏิเสธ meeting ที่ `CANCELLED`, `end <= start` และ start ในอดีต (N6) — เดิมเป็น `SECURITY INVOKER` ที่พึ่ง RLS; เปลี่ยนเป็น DEFINER เพื่อเรียกเข้า schema `private` ได้ โดยพฤติกรรมเท่าเดิม (ดู `docs/DESIGN_DECISIONS.md` §5.10) |
 | `is_admin()` | RLS helper — ใช้ใน policy ของเกือบทุกตาราง | `boolean` | DEFINER | คืน true เมื่อผู้ใช้ที่ login (`auth.uid()`) มี `role = 'ADMIN'` ใน `public.User` เป็น `SECURITY DEFINER` + `SET search_path = ''` เพื่อกัน RLS recursion บน `public.User` และกัน search_path hijacking |
 | `is_meeting_participant(p_meeting_id text)` | RLS helper — policy ของ `MeetingNote`/`Decision`/`RelatedResource`/`TaskComment` | `boolean` | DEFINER | คืน true เมื่อ Person ของผู้ใช้ที่ login เป็น `MeetingParticipant` ของ meeting ที่ระบุ (ให้ participant ที่ไม่ใช่ organizer เขียน note/decision/resource ได้) |
 | `cancel_meeting_reminders()` | BR-14 — trigger function | `trigger` | INVOKER | ตั้ง reminder ที่ยัง `PENDING` ของ meeting เป็น `CANCELLED` เมื่อ `Meeting.status` เปลี่ยนเป็น `CANCELLED` (ดู Trigger `trg_cancel_meeting_reminders`) |
@@ -496,6 +496,16 @@ Verified live via `SELECT t.typname, array_agg(e.enumlabel ORDER BY e.enumsortor
 `process_due_reminders()`/`get_meeting_context()` เป็น `SECURITY INVOKER` เพราะแค่ query ข้อมูล ไม่ต้องข้าม RLS ของใคร รันในสิทธิ์ผู้เรียกตามปกติ — เช่นเดียวกับ `update_project_with_members()`/`update_meeting_with_participants()` (RLS ของ `Project`/`Meeting` เองบล็อกให้อยู่แล้ว ไม่มี insert ใดที่ต้อง bypass) ส่วน `create_meeting_with_participants()` เป็น `DEFINER` แบบเดียวกับ `is_admin()`/`is_meeting_participant()` ที่ RLS policies พึ่งพา เพราะต้อง insert แถว `Notification` ที่ผู้เรียกเองไม่มีสิทธิ์ insert ตรงๆ (ดูเหตุผลแยกแต่ละตัวในคอลัมน์ Logic ด้านบน)
 
 `rls_auto_enable()` เป็นฟังก์ชันที่ Supabase สร้างและดูแลเอง (event trigger เปิด RLS อัตโนมัติให้ตารางใหม่) จึงไม่นับรวมใน 11 ฟังก์ชันข้างบน — `pg_proc` ของ schema `public` บน DB จริงจึงมี 12 รายการเมื่อรวมตัวนี้
+
+---
+
+## Stored Procedure (1)
+
+| Procedure | Schema | ตอบข้อ | OUT | Security | Logic |
+|---|---|---|---|---|---|
+| `reschedule_meeting_proc(p_meeting_id text, p_start_time timestamp, p_end_time timestamp, OUT p_meeting "Meeting")` | `private` | FR-04 เลื่อนนัด / BR-05 / BR-11 (เบื้องหลัง RPC `reschedule_meeting`) | แถว `"Meeting"` ที่ถูกอัปเดต | DEFINER, `SET search_path = ''` | `CREATE PROCEDURE` จริง (`pg_proc.prokind = 'p'`) จาก migration `20261011120000_reschedule_meeting_procedure` — ตรวจ (1) พบ meeting (2) ผู้เรียกเป็น organizer หรือ admin (ไม่งั้น `42501`) (3) ไม่ถูกยกเลิก (4) มี start/end และ end > start (5) start ไม่อยู่ในอดีต; แล้วล็อกแถว (`FOR UPDATE`), อัปเดต `Meeting` (start/end/`POSTPONED`/`updatedAt`) และเลื่อน `Reminder` ที่ `PENDING` ด้วย delta เดียวกัน (ตกไปในอดีต → `CANCELLED`) — ไม่มี `COMMIT/ROLLBACK` ในตัว ทำงานใน transaction ของผู้เรียก; schema `private` ไม่อยู่ใน schema ที่ PostgREST เปิด และ `anon`/`authenticated` ไม่มีทั้ง `USAGE` บน schema และ `EXECUTE` บน procedure — เรียกได้ทางเดียวคือผ่าน `public.reschedule_meeting()` |
+
+**สิทธิ์ระดับตาราง** (migration `20261011110000_add_fk_indexes_and_revoke_ddl_privileges`): `anon`/`authenticated` มีเพียง `SELECT/INSERT/UPDATE/DELETE` (ทุกคำสั่งผ่าน RLS) — สิทธิ์ `TRUNCATE`/`TRIGGER`/`REFERENCES` ที่ไม่ผ่าน RLS ถูกถอนออกทั้งตารางเดิมและตารางที่ `postgres` จะสร้างในอนาคต (default privileges) และ foreign key ทุกตัวใน schema `public` มี index รองรับแล้ว (เพิ่ม 14 ตัว — คอลัมน์ที่ระบุ "indexed (`20261011110000`)" ในตารางด้านบน)
 
 ---
 

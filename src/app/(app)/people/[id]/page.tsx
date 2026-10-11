@@ -125,7 +125,7 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
                   </thead>
                   <tbody className="divide-y divide-outline-variant/20">
                     {meetingHistory.map((mp) => {
-                      const badge = meetingStatusBadge(mp.meeting.status);
+                      const badge = meetingStatusBadge(mp.meeting.status, mp.meeting.endTime);
                       return (
                         <tr key={mp.id} className="hover:bg-surface-container-lowest transition-colors group">
                           <td className="px-6 py-4">

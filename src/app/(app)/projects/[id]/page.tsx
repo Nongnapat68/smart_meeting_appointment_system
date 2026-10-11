@@ -91,7 +91,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-outline">account_circle</span>
               <div>
-                <p className="font-label-md text-label-md text-outline">Project Manager</p>
+                <p className="font-label-md text-label-md text-outline">ผู้จัดการโปรเจกต์</p>
                 <p className="font-body-md text-body-md font-medium text-on-background">{project.manager?.name ?? "-"}</p>
               </div>
             </div>

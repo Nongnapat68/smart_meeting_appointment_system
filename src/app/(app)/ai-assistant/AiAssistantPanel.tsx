@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/Feedback";
 import { AiDisclaimer } from "@/components/ui/AiDisclaimer";
 import { formatDate, formatDateTime, parseDbTimestamp } from "@/lib/format";
 import { SAMPLE_MODE_MODEL, type AiResultMode } from "@/lib/ai-sample-mode";
+import { canEditMeeting, type PermissionUser } from "@/lib/permissions";
 import type { AISummary, MeetingStatus, MeetingType } from "@prisma/client";
 
 interface MeetingOption {
@@ -17,12 +18,18 @@ interface MeetingOption {
   startTime: Date;
   status: MeetingStatus;
   type: MeetingType;
+  organizerId: string | null;
 }
 
 // FR-18: One-shot meeting ไม่มีบริบทสะสมจากการประชุมอื่นให้ AI อ้างอิง — ปิดปุ่มเรียก AI
 // ไว้ทั้ง UI นี้ (ฝั่ง API ก็ guard ซ้ำไว้ที่ POST /api/meetings/[id]/ai-summary เผื่อเลี่ยง UI)
 const AI_DISABLED_REASON =
   "การประชุมเดี่ยว (One-shot) ไม่จำเป็นต้องใช้ AI เพราะไม่มีบริบทสะสมจากการประชุมก่อนหน้า";
+
+// B12: POST ai-summary / pending-issues / agenda-suggestion และ PATCH ai-summary
+// ทั้งหมด assertOwner(ผู้จัด) — กติกาเดียวกับ canEditMeeting — ผู้เข้าร่วมที่ไม่ใช่ผู้จัด
+// จึงเห็นสรุปที่บันทึกไว้แบบอ่านอย่างเดียว แทนปุ่มที่กดแล้วได้ 403 ทุกครั้ง
+const AI_NOT_ALLOWED_REASON = "เฉพาะผู้จัดประชุมหรือผู้ดูแลระบบเท่านั้นที่ใช้ AI กับการประชุมนี้ได้";
 
 interface AiSource {
   label: string;
@@ -33,9 +40,11 @@ interface AiSource {
 export function AiAssistantPanel({
   meetings,
   initialMeetingId,
+  currentUser,
 }: {
   meetings: MeetingOption[];
   initialMeetingId?: string;
+  currentUser: PermissionUser | null;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -116,7 +125,7 @@ export function AiAssistantPanel({
   }
 
   function requestGenerate() {
-    if (!selectedId || aiDisabled) return;
+    if (!selectedId || aiDisabled || !canUseAi) return;
     // A saved summary already exists (loaded in the effect above), so generate()
     // would upsert over it — confirm before replacing.
     if (summary) {
@@ -127,7 +136,7 @@ export function AiAssistantPanel({
   }
 
   async function generate() {
-    if (!selectedId || aiDisabled) return;
+    if (!selectedId || aiDisabled || !canUseAi) return;
     setGenerating(true);
     setError(null);
     try {
@@ -143,7 +152,7 @@ export function AiAssistantPanel({
   }
 
   async function saveEdit() {
-    if (!selectedId) return;
+    if (!selectedId || !canUseAi) return;
     setSaving(true);
     try {
       await api.patch(`/api/meetings/${selectedId}/ai-summary`, { content });
@@ -156,7 +165,7 @@ export function AiAssistantPanel({
   }
 
   async function analyzePendingIssues() {
-    if (!selectedId || aiDisabled) return;
+    if (!selectedId || aiDisabled || !canUseAi) return;
     setPendingIssuesLoading(true);
     setPendingIssuesError(null);
     try {
@@ -176,7 +185,7 @@ export function AiAssistantPanel({
   }
 
   async function suggestAgenda() {
-    if (!selectedId || aiDisabled || !agendaTopic.trim()) return;
+    if (!selectedId || aiDisabled || !canUseAi || !agendaTopic.trim()) return;
     setAgendaLoading(true);
     setAgendaError(null);
     try {
@@ -199,6 +208,7 @@ export function AiAssistantPanel({
   const sources: AiSource[] = summary?.sources ? JSON.parse(summary.sources) : [];
   const selectedMeeting = meetings.find((m) => m.id === selectedId);
   const aiDisabled = selectedMeeting?.type === "SINGLE";
+  const canUseAi = selectedMeeting ? canEditMeeting(selectedMeeting, currentUser) : false;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -256,12 +266,14 @@ export function AiAssistantPanel({
                   </p>
                 </div>
               </div>
-              <RegenerateButton
-                onClick={requestGenerate}
-                loading={generating}
-                disabled={aiDisabled}
-                title={aiDisabled ? AI_DISABLED_REASON : "สร้าง/รีเฟรชสรุปใหม่"}
-              />
+              {canUseAi && (
+                <RegenerateButton
+                  onClick={requestGenerate}
+                  loading={generating}
+                  disabled={aiDisabled}
+                  title={aiDisabled ? AI_DISABLED_REASON : "สร้าง/รีเฟรชสรุปใหม่"}
+                />
+              )}
             </div>
 
             <div className="flex-1 p-card-padding">
@@ -292,19 +304,22 @@ export function AiAssistantPanel({
                     <textarea
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
+                      readOnly={!canUseAi}
                       className="w-full h-full min-h-[300px] p-4 bg-transparent border-none resize-none focus:ring-0 font-body-md text-body-md text-on-surface leading-relaxed"
                       spellCheck={false}
                     />
                   </div>
-                  <div className="flex justify-end mt-3">
-                    <button
-                      onClick={saveEdit}
-                      disabled={saving || content === summary.content}
-                      className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors disabled:opacity-50"
-                    >
-                      {saving ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
-                    </button>
-                  </div>
+                  {canUseAi && (
+                    <div className="flex justify-end mt-3">
+                      <button
+                        onClick={saveEdit}
+                        disabled={saving || content === summary.content}
+                        className="px-4 py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors disabled:opacity-50"
+                      >
+                        {saving ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
+                      </button>
+                    </div>
+                  )}
                   <AiSourceList sources={sources} />
                 </>
               ) : (
@@ -312,14 +327,18 @@ export function AiAssistantPanel({
                   <p className="font-body-md text-body-md text-on-surface-variant mb-4">
                     ยังไม่มีสรุปสำหรับการประชุมนี้
                   </p>
-                  <button
-                    onClick={requestGenerate}
-                    disabled={generating}
-                    className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors inline-flex items-center gap-2 disabled:opacity-60"
-                  >
-                    {generating ? <Spinner /> : <span className="material-symbols-outlined text-[18px]">auto_awesome</span>}
-                    {generating ? "กำลังสร้างสรุป..." : "สร้างสรุปด้วย AI"}
-                  </button>
+                  {canUseAi ? (
+                    <button
+                      onClick={requestGenerate}
+                      disabled={generating}
+                      className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-colors inline-flex items-center gap-2 disabled:opacity-60"
+                    >
+                      {generating ? <Spinner /> : <span className="material-symbols-outlined text-[18px]">auto_awesome</span>}
+                      {generating ? "กำลังสร้างสรุป..." : "สร้างสรุปด้วย AI"}
+                    </button>
+                  ) : (
+                    <p className="font-label-md text-label-md text-on-surface-variant">{AI_NOT_ALLOWED_REASON}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -345,18 +364,22 @@ export function AiAssistantPanel({
                   </p>
                 </div>
               </div>
-              <RegenerateButton
-                onClick={analyzePendingIssues}
-                loading={pendingIssuesLoading}
-                disabled={aiDisabled}
-                title={aiDisabled ? AI_DISABLED_REASON : "วิเคราะห์ประเด็นค้างใหม่"}
-              />
+              {canUseAi && (
+                <RegenerateButton
+                  onClick={analyzePendingIssues}
+                  loading={pendingIssuesLoading}
+                  disabled={aiDisabled}
+                  title={aiDisabled ? AI_DISABLED_REASON : "วิเคราะห์ประเด็นค้างใหม่"}
+                />
+              )}
             </div>
             <div className="p-card-padding">
               {aiDisabled ? (
                 <p className="font-body-md text-body-md text-on-surface-variant text-center py-6" title={AI_DISABLED_REASON}>
                   {AI_DISABLED_REASON}
                 </p>
+              ) : !canUseAi ? (
+                <p className="font-body-md text-body-md text-on-surface-variant text-center py-6">{AI_NOT_ALLOWED_REASON}</p>
               ) : pendingIssuesError ? (
                 <p className="text-error font-body-md text-body-md">{pendingIssuesError}</p>
               ) : pendingIssues ? (
@@ -408,6 +431,8 @@ export function AiAssistantPanel({
                 <p className="font-body-md text-body-md text-on-surface-variant text-center py-6" title={AI_DISABLED_REASON}>
                   {AI_DISABLED_REASON}
                 </p>
+              ) : !canUseAi ? (
+                <p className="font-body-md text-body-md text-on-surface-variant text-center py-6">{AI_NOT_ALLOWED_REASON}</p>
               ) : (
                 <>
                   <div className="flex gap-2">

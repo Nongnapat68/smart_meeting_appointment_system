@@ -8,7 +8,6 @@ export function LoginForm({ nextUrl }: { nextUrl: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +16,7 @@ export function LoginForm({ nextUrl }: { nextUrl: string }) {
     setError(null);
     setLoading(true);
     try {
-      await api.post("/api/auth/login", { email, password, remember });
+      await api.post("/api/auth/login", { email, password });
       router.push(nextUrl);
       router.refresh();
     } catch (err) {
@@ -79,22 +78,14 @@ export function LoginForm({ nextUrl }: { nextUrl: string }) {
           />
         </div>
       </div>
-      <div className="flex items-center mt-2 mb-4">
-        <input
-          id="remember"
-          type="checkbox"
-          checked={remember}
-          onChange={(e) => setRemember(e.target.checked)}
-          className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary bg-surface"
-        />
-        <label className="ml-2 font-body-md text-body-md text-on-surface-variant" htmlFor="remember">
-          จดจำการเข้าสู่ระบบ
-        </label>
-      </div>
+      {/* B14: no "จดจำการเข้าสู่ระบบ" checkbox — it was never wired to anything
+          (the Supabase session cookies are always persistent and are refreshed
+          by the proxy and the browser client alike), so it only promised a
+          behavior the app doesn't have. See docs/DESIGN_DECISIONS.md. */}
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-primary text-on-primary font-body-lg text-body-lg font-medium py-3 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
+        className="mt-4 w-full bg-primary text-on-primary font-body-lg text-body-lg font-medium py-3 rounded-lg hover:opacity-90 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60"
       >
         {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
       </button>

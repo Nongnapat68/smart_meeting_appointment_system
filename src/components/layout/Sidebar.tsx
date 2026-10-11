@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/dashboard", icon: "home", label: "หน้าหลัก" },
-  { href: "/people", icon: "person", label: "ผู้คน" },
+  { href: "/people", icon: "person", label: "ผู้ติดต่อ" },
   { href: "/groups", icon: "group", label: "กลุ่ม" },
   { href: "/meetings", icon: "calendar_month", label: "การประชุม" },
   { href: "/projects", icon: "assignment", label: "โปรเจกต์" },

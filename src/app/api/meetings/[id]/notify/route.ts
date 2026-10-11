@@ -38,7 +38,7 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
   const meeting = await prisma.meeting.findUnique({
     where: { id },
     include: {
-      participants: { include: { person: true } },
+      participants: { include: { person: { include: { user: { select: { emailNotifications: true } } } } } },
       organizerPerson: { select: { name: true, email: true } },
       onlineMeetingResource: { select: { url: true } },
     },
