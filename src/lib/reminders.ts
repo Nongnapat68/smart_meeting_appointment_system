@@ -17,7 +17,10 @@ import { formatDateTime } from "@/lib/format";
 export const reminderWithRecipients = {
   meeting: {
     include: {
-      participants: { include: { person: { include: { user: { select: { emailNotifications: true } } } } } },
+      organizer: { select: { id: true, inAppNotifications: true } },
+      participants: {
+        include: { person: { include: { user: { select: { emailNotifications: true, inAppNotifications: true } } } } },
+      },
     },
   },
 } satisfies Prisma.ReminderInclude;
@@ -54,6 +57,79 @@ function outcomeData(status: "SENT" | "SIMULATED") {
   return { status, sentAt: status === "SENT" ? new Date() : null, failureReason: null };
 }
 
+/**
+ * In-app REMINDER notifications for a reminder that has just left PENDING:
+ * one per internal account among the participants, plus the organizer, unless
+ * that account turned "การแจ้งเตือนในแอป" off in Settings. External contacts
+ * have no account and only get the email. Created once, when the reminder is
+ * first processed (whatever the email outcome) — a later retry of a FAILED
+ * email doesn't add another.
+ */
+function reminderNotifications(reminder: ReminderWithRecipients): Prisma.NotificationCreateManyInput[] {
+  const { meeting } = reminder;
+  const userIds = new Set<string>();
+  for (const p of meeting.participants) {
+    if (p.person.userId && p.person.user?.inAppNotifications !== false) userIds.add(p.person.userId);
+  }
+  if (meeting.organizer && meeting.organizer.inAppNotifications !== false) userIds.add(meeting.organizer.id);
+  return [...userIds].map((userId) => ({
+    userId,
+    type: "REMINDER" as const,
+    title: "แจ้งเตือนการประชุม",
+    body: `"${meeting.title}" จะเริ่มเวลา ${formatDateTime(meeting.startTime)}`,
+    relatedId: meeting.id,
+  }));
+}
+
+/**
+ * Claims one due reminder, sends it and records the outcome — all inside one
+ * transaction that holds a row lock on the Reminder. `FOR UPDATE SKIP LOCKED`
+ * means a second processor running at the same moment (the admin button and
+ * the auto-processor, or two server instances) skips a row the first one is
+ * working on instead of emailing it again, and once the first commits the row
+ * is no longer PENDING. The meeting is re-checked under the lock, so a
+ * reminder whose meeting was cancelled or started after the due set was read
+ * is not sent (the sweep below cancels it).
+ *
+ * The lock is transaction-scoped, so it is safe behind the transaction-mode
+ * pooler (same as the advisory lock in src/lib/otp.ts). The email is sent while
+ * the lock is held — that is the point — so the timeout leaves room for it.
+ */
+async function processOneDueReminder(reminder: ReminderWithRecipients): Promise<ProcessDueResult["status"]> {
+  return prisma.$transaction(
+    async (tx) => {
+      const claimed = await tx.$queryRaw<{ id: string }[]>`
+        SELECT r.id
+        FROM public."Reminder" r
+        JOIN public."Meeting" m ON m.id = r."meetingId"
+        WHERE r.id = ${reminder.id}
+          AND r.status = 'PENDING'
+          AND m.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND m."startTime" > now()
+          AND m."endTime" > now()
+        FOR UPDATE OF r SKIP LOCKED`;
+      if (claimed.length === 0) return "SKIPPED";
+
+      let status: "SENT" | "SIMULATED" | "FAILED";
+      try {
+        status = await deliver(reminder);
+        await tx.reminder.update({ where: { id: reminder.id }, data: outcomeData(status) });
+      } catch (err) {
+        console.error("process-due reminder failed", reminder.id, err);
+        status = "FAILED";
+        await tx.reminder.update({
+          where: { id: reminder.id },
+          data: { status: "FAILED", failureReason: SEND_FAILURE_REASON },
+        });
+      }
+      const notifications = reminderNotifications(reminder);
+      if (notifications.length) await tx.notification.createMany({ data: notifications });
+      return status;
+    },
+    { maxWait: 10_000, timeout: 60_000 }
+  );
+}
+
 export type ProcessDueResult = {
   id: string;
   meetingTitle: string;
@@ -63,10 +139,16 @@ export type ProcessDueResult = {
 /**
  * BR-13: processes every Reminder whose scheduledAt has passed and is still
  * PENDING (the due set comes from the process_due_reminders() SQL function),
- * emails its participants, and moves it out of PENDING so a second call never
- * processes it again. Each row is moved with `updateMany({ where: { id,
- * status: "PENDING" } })`, which only succeeds while it is still PENDING at
- * the moment of the write.
+ * emails its participants, creates the in-app REMINDER notifications, and
+ * moves it out of PENDING so a second call never processes it again. Each row
+ * is claimed under a row lock before anything is sent (processOneDueReminder),
+ * so two runs at the same moment send it once — the other reports SKIPPED.
+ * This used to send first and then flip the row with a conditional update:
+ * the row ended up updated once, but both overlapping runs had already
+ * emailed it.
+ *
+ * Shared by POST /api/reminders/process-due (the admin button) and the
+ * optional auto-processor started from src/instrumentation.ts.
  *
  * The same run also sweeps up the PENDING reminders process_due_reminders()
  * deliberately does *not* return (20261003130100 — cancelled/finished meetings
@@ -85,25 +167,7 @@ export async function processDueReminders(): Promise<ProcessDueResult[]> {
 
   const results: ProcessDueResult[] = [];
   for (const reminder of dueReminders) {
-    try {
-      const status = await deliver(reminder);
-      const updated = await prisma.reminder.updateMany({
-        where: { id: reminder.id, status: "PENDING" },
-        data: outcomeData(status),
-      });
-      results.push({
-        id: reminder.id,
-        meetingTitle: reminder.meeting.title,
-        status: updated.count > 0 ? status : "SKIPPED",
-      });
-    } catch (err) {
-      console.error("process-due reminder failed", reminder.id, err);
-      await prisma.reminder.updateMany({
-        where: { id: reminder.id, status: "PENDING" },
-        data: { status: "FAILED", failureReason: SEND_FAILURE_REASON },
-      });
-      results.push({ id: reminder.id, meetingTitle: reminder.meeting.title, status: "FAILED" });
-    }
+    results.push({ id: reminder.id, meetingTitle: reminder.meeting.title, status: await processOneDueReminder(reminder) });
   }
   results.push(...(await sweepUnsendableReminders()));
   return results;

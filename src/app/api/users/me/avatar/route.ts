@@ -4,17 +4,31 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { ApiError, requireUser, withApiErrors } from "@/lib/api-helpers";
-import { checkAvatarUpload } from "@/lib/upload-validation";
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+import {
+  AVATAR_MAX_BYTES,
+  AVATAR_TOO_LARGE_MESSAGE,
+  checkAvatarRequestSize,
+  checkAvatarUpload,
+} from "@/lib/upload-validation";
 
 export const POST = withApiErrors(async (request: Request) => {
   const user = await requireUser();
 
-  const formData = await request.formData();
+  // Refuse an oversized upload from its Content-Length before reading the body.
+  const sizeCheck = checkAvatarRequestSize(request.headers.get("content-length"));
+  if (!sizeCheck.ok) throw new ApiError(413, sizeCheck.message);
+
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    // A body cut short (e.g. past the proxy's buffer) can't be parsed —
+    // answer with the size rule instead of a generic 500.
+    throw new ApiError(400, `อ่านไฟล์ที่อัปโหลดไม่สำเร็จ — ${AVATAR_TOO_LARGE_MESSAGE}`);
+  }
   const file = formData.get("file");
   if (!(file instanceof File)) throw new ApiError(400, "กรุณาเลือกรูปภาพ");
-  if (file.size > MAX_FILE_SIZE) throw new ApiError(400, "ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 5MB)");
+  if (file.size > AVATAR_MAX_BYTES) throw new ApiError(400, AVATAR_TOO_LARGE_MESSAGE);
 
   // Extension + declared MIME + magic bytes must all say "image" — the
   // declared MIME alone used to decide this, and the client controls it.

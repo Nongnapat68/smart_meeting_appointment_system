@@ -129,3 +129,32 @@ export function canEditRelatedResource(
   if (!user) return false;
   return isAdmin(user) || meeting.organizerId === user.id || resource.addedById === user.id;
 }
+
+/**
+ * Who is shown "สร้างงาน" in the "งานของโปรเจกต์" card on a project page: an
+ * admin, the project's manager, a project member (a ProjectMember whose Person
+ * links to the user), the organizer or a participant of one of the project's
+ * meetings — the same people canContributeToMeeting() lets in on those
+ * meetings — or someone already assigned a task in the project.
+ *
+ * Unlike the checks above this does NOT mirror an RLS policy: Task's
+ * "insert_own_as_creator" lets any signed-in user insert a task with
+ * themselves as creator, in any project, and that policy is unchanged. This
+ * only stops offering the button to people with no part in the project; it is
+ * a UI restriction, not an access control (see docs/GAP_ANALYSIS.md).
+ */
+export function canCreateProjectTask(
+  project: {
+    managerId: string | null;
+    members?: { person?: { userId: string | null } | null }[];
+    meetings?: { organizerId: string | null; participants?: { person?: { userId: string | null } | null }[] }[];
+    tasks?: { assigneeId: string | null }[];
+  },
+  user: PermissionUser | null
+): boolean {
+  if (!user) return false;
+  if (isAdmin(user) || project.managerId === user.id) return true;
+  if ((project.members ?? []).some((m) => m.person?.userId === user.id)) return true;
+  if ((project.meetings ?? []).some((m) => canContributeToMeeting(m, user))) return true;
+  return (project.tasks ?? []).some((t) => t.assigneeId === user.id);
+}

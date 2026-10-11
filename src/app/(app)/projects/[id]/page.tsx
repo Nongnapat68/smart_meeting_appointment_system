@@ -8,6 +8,7 @@ import { ProjectDeleteButton } from "./ProjectDeleteButton";
 import { CreateTaskButton } from "@/components/tasks/CreateTaskButton";
 import { getCurrentUser } from "@/lib/auth";
 import { canEditTask } from "@/lib/tasks";
+import { canCreateProjectTask } from "@/lib/permissions";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,7 +18,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     include: {
       manager: { select: { name: true } },
       members: { include: { person: true } },
-      meetings: { orderBy: { startTime: "asc" } },
+      meetings: {
+        orderBy: { startTime: "asc" },
+        include: { participants: { select: { person: { select: { userId: true } } } } },
+      },
       tasks: { orderBy: { dueDate: "asc" } },
     },
   });
@@ -167,8 +171,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 <span className="material-symbols-outlined text-tertiary-fixed-dim">checklist</span>
                 งานของโปรเจกต์
               </h3>
-              {/* FR-12 AC2: create a task already linked to this project */}
-              <CreateTaskButton defaultProjectId={project.id} />
+              {/* FR-12 AC2: create a task already linked to this project — offered only to
+                  people involved in it (UI only; RLS insert_own_as_creator is unchanged) */}
+              {canCreateProjectTask(project, user) && <CreateTaskButton defaultProjectId={project.id} />}
             </div>
             {project.tasks.length === 0 ? (
               <p className="text-on-surface-variant font-body-md text-body-md">ยังไม่มีงานในโปรเจกต์นี้</p>

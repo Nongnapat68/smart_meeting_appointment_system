@@ -5,7 +5,8 @@
  * Builds real file bytes (signatures included) and checks that allowed files
  * pass, executable/markup files are rejected with a readable message, and a
  * file whose extension lies about its content (e.g. HTML renamed to .png) is
- * rejected too. Pure function tests — no database or server needed:
+ * rejected too. Pure function tests (plus a source check of the avatar route) —
+ * no database or server needed:
  *
  *   npm run test:uploads
  *
@@ -18,10 +19,14 @@ import {
   checkAttachmentUpload,
   checkAvatarUpload,
   checkAttachmentRequestSize,
+  checkAvatarRequestSize,
   ATTACHMENT_ACCEPT,
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_MAX_REQUEST_BYTES,
   AVATAR_ACCEPT,
+  AVATAR_MAX_BYTES,
+  AVATAR_MAX_REQUEST_BYTES,
+  AVATAR_TOO_LARGE_MESSAGE,
 } from "@/lib/upload-validation";
 
 let failures = 0;
@@ -185,6 +190,32 @@ check("unparsable Content-Length passes to the per-file check", checkAttachmentR
 check("next.config proxyClientMaxBodySize is larger than the request cap (else bodies arrive truncated → 500)", (() => {
   const m = readFileSync("next.config.ts", "utf8").match(/proxyClientMaxBodySize:\s*"(\d+)mb"/);
   return !!m && Number(m[1]) * MB >= ATTACHMENT_MAX_REQUEST_BYTES;
+})());
+
+console.log("\n[7b] Avatar: size limit (5MB) checked from Content-Length before the body is read");
+const avatarSized = (n: number | null) => checkAvatarRequestSize(n === null ? null : String(n));
+check("avatar max file size is 5MB", AVATAR_MAX_BYTES === 5 * MB);
+check("avatar request cap leaves room for multipart overhead on a 5MB image", AVATAR_MAX_REQUEST_BYTES > AVATAR_MAX_BYTES);
+check("small avatar request (2KB) passes", avatarSized(2048).ok);
+check("5MB image + 1KB multipart overhead passes", avatarSized(5 * MB + 1024).ok);
+check("avatar request exactly at the cap passes", avatarSized(AVATAR_MAX_REQUEST_BYTES).ok);
+check("one byte over the avatar cap is refused", !avatarSized(AVATAR_MAX_REQUEST_BYTES + 1).ok);
+check("~6MB avatar request is refused with the Thai size message", (() => {
+  const r = avatarSized(6 * MB);
+  return !r.ok && r.message === "ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 5MB)" && r.message === AVATAR_TOO_LARGE_MESSAGE;
+})());
+check("a 7MB request is fine for attachments but refused for avatars", sized(7 * MB).ok && !avatarSized(7 * MB).ok);
+check("missing Content-Length passes to the avatar per-file check", avatarSized(null).ok);
+check("unparsable Content-Length passes to the avatar per-file check", checkAvatarRequestSize("abc").ok);
+check("avatar route answers 413 from Content-Length and 400 when formData() throws (no bare 500)", (() => {
+  const src = readFileSync("src/app/api/users/me/avatar/route.ts", "utf8");
+  const sizeAt = src.indexOf("checkAvatarRequestSize(request.headers.get(\"content-length\"))");
+  const parseAt = src.indexOf("await request.formData()");
+  return sizeAt > 0 && parseAt > sizeAt && /ApiError\(413,/.test(src) && /try\s*\{\s*formData = await request\.formData\(\);\s*\}\s*catch/.test(src);
+})());
+check("next.config proxyClientMaxBodySize is larger than the avatar request cap", (() => {
+  const m = readFileSync("next.config.ts", "utf8").match(/proxyClientMaxBodySize:\s*"(\d+)mb"/);
+  return !!m && Number(m[1]) * MB >= AVATAR_MAX_REQUEST_BYTES;
 })());
 
 console.log("\n[8] Task upload folder removed on task delete: only a direct child of public/uploads/tasks/");

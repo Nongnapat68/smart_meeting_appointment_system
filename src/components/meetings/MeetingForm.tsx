@@ -978,7 +978,7 @@ p_project_id: resolvedProjectId || null,
                     <p className="text-on-surface-variant font-body-md text-sm">ยังไม่มีการแจ้งเตือน</p>
                   )}
                   {existingReminders.map((r) => {
-                    const badge = reminderStatusBadge(r.status);
+                    const badge = reminderStatusBadge(r.status, r.scheduledAt);
                     return (
                       <div
                         key={r.id}

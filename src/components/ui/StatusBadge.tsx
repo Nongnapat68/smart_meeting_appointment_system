@@ -65,9 +65,14 @@ export function taskStatusBadge(status: string) {
   }
 }
 
-export function reminderStatusBadge(status: string) {
+// Pass scheduledAt and a PENDING reminder whose time has already come reads
+// "เลยกำหนด — รอระบบประมวลผล": nothing processes it until the admin button on
+// /reminders is pressed or the auto-processor (REMINDER_AUTO_PROCESS=1) runs.
+// Display only — the row stays PENDING, same as N8 above.
+export function reminderStatusBadge(status: string, scheduledAt?: Date | string) {
   switch (status) {
     case "PENDING":
+      if (scheduledAt && isPast(scheduledAt)) return { label: "เลยกำหนด — รอระบบประมวลผล", variant: "error" as const };
       return { label: "รอส่ง", variant: "warning" as const };
     case "SENT":
       return { label: "ส่งแล้ว", variant: "success" as const };

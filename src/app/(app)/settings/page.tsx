@@ -6,7 +6,7 @@ import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { ErrorBanner, FullPageSpinner } from "@/components/ui/Feedback";
-import { AVATAR_ACCEPT } from "@/lib/upload-validation";
+import { AVATAR_ACCEPT, AVATAR_MAX_BYTES, AVATAR_TOO_LARGE_MESSAGE } from "@/lib/upload-validation";
 
 interface MeUser {
   id: string;
@@ -78,6 +78,12 @@ export default function SettingsPage() {
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    // Same 5MB rule the route enforces — refused here without uploading.
+    if (file.size > AVATAR_MAX_BYTES) {
+      showToast(AVATAR_TOO_LARGE_MESSAGE, "error");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setUploadingAvatar(true);
     try {
       const formData = new FormData();

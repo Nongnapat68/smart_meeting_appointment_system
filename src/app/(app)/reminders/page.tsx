@@ -164,8 +164,9 @@ export default function RemindersPage() {
     }
   }
 
-  // BR-13: there is no cron (the app only runs under `npm run dev`), so an
-  // admin triggers POST /api/reminders/process-due from here on demand.
+  // BR-13: an admin triggers POST /api/reminders/process-due from here on
+  // demand. The auto-processor (REMINDER_AUTO_PROCESS=1, src/instrumentation.ts)
+  // runs the same thing on a timer, but it is off by default.
   async function processDue() {
     setProcessing(true);
     try {
@@ -258,7 +259,7 @@ export default function RemindersPage() {
               </thead>
               <tbody className="divide-y divide-outline-variant">
                 {items.map((r) => {
-                  const badge = reminderStatusBadge(r.status);
+                  const badge = reminderStatusBadge(r.status, r.scheduledAt);
                   return (
                     <tr key={r.id} className={`hover:bg-surface-bright transition-colors ${r.status === "FAILED" ? "bg-error-container/10" : ""} ${r.status === "CANCELLED" ? "opacity-60" : ""}`}>
                       <td className="py-4 px-4">

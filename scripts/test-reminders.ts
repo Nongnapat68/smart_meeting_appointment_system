@@ -2,7 +2,11 @@
  * Test: reminders are never recorded as SENT unless an email was actually
  * delivered (ReminderStatus SIMULATED), retry only accepts FAILED, and the
  * existing SQL (process_due_reminders(), the BR-14 cancel trigger,
- * reschedule_meeting()) still behaves with the new enum value.
+ * reschedule_meeting()) still behaves with the new enum value. Also: two
+ * processors running at once (admin button + auto-processor) email a reminder
+ * once and create one in-app REMINDER notification per account, and the
+ * auto-processor started from src/instrumentation.ts is off unless
+ * REMINDER_AUTO_PROCESS=1.
  *
  * Calls src/lib/reminders.ts (what POST /api/reminders/process-due and
  * POST /api/reminders/[id]/retry run after their auth checks) with real
@@ -174,6 +178,9 @@ async function main() {
       outcomes.filter((o) => o === "SIMULATED").length === 1,
       JSON.stringify(outcomes)
     );
+    // The row being updated once was never the whole story: both runs used to
+    // email before flipping it. The claim now happens under a row lock first.
+    check("…and the participant got the email once, not twice", sent(addr("carol")) === 1, `emails=${sent(addr("carol"))}`);
 
     // ─────────────────────────────────────────────────────────────────────
     console.log("\n[3] retry accepts FAILED only");
@@ -306,6 +313,15 @@ async function main() {
     const badge = reminderStatusBadge("SIMULATED");
     check("SIMULATED badge doesn't say 'ส่งแล้ว' and isn't the success colour", !badge.label.startsWith("ส่งแล้ว") && badge.variant !== "success", JSON.stringify(badge));
     check("SENT badge unchanged", JSON.stringify(reminderStatusBadge("SENT")) === JSON.stringify({ label: "ส่งแล้ว", variant: "success" }));
+    const overdueIso = new Date(Date.now() - 5 * MIN).toISOString();
+    const overdueDb = overdueIso.replace("Z", ""); // supabase-js returns timestamp(3) without a zone
+    const upcomingIso = new Date(Date.now() + HOUR).toISOString();
+    check(
+      "PENDING past its time reads 'เลยกำหนด — รอระบบประมวลผล' (ISO and zone-less DB value)",
+      [overdueIso, overdueDb].every((t) => reminderStatusBadge("PENDING", t).label === "เลยกำหนด — รอระบบประมวลผล")
+    );
+    check("PENDING not yet due still reads 'รอส่ง'", reminderStatusBadge("PENDING", upcomingIso).label === "รอส่ง" && reminderStatusBadge("PENDING").label === "รอส่ง");
+    check("overdue label only for PENDING (SIMULATED/CANCELLED unchanged)", reminderStatusBadge("SIMULATED", overdueIso).label === badge.label && reminderStatusBadge("CANCELLED", overdueIso).label === "ยกเลิกแล้ว");
     check("reminderQuerySchema accepts SIMULATED", reminderQuerySchema.safeParse({ status: "SIMULATED" }).success);
     const seed = readFileSync("prisma/seed.ts", "utf8");
     check("seed.ts no longer creates SENT reminders", !/status:\s*"SENT"/.test(seed));
@@ -356,7 +372,120 @@ async function main() {
       _count: true,
     });
     check("no two PENDING reminders of a meeting share a scheduledAt", pendingGroups.every((g) => g._count === 1));
+
+    // ─────────────────────────────────────────────────────────────────────
+    console.log("\n[7] In-app REMINDER notification at reminder time + concurrent processors");
+    const { createReminderAutoTick, reminderAutoProcessIntervalSeconds, reminderAutoProcessorRunning, stopReminderAutoProcessor } =
+      await import("@/lib/reminder-auto-processor");
+    const { register } = await import("@/instrumentation");
+    const notifOrganizer = await makeUser("norg");
+    const linkedOn = await makeUser("linked-on");
+    const linkedOff = await makeUser("linked-off");
+    await prisma.user.update({ where: { id: linkedOff }, data: { inAppNotifications: false } });
+    const mn = await makeMeeting(notifOrganizer, [addr("ext-only")]);
+    for (const [uid, name] of [[linkedOn, "linked-on"], [linkedOff, "linked-off"], [notifOrganizer, "norg"]] as const) {
+      const person = await prisma.person.create({ data: { name, email: addr(`p-${name}`), userId: uid } });
+      personIds.push(person.id);
+      await prisma.meetingParticipant.create({ data: { meetingId: mn.id, personId: person.id } });
+    }
+    const notifs = (uid: string) => prisma.notification.findMany({ where: { userId: uid, relatedId: mn.id } });
+    check("no REMINDER notification exists before the reminder is due", (await notifs(linkedOn)).length === 0);
+    const dueN = await makeReminder(mn.id, -MIN, "PENDING");
+    const futureN = await makeReminder(mn.id, 30 * MIN, "PENDING");
+    // Admin button (processDueReminders) and the auto-processor tick at the same moment.
+    const autoTick = createReminderAutoTick();
+    const [buttonRun, autoOutcome] = await Promise.all([processDueReminders(), autoTick()]);
+    check("auto tick ran alongside the button run", autoOutcome === "ran", autoOutcome);
+    check("due reminder → SIMULATED, stored once", (await load(dueN.id)).status === "SIMULATED");
+    const onRows = await notifs(linkedOn);
+    check(
+      "participant with an account gets exactly one REMINDER notification (button + auto at once)",
+      onRows.length === 1 && onRows[0].type === "REMINDER" && onRows[0].isRead === false,
+      JSON.stringify(onRows.map((n) => n.type))
+    );
+    check("…its title/body name the meeting and link to it", onRows[0]?.title === "แจ้งเตือนการประชุม" && !!onRows[0]?.body?.includes(mn.title) && onRows[0]?.relatedId === mn.id);
+    check("organizer gets one too (also deduplicated when listed as a participant)", (await notifs(notifOrganizer)).length === 1);
+    check("account with in-app notifications off gets none", (await notifs(linkedOff)).length === 0);
+    check("each email recipient got the email once", [addr("ext-only"), addr("p-linked-on"), addr("p-linked-off"), addr("p-norg")].every((e) => sent(e) === 1));
+    check("not-yet-due reminder: still PENDING, no notification for it", (await load(futureN.id)).status === "PENDING" && buttonRun.every((r) => r.id !== futureN.id));
+    await processDueReminders();
+    check("a later run adds no second notification", (await notifs(linkedOn)).length === 1);
+
+    // A failed email still leaves the in-app notification (created once).
+    const mf = await makeMeeting(notifOrganizer, [`z-${tag}@explode.test`]);
+    const dueF = await makeReminder(mf.id, -MIN, "PENDING");
+    await processDueReminders();
+    const fRow = await load(dueF.id);
+    const orgF = await prisma.notification.count({ where: { userId: notifOrganizer, relatedId: mf.id } });
+    check("email that throws → FAILED, organizer still notified in-app once", fRow.status === "FAILED" && orgF === 1, `${fRow.status} n=${orgF}`);
+    await retryFailedReminder(await load(dueF.id));
+    check("retrying the FAILED email does not add another notification", (await prisma.notification.count({ where: { userId: notifOrganizer, relatedId: mf.id } })) === 1);
+
+    console.log("\n[8] Auto-processor: opt-in, interval, no overlap, errors contained");
+    check("interval default 60s when unset", reminderAutoProcessIntervalSeconds(undefined) === 60 && reminderAutoProcessIntervalSeconds("") === 60);
+    check("interval garbage → 60s", reminderAutoProcessIntervalSeconds("abc") === 60);
+    check("interval 120 → 120s", reminderAutoProcessIntervalSeconds("120") === 120);
+    check("interval below 15 is raised to 15 (5, 0, -3)", ["5", "0", "-3"].every((v) => reminderAutoProcessIntervalSeconds(v) === 15));
+    let release: () => void = () => {};
+    let calls = 0;
+    const slowTick = createReminderAutoTick(() => {
+      calls++;
+      return new Promise((resolve) => (release = () => resolve([])));
+    });
+    const first = slowTick();
+    const second = await slowTick();
+    release();
+    check("a tick that starts while the previous one runs is skipped", second === "skipped" && (await first) === "ran" && calls === 1);
+    const third = slowTick();
+    release();
+    check("…and the next tick after it finishes runs again", (await third) === "ran" && calls === 2);
+    const realErr = console.error;
+    const errLogs: string[] = [];
+    console.error = (...a: unknown[]) => void errLogs.push(a.map(String).join(" "));
+    const failing2 = await createReminderAutoTick(async () => {
+      throw new Error("db down");
+    })();
+    console.error = realErr;
+    check("an error inside a run is caught and logged, not thrown", failing2 === "failed" && errLogs.some((l) => l.includes("[reminders:auto] run failed")));
+
+    const savedRuntime = process.env.NEXT_RUNTIME;
+    const savedFlag = process.env.REMINDER_AUTO_PROCESS;
+    const savedInterval = process.env.REMINDER_AUTO_PROCESS_INTERVAL_SECONDS;
+    process.env.NEXT_RUNTIME = "nodejs";
+    delete process.env.REMINDER_AUTO_PROCESS;
+    await register();
+    check("REMINDER_AUTO_PROCESS unset → register() starts nothing (off by default)", !reminderAutoProcessorRunning());
+    process.env.REMINDER_AUTO_PROCESS = "true";
+    await register();
+    check("REMINDER_AUTO_PROCESS=true (not \"1\") → still off", !reminderAutoProcessorRunning());
+    process.env.REMINDER_AUTO_PROCESS = "1";
+    process.env.NEXT_RUNTIME = "edge";
+    await register();
+    check("REMINDER_AUTO_PROCESS=1 on the edge runtime → off (Node only)", !reminderAutoProcessorRunning());
+    process.env.NEXT_RUNTIME = "nodejs";
+    process.env.REMINDER_AUTO_PROCESS_INTERVAL_SECONDS = "15";
+    const ma = await makeMeeting(notifOrganizer, [addr("auto")]);
+    const dueA = await makeReminder(ma.id, -MIN, "PENDING");
+    await register();
+    await register(); // as a hot reload would — must not add a second timer
+    check("REMINDER_AUTO_PROCESS=1 → register() starts the auto-processor", reminderAutoProcessorRunning());
+    let autoStatus = "";
+    for (let i = 0; i < 40 && autoStatus !== "SIMULATED"; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      autoStatus = (await load(dueA.id)).status;
+    }
+    check("…its first tick processes a due reminder without anyone pressing the button", autoStatus === "SIMULATED", autoStatus);
+    check("…the email went out once even though register() ran twice", sent(addr("auto")) === 1, `emails=${sent(addr("auto"))}`);
+    check("…and the organizer got one in-app REMINDER", (await prisma.notification.count({ where: { userId: notifOrganizer, relatedId: ma.id, type: "REMINDER" } })) === 1);
+    stopReminderAutoProcessor();
+    check("stop clears the timer", !reminderAutoProcessorRunning());
+    process.env.NEXT_RUNTIME = savedRuntime;
+    if (savedFlag === undefined) delete process.env.REMINDER_AUTO_PROCESS;
+    else process.env.REMINDER_AUTO_PROCESS = savedFlag;
+    if (savedInterval === undefined) delete process.env.REMINDER_AUTO_PROCESS_INTERVAL_SECONDS;
+    else process.env.REMINDER_AUTO_PROCESS_INTERVAL_SECONDS = savedInterval;
   } finally {
+    (await import("@/lib/reminder-auto-processor")).stopReminderAutoProcessor();
     await prisma.reminder.deleteMany({ where: { meetingId: { in: meetingIds } } });
     await prisma.meetingParticipant.deleteMany({ where: { meetingId: { in: meetingIds } } });
     await prisma.meeting.deleteMany({ where: { id: { in: meetingIds } } });

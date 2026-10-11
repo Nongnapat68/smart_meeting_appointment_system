@@ -100,16 +100,31 @@ export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 export const ATTACHMENT_MAX_REQUEST_BYTES = ATTACHMENT_MAX_BYTES + 512 * 1024;
 export const ATTACHMENT_TOO_LARGE_MESSAGE = "ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 10MB)";
 
+// Avatars: at most 5MB per image, same multipart allowance on top.
+export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+export const AVATAR_MAX_REQUEST_BYTES = AVATAR_MAX_BYTES + 512 * 1024;
+export const AVATAR_TOO_LARGE_MESSAGE = "ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 5MB)";
+
+type SizeCheck = { ok: true } | { ok: false; message: string };
+
 /**
  * Checked from the Content-Length header before the body is read, so an
  * oversized upload is refused with 413 instead of being parsed at all. A
  * missing or unparsable header passes here; the per-file size check after
  * parsing still applies.
  */
-export function checkAttachmentRequestSize(contentLength: string | null): { ok: true } | { ok: false; message: string } {
+function checkRequestSize(contentLength: string | null, maxBytes: number, message: string): SizeCheck {
   const length = contentLength === null ? NaN : Number(contentLength);
-  if (Number.isFinite(length) && length > ATTACHMENT_MAX_REQUEST_BYTES) return { ok: false, message: ATTACHMENT_TOO_LARGE_MESSAGE };
+  if (Number.isFinite(length) && length > maxBytes) return { ok: false, message };
   return { ok: true };
+}
+
+export function checkAttachmentRequestSize(contentLength: string | null): SizeCheck {
+  return checkRequestSize(contentLength, ATTACHMENT_MAX_REQUEST_BYTES, ATTACHMENT_TOO_LARGE_MESSAGE);
+}
+
+export function checkAvatarRequestSize(contentLength: string | null): SizeCheck {
+  return checkRequestSize(contentLength, AVATAR_MAX_REQUEST_BYTES, AVATAR_TOO_LARGE_MESSAGE);
 }
 
 // Tags a browser could run script through if a "text" file were ever rendered
