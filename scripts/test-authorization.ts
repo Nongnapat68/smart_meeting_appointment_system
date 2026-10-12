@@ -77,6 +77,9 @@ function startServer(): ChildProcess {
     cwd: process.cwd(),
     shell: true,
     stdio: "pipe",
+    // The reminder auto-processor is on by default; a test server must never
+    // process the shared database's reminders.
+    env: { ...process.env, REMINDER_AUTO_PROCESS: "0" },
   });
   child.stdout?.on("data", () => {});
   child.stderr?.on("data", (d) => process.stderr.write(`[next dev] ${d}`));

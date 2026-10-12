@@ -1,10 +1,13 @@
 import { processDueReminders, type ProcessDueResult } from "@/lib/reminders";
 
-// Optional in-process scheduler for BR-13: runs the same processDueReminders()
-// as the admin button on /reminders (POST /api/reminders/process-due) every
+// In-process scheduler for BR-13: runs the same processDueReminders() as the
+// admin button on /reminders (POST /api/reminders/process-due) every
 // REMINDER_AUTO_PROCESS_INTERVAL_SECONDS while the Node server is up. Started
-// from src/instrumentation.ts only when REMINDER_AUTO_PROCESS=1 — off by
-// default, so no reminder is processed unless someone opts in.
+// once per process from src/instrumentation.ts — on by default, off with
+// REMINDER_AUTO_PROCESS=0 (and never during next build / tests / without a
+// database; see src/lib/reminder-auto-config.ts). Two servers on the same
+// database are safe: each reminder is claimed under a row lock
+// (FOR UPDATE SKIP LOCKED) and its notifications carry a dedupe key.
 //
 // This only works on a long-running server (`npm run dev` / `npm start`). On
 // serverless hosting there is no process between requests to keep a timer
@@ -68,7 +71,7 @@ export function startReminderAutoProcessor(intervalSeconds: number): boolean {
   // Don't keep a process alive just for this timer.
   timer.unref?.();
   globalForReminders.__reminderAutoProcessor = { timer, intervalSeconds };
-  console.log(`[reminders:auto] enabled — checking due reminders every ${intervalSeconds}s`);
+  console.log(`[reminders:auto] enabled — checking due reminders every ${intervalSeconds}s (REMINDER_AUTO_PROCESS=0 turns it off)`);
   void tick();
   return true;
 }

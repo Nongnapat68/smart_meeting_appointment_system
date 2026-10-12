@@ -509,6 +509,11 @@ enum NotificationType {
   TASK_ASSIGNED
   AI_SUMMARY_READY
   REMINDER
+  // fix4 (20261012090000): written by the DB notification triggers
+  MEETING_REMOVED
+  MEETING_NOTE
+  TASK_UPDATED
+  TASK_COMMENT
 }
 
 model Notification {
@@ -521,8 +526,12 @@ model Notification {
   isRead      Boolean           @default(false)
   relatedId   String? // meetingId / taskId, interpreted by `type`
   createdAt   DateTime          @default(now())
+  // One row per (recipient, event): the DB triggers write every notification
+  // with a key and ON CONFLICT DO NOTHING (20261012090000). NULL on old rows.
+  dedupeKey   String?
 
   @@index([userId, isRead])
+  @@unique([userId, dedupeKey])
 }
 
 // ---------------------------------------------------------------------------

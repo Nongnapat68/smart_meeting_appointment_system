@@ -52,24 +52,33 @@ cp .env.example .env
 | `SUPABASE_SECRET_KEY` | Supabase Dashboard → Project Settings → API → **Secret key** — สิทธิ์เต็ม ใช้ฝั่ง server เท่านั้น **ห้าม** ใส่ prefix `NEXT_PUBLIC_` เด็ดขาด *(ใหม่)* |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) — จำเป็นสำหรับฟีเจอร์ AI (สรุปก่อนประชุม/วิเคราะห์ประเด็นค้าง/แนะนำ agenda) เท่านั้น ส่วนอื่นของระบบใช้งานได้ปกติแม้ไม่ตั้งค่า |
 | `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` | ไม่ต้องตั้ง — `sendEmail()` (`src/lib/email.ts`) ยังเป็น stub: ทุกอีเมล (OTP/คำเชิญ/แจ้งเตือน) ถูก log ออกทาง server console เสมอ แม้ตั้ง `SMTP_HOST` ก็ไม่ส่งจริง (โค้ดอ่านแค่ `SMTP_HOST`; อีกสี่ตัวเตรียมไว้สำหรับ transport จริงในอนาคต) |
-| `REMINDER_AUTO_PROCESS` / `REMINDER_AUTO_PROCESS_INTERVAL_SECONDS` | ไม่บังคับ — **ค่าเริ่มต้นปิด** ดูหัวข้อ "ประมวลผลการแจ้งเตือนอัตโนมัติ" ด้านล่าง |
+| `REMINDER_AUTO_PROCESS` / `REMINDER_AUTO_PROCESS_INTERVAL_SECONDS` | ไม่บังคับ — **ค่าเริ่มต้นเปิด** (`0` = ปิด) ดูหัวข้อ "ประมวลผลการแจ้งเตือนอัตโนมัติ" ด้านล่าง |
 
-#### ประมวลผลการแจ้งเตือนอัตโนมัติ (ไม่บังคับ)
+#### ประมวลผลการแจ้งเตือนอัตโนมัติ (เปิดเป็นค่าเริ่มต้น)
 
-โดยค่าเริ่มต้น การแจ้งเตือนที่ถึงเวลาจะยังเป็นสถานะ `PENDING` (หน้า `/reminders` แสดงป้าย "เลยกำหนด — รอระบบประมวลผล") จนกว่าแอดมินจะกดปุ่ม "ประมวลผล reminder ที่ถึงเวลา" บนหน้า `/reminders`
-ถ้าต้องการให้ระบบประมวลผลเองตามเวลา ให้ตั้งใน `.env` แล้วรีสตาร์ต `npm run dev`:
+เมื่อรัน `npm run dev` / `npm start` เซิร์ฟเวอร์ Node จะเริ่มตัวประมวลผลการแจ้งเตือนเองหนึ่งตัวต่อโปรเซส (`src/instrumentation.ts` → `src/lib/reminder-auto-processor.ts`) และพิมพ์หนึ่งบรรทัดใน console ว่า
+`[reminders:auto] enabled — checking due reminders every 60s (REMINDER_AUTO_PROCESS=0 turns it off)`
+ทุกช่วงเวลาจะเรียก `processDueReminders()` ชุดเดียวกับปุ่ม "ประมวลผล reminder ที่ถึงเวลา" บนหน้า `/reminders`: ส่งอีเมล (ปัจจุบันเป็นโหมดจำลอง) และเปลี่ยนสถานะเป็น `SIMULATED`/`SENT`/`FAILED` ซึ่งทำให้ฐานข้อมูลสร้างการแจ้งเตือนในกระดิ่งชนิด `REMINDER` ให้ผู้จัดและผู้เข้าร่วมที่มีบัญชี
 
 ```bash
-REMINDER_AUTO_PROCESS="1"                    # ค่าอื่นหรือไม่ตั้ง = ปิด
+REMINDER_AUTO_PROCESS="0"                    # ปิด (ค่าอื่นหรือไม่ตั้ง = เปิด)
 REMINDER_AUTO_PROCESS_INTERVAL_SECONDS="60"  # ตรวจทุกกี่วินาที (ค่าเริ่มต้น 60, ต่ำสุด 15)
 ```
 
-เมื่อเปิด เซิร์ฟเวอร์ Node จะเรียก `processDueReminders()` ชุดเดียวกับปุ่มตามช่วงเวลาที่ตั้ง (`src/instrumentation.ts` → `src/lib/reminder-auto-processor.ts`): ส่งอีเมล (ปัจจุบันเป็นโหมดจำลอง) เปลี่ยนสถานะเป็น `SIMULATED`/`SENT`/`FAILED` และสร้างการแจ้งเตือนในแอปชนิด `REMINDER` ให้ผู้เข้าร่วมที่มีบัญชีและผู้จัดประชุม (ยกเว้นคนที่ปิด "การแจ้งเตือนในแอป") — ถ้ากดปุ่มพร้อมกับรอบอัตโนมัติ แต่ละรายการถูกประมวลผลครั้งเดียว (ล็อกแถวก่อนส่ง)
+ตัวประมวลผลไม่เริ่มเองเมื่อ: `REMINDER_AUTO_PROCESS=0`, ระหว่าง `next build`, `NODE_ENV=test`, ไม่มี `DATABASE_URL`, หรือ edge runtime (`src/lib/reminder-auto-config.ts`) — `npm run test:authz` เปิดเซิร์ฟเวอร์ทดสอบพร้อม `REMINDER_AUTO_PROCESS=0` ให้เอง
 
 ข้อจำกัดและคำเตือน:
-- ทำงานได้เฉพาะเซิร์ฟเวอร์ที่รันค้างตลอด (`npm run dev` / `npm start`) — บน serverless (เช่น Vercel) ไม่มี process ค้างให้ตั้งเวลา ต้องใช้ cron ภายนอกแทน และเนื่องจาก `POST /api/reminders/process-due` ต้องล็อกอินเป็นแอดมิน จึงต้องเพิ่ม route ที่ป้องกันด้วย secret สำหรับ cron ก่อน (ยังไม่มีในระบบ)
-- **เมื่อเปิดแล้ว การแจ้งเตือนทุกรายการในฐานข้อมูลที่เชื่อมอยู่จะถูกประมวลผลเมื่อถึงเวลา รวมถึงการแจ้งเตือนของประชุมตัวอย่าง ("ตัวอย่าง: ประชุมติดตามความคืบหน้าโครงการทุนวิจัย AI Lab ครั้งที่ 1/2")** และการแจ้งเตือนที่ค้าง `PENDING` ของประชุมที่เริ่มไปแล้วจะถูกเปลี่ยนเป็น `CANCELLED` ในรอบแรก (เหมือนการกดปุ่ม)
-- กระดิ่งแจ้งเตือนอัปเดตจำนวนเมื่อเปลี่ยนหน้าหรือเปิดกระดิ่ง (เหมือนคำเชิญประชุม) ไม่ได้ push แบบ real-time
+- รันสองเซิร์ฟเวอร์บนฐานข้อมูลเดียวกันได้: แต่ละการเตือนถูก "จอง" ด้วย row lock (`FOR UPDATE SKIP LOCKED`) ก่อนส่ง และการแจ้งเตือนในกระดิ่งมีคีย์กันซ้ำ จึงไม่ส่งซ้ำและไม่ขึ้นซ้ำ
+- ทำงานได้เฉพาะเซิร์ฟเวอร์ที่รันค้างตลอด — บน serverless (เช่น Vercel) ต้องใช้ cron ภายนอก และเนื่องจาก `POST /api/reminders/process-due` ต้องล็อกอินเป็นแอดมิน จึงต้องเพิ่ม route ที่ป้องกันด้วย secret ก่อน (ยังไม่มีในระบบ)
+- **การแจ้งเตือนทุกรายการในฐานข้อมูลที่เชื่อมอยู่จะถูกประมวลผลเมื่อถึงเวลา รวมถึงของประชุมตัวอย่าง ("ตัวอย่าง: ประชุมติดตามความคืบหน้าโครงการทุนวิจัย AI Lab ครั้งที่ 1/2")** และรายการที่ค้าง `PENDING` ของประชุมที่จบไปแล้วจะถูกเปลี่ยนเป็น `CANCELLED` ในรอบแรก (เหมือนการกดปุ่ม)
+
+#### การแจ้งเตือนในระบบ (กระดิ่ง)
+
+ทุกเหตุการณ์ที่ระบบ "แจ้งใครสักคน" มีรายการในกระดิ่งและหน้า `/notifications` สำหรับผู้ที่มีบัญชี: ได้รับคำเชิญ, ถูกนำออกจากประชุม, เลื่อนประชุม (เวลาเดิม → ใหม่), แก้ชื่อ/สถานที่/ลิงก์ประชุมออนไลน์, ยกเลิกประชุม, การเตือนก่อนประชุม (ทุกสถานะ), ได้รับมอบหมายงาน/งานถูกโอน, สถานะงานเปลี่ยน, ความเห็นใหม่ในงาน, บันทึกการประชุม/มติใหม่ และสรุปประชุมโดย AI
+- แถวการแจ้งเตือนเขียนโดย trigger ในฐานข้อมูล (`prisma/migrations/20261012090000_in_app_notifications_for_all_events`) จึงเกิดเหมือนกันไม่ว่าการกระทำมาจากหน้าเว็บ (supabase-js/RPC) หรือเซิร์ฟเวอร์ ผู้ลงมือไม่ได้รับของตัวเอง ผู้ที่ปิด "การแจ้งเตือนในระบบ" ใน Settings ไม่ได้รับ
+- บุคคลภายนอกที่ไม่มีบัญชีได้เฉพาะอีเมล (ปัจจุบันเป็น stub)
+- กระดิ่งตรวจจำนวนที่ยังไม่อ่านทุก 30 วินาที (ขึ้น toast "มีการแจ้งเตือนใหม่") แสดง 10 รายการล่าสุด และมีลิงก์ "ดูการแจ้งเตือนทั้งหมด" ไปหน้า `/notifications` (กรองยังไม่อ่าน, ทำเครื่องหมายอ่านทีละรายการหรือทั้งหมด)
+- รายละเอียดเหตุการณ์ → ผู้รับ → ข้อความ อยู่ที่ `docs/DESIGN_DECISIONS.md` §5.14
 
 ### 2. Generate Prisma Client
 
@@ -94,6 +103,10 @@ npx prisma migrate deploy
 `prisma/migrations/*/migration.sql` แต่ละไฟล์) ซึ่งต้องอาศัย schema `auth` ที่ Supabase Auth สร้างไว้ให้อยู่แล้วในทุกโปรเจกต์จริง —
 `migrate dev` จะพยายามสร้าง shadow database ที่ไม่มี schema `auth` นี้มาเทียบ diff แล้วพัง ส่วน `migrate deploy` แค่ไล่ apply
 ทุก migration ที่ยังไม่เคยรันตามลำดับไฟล์ตรงๆ กับฐานข้อมูลจริง (ปลอดภัยสำหรับฐานข้อมูล Supabase โปรเจกต์ใหม่ที่ว่างเปล่า)
+
+migration ล่าสุด `20261012090000_in_app_notifications_for_all_events` (trigger การแจ้งเตือน 9 ตัว + ฟังก์ชันใน schema `private`) ถูกรวมอยู่ใน `migrate deploy` ด้วย ไม่ต้องทำอะไรเพิ่ม
+(ฐานข้อมูลของทีม apply แล้วเมื่อ 12 ต.ค. 2569) ถ้าต้องถอยกลับ ใช้ `prisma/rollbacks/20261012090000_in_app_notifications_for_all_events.down.sql` ในทรานแซกชันเดียว
+แล้วลบแถวของ migration นี้ออกจาก `_prisma_migrations` (ทั้งหมดอธิบายในหัวไฟล์)
 
 ### 4. ใส่ข้อมูลตัวอย่าง
 
@@ -124,9 +137,9 @@ npm run dev
 
 - `npm run test:uploads`, `npm run test:format`, `npm run test:redirect` — pure function ไม่ต้องใช้ฐานข้อมูลหรือเซิร์ฟเวอร์
 - `npm run test:rls`, `npm run test:authz` — ใช้ `.env` และ**ต่อฐานข้อมูลจริง**: สร้าง fixture ชั่วคราวแล้วลบเอง (`test:authz` เปิด `next dev` ชั่วคราวที่พอร์ต 3199) — รันเมื่อจำเป็นเท่านั้น
-- `npm run test:otp`, `npm run test:reminders` — ต้องใช้ Postgres ทิ้งได้ในเครื่อง (localhost เท่านั้น สคริปต์ปฏิเสธที่อยู่อื่น) ผ่านตัวแปร `OTP_TEST_DATABASE_URL` / `REMINDER_TEST_DATABASE_URL` เช่น
+- `npm run test:otp`, `npm run test:reminders`, `npm run test:notifications` — ต้องใช้ Postgres ทิ้งได้ในเครื่อง (localhost เท่านั้น สคริปต์ปฏิเสธที่อยู่อื่น) ผ่านตัวแปร `OTP_TEST_DATABASE_URL` / `REMINDER_TEST_DATABASE_URL` / `NOTIFICATION_TEST_DATABASE_URL` เช่น
   `REMINDER_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54329/otptest npm run test:reminders`
-  (`test:reminders` ต้องการฐานที่ apply ทุก migration พร้อม stand-in ของ schema `auth`; `test:otp` ใช้ฐานจาก `prisma db push` — รายละเอียดในหัวไฟล์ของแต่ละสคริปต์)
+  (`test:reminders` และ `test:notifications` ต้องการฐานที่ apply ทุก migration พร้อม stand-in ของ schema `auth`; `test:otp` ใช้ฐานจาก `prisma db push` — รายละเอียดในหัวไฟล์ของแต่ละสคริปต์)
 
 ---
 
@@ -134,7 +147,7 @@ npm run dev
 
 - **อีเมลยังไม่ส่งจริง** — `sendEmail()` เป็น stub ที่ log ข้อความไว้ใน server console การเตือนที่ประมวลผลแล้วจึงมีสถานะ `SIMULATED` (จำลองการส่ง) ไม่ใช่ `SENT`
 - **AI** — ไม่มี `ANTHROPIC_API_KEY` จะใช้โหมดเทมเพลต (ป้าย "สร้างโดยระบบ") ; ปุ่มจัดลำดับงานด้วย AI ในหน้า `/tasks` ต้องมีคีย์ (ไม่มีโหมดเทมเพลต)
-- **การแจ้งเตือนที่ถึงเวลา** ไม่ถูกประมวลผลเองถ้าไม่เปิด `REMINDER_AUTO_PROCESS=1` — แอดมินต้องกดปุ่มบนหน้า `/reminders` (หน้าแสดงสถานะนี้ให้ทุกคนเห็น)
+- **การแจ้งเตือนที่ถึงเวลา** ถูกประมวลผลเองโดยเซิร์ฟเวอร์ที่รันค้าง (ปิดด้วย `REMINDER_AUTO_PROCESS=0`) — บน serverless ต้องมี cron ภายนอก (ยังไม่มี route สำหรับ cron)
 - **ยังไม่มีสมัครสมาชิกแบบเปิด** (FR-01) — บัญชีถูกสร้างโดย `db:seed`
 - รายการข้อจำกัดเต็ม (รวมเรื่องที่ต้องแก้ RLS/DB) อยู่ที่ [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) หัวข้อ "สิ่งที่ยังไม่ทำ (ของจริง)"
 
@@ -168,6 +181,8 @@ npm run dev
   (`process_due_reminders()`, `get_meeting_context()`, `create_meeting_with_participants()`,
   `update_project_with_members()`, `update_meeting_with_participants()` — สามตัวหลังเป็น RPC เขียนข้อมูลแบบ atomic
   สำหรับ hybrid migration ไม่ใช่แค่ query อ่านอย่างเดียวแบบสองตัวแรก), 1 Trigger (`trg_cancel_meeting_reminders`)
+  — รอบ fix4 (12 ต.ค. 2569) เพิ่ม trigger การแจ้งเตือน 9 ตัวและฟังก์ชันช่วยใน schema `private` 13 ตัว
+  (หัวข้อ "การแจ้งเตือนในระบบ" ด้านบน และ `docs/DESIGN_DECISIONS.md` §5.14)
 
 ดูเหตุผลการออกแบบแต่ละจุดแบบละเอียด (ทางเลือกที่พิจารณา/ตัดสินใจ/เหตุผล) ที่ [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md)
 

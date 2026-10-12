@@ -17,9 +17,8 @@ import { formatDateTime } from "@/lib/format";
 export const reminderWithRecipients = {
   meeting: {
     include: {
-      organizer: { select: { id: true, inAppNotifications: true } },
       participants: {
-        include: { person: { include: { user: { select: { emailNotifications: true, inAppNotifications: true } } } } },
+        include: { person: { include: { user: { select: { emailNotifications: true } } } } },
       },
     },
   },
@@ -57,29 +56,12 @@ function outcomeData(status: "SENT" | "SIMULATED") {
   return { status, sentAt: status === "SENT" ? new Date() : null, failureReason: null };
 }
 
-/**
- * In-app REMINDER notifications for a reminder that has just left PENDING:
- * one per internal account among the participants, plus the organizer, unless
- * that account turned "การแจ้งเตือนในแอป" off in Settings. External contacts
- * have no account and only get the email. Created once, when the reminder is
- * first processed (whatever the email outcome) — a later retry of a FAILED
- * email doesn't add another.
- */
-function reminderNotifications(reminder: ReminderWithRecipients): Prisma.NotificationCreateManyInput[] {
-  const { meeting } = reminder;
-  const userIds = new Set<string>();
-  for (const p of meeting.participants) {
-    if (p.person.userId && p.person.user?.inAppNotifications !== false) userIds.add(p.person.userId);
-  }
-  if (meeting.organizer && meeting.organizer.inAppNotifications !== false) userIds.add(meeting.organizer.id);
-  return [...userIds].map((userId) => ({
-    userId,
-    type: "REMINDER" as const,
-    title: "แจ้งเตือนการประชุม",
-    body: `"${meeting.title}" จะเริ่มเวลา ${formatDateTime(meeting.startTime)}`,
-    relatedId: meeting.id,
-  }));
-}
+// In-app REMINDER notifications are not created here: the
+// trg_notify_reminder_due trigger (20261012090000) writes them whenever a due
+// reminder leaves PENDING - SENT, SIMULATED, FAILED here, or CANCELLED by the
+// sweep below - for the organizer and every participant with an account
+// (unless they turned "การแจ้งเตือนในระบบ" off), once per reminder and account
+// (dedupe key), in the same transaction as the status change.
 
 /**
  * Claims one due reminder, sends it and records the outcome — all inside one
@@ -122,8 +104,6 @@ async function processOneDueReminder(reminder: ReminderWithRecipients): Promise<
           data: { status: "FAILED", failureReason: SEND_FAILURE_REASON },
         });
       }
-      const notifications = reminderNotifications(reminder);
-      if (notifications.length) await tx.notification.createMany({ data: notifications });
       return status;
     },
     { maxWait: 10_000, timeout: 60_000 }
@@ -139,16 +119,16 @@ export type ProcessDueResult = {
 /**
  * BR-13: processes every Reminder whose scheduledAt has passed and is still
  * PENDING (the due set comes from the process_due_reminders() SQL function),
- * emails its participants, creates the in-app REMINDER notifications, and
- * moves it out of PENDING so a second call never processes it again. Each row
- * is claimed under a row lock before anything is sent (processOneDueReminder),
+ * emails its participants and moves it out of PENDING (which makes the
+ * database write the in-app REMINDER notifications), so a second call never
+ * processes it again. Each row is claimed under a row lock before anything is sent (processOneDueReminder),
  * so two runs at the same moment send it once — the other reports SKIPPED.
  * This used to send first and then flip the row with a conditional update:
  * the row ended up updated once, but both overlapping runs had already
  * emailed it.
  *
  * Shared by POST /api/reminders/process-due (the admin button) and the
- * optional auto-processor started from src/instrumentation.ts.
+ * auto-processor started from src/instrumentation.ts (on by default).
  *
  * The same run also sweeps up the PENDING reminders process_due_reminders()
  * deliberately does *not* return (20261003130100 — cancelled/finished meetings

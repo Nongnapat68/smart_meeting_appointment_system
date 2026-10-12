@@ -165,8 +165,8 @@ export default function RemindersPage() {
   }
 
   // BR-13: an admin triggers POST /api/reminders/process-due from here on
-  // demand. The auto-processor (REMINDER_AUTO_PROCESS=1, src/instrumentation.ts)
-  // runs the same thing on a timer, but it is off by default.
+  // demand. The auto-processor (src/instrumentation.ts) runs the same thing on
+  // a timer — on by default, off with REMINDER_AUTO_PROCESS=0.
   async function processDue() {
     setProcessing(true);
     try {

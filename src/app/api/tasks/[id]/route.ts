@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { updateTaskSchema } from "@/lib/validations";
 import { ApiError, assertOwner, parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { removeTaskUploads } from "@/lib/task-uploads";
+import { withNotificationActor } from "@/lib/notification-actor";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -43,44 +44,30 @@ export const PATCH = withApiErrors(async (request: Request, { params }: Params) 
   let assigneeId: string | null | undefined = undefined;
   if (body.assigneePersonId !== undefined) {
     const assigneePerson = body.assigneePersonId
-      ? await prisma.person.findUnique({
-          where: { id: body.assigneePersonId },
-          include: { user: { select: { inAppNotifications: true } } },
-        })
+      ? await prisma.person.findUnique({ where: { id: body.assigneePersonId }, select: { userId: true } })
       : null;
     assigneeId = assigneePerson?.userId ?? null;
-
-    if (
-      assigneePerson?.userId &&
-      assigneePerson.userId !== existing.assigneeId &&
-      assigneePerson.userId !== user.id &&
-      assigneePerson.user?.inAppNotifications !== false
-    ) {
-      await prisma.notification.create({
-        data: {
-          userId: assigneePerson.userId,
-          type: "TASK_ASSIGNED",
-          title: "คุณได้รับมอบหมายงานใหม่",
-          body: body.title ?? existing.title,
-          relatedId: id,
-        },
-      });
-    }
   }
 
   const wasCompleted = existing.status === "COMPLETED";
   const willBeCompleted = body.status === "COMPLETED";
 
-  const task = await prisma.task.update({
-    where: { id },
-    data: {
-      ...body,
-      ...(body.dueDate !== undefined ? { dueDate: body.dueDate ? new Date(body.dueDate) : null } : {}),
-      ...(assigneeId !== undefined ? { assigneeId } : {}),
-      ...(willBeCompleted && !wasCompleted ? { completedAt: new Date() } : {}),
-      ...(!willBeCompleted && body.status && body.status !== "COMPLETED" ? { completedAt: null } : {}),
-    },
-  });
+  // Reassignment and status-change notifications (new assignee, previous
+  // assignee, creator, meeting organizer - never this user) come from the
+  // trg_notify_task_changed trigger (20261012090000); the actor setting tells
+  // it who "this user" is, since a Prisma connection carries no JWT.
+  const task = await withNotificationActor(user.id, (tx) =>
+    tx.task.update({
+      where: { id },
+      data: {
+        ...body,
+        ...(body.dueDate !== undefined ? { dueDate: body.dueDate ? new Date(body.dueDate) : null } : {}),
+        ...(assigneeId !== undefined ? { assigneeId } : {}),
+        ...(willBeCompleted && !wasCompleted ? { completedAt: new Date() } : {}),
+        ...(!willBeCompleted && body.status && body.status !== "COMPLETED" ? { completedAt: null } : {}),
+      },
+    })
+  );
 
   return NextResponse.json({ task });
 });

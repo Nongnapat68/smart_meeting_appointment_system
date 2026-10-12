@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { taskSchema } from "@/lib/validations";
 import { parseBody, requireUser, withApiErrors } from "@/lib/api-helpers";
 import { TaskStatus, type Prisma } from "@prisma/client";
+import { withNotificationActor } from "@/lib/notification-actor";
 
 export const GET = withApiErrors(async (request: Request) => {
   const user = await requireUser();
@@ -58,33 +59,22 @@ export const POST = withApiErrors(async (request: Request) => {
   // contact with no login). When the assigned person has a linked account,
   // both point at the same person.
   const assigneePerson = body.assigneePersonId
-    ? await prisma.person.findUnique({
-        where: { id: body.assigneePersonId },
-        include: { user: { select: { inAppNotifications: true } } },
-      })
+    ? await prisma.person.findUnique({ where: { id: body.assigneePersonId }, select: { userId: true } })
     : null;
 
-  const task = await prisma.task.create({
-    data: {
-      ...body,
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
-      createdById: user.id,
-      assigneeId: assigneePerson?.userId ?? null,
-    },
-  });
-
-  // Settings "การแจ้งเตือนในระบบ" off -> no in-app row for the assignee.
-  if (assigneePerson?.userId && assigneePerson.userId !== user.id && assigneePerson.user?.inAppNotifications !== false) {
-    await prisma.notification.create({
+  // The assignee's TASK_ASSIGNED notification is written by the
+  // trg_notify_task_changed trigger (20261012090000) - for this route and for
+  // any other way a task gets inserted - so nothing is created here.
+  const task = await withNotificationActor(user.id, (tx) =>
+    tx.task.create({
       data: {
-        userId: assigneePerson.userId,
-        type: "TASK_ASSIGNED",
-        title: "คุณได้รับมอบหมายงานใหม่",
-        body: task.title,
-        relatedId: task.id,
+        ...body,
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        createdById: user.id,
+        assigneeId: assigneePerson?.userId ?? null,
       },
-    });
-  }
+    })
+  );
 
   return NextResponse.json({ task }, { status: 201 });
 });

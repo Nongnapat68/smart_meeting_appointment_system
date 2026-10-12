@@ -246,6 +246,17 @@ async function cleanupFixtures(f: Awaited<ReturnType<typeof setupFixtures>>) {
   // so a policy regression can never leak fixtures into the seeded data.
   // Order matters: Meeting.projectId / Task.projectId are ON DELETE RESTRICT.
   await prisma.notification.deleteMany({ where: { id: { in: [f.notifSomchai.id, f.notifSiriporn.id] } } });
+  // The fixtures (participants, notes, decisions, the reschedule, tasks) make
+  // the notification triggers of 20261012090000 notify the real accounts
+  // somchai / siriporn — remove those rows too, by the fixture ids.
+  const fixtureMeetings = await prisma.meeting.findMany({ where: { title: { startsWith: "[test-rls]" } }, select: { id: true } });
+  const fixtureTasks = await prisma.task.findMany({
+    where: { OR: [{ title: { startsWith: "[test-rls]" } }, { project: { name: { startsWith: "[test-rls]" } } }] },
+    select: { id: true },
+  });
+  await prisma.notification.deleteMany({
+    where: { relatedId: { in: [...fixtureMeetings, ...fixtureTasks].map((r) => r.id) } },
+  });
   await prisma.meeting.deleteMany({ where: { title: { startsWith: "[test-rls]" } } });
   await prisma.contactGroupMember.deleteMany({ where: { group: { name: { startsWith: "[test-rls]" } } } });
   await prisma.contactGroup.deleteMany({ where: { name: { startsWith: "[test-rls]" } } });

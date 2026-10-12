@@ -20,8 +20,9 @@ export type TaskFormInitial = Pick<
  * FR-12 AC2: create a task (title, assignee, due date, priority, linked
  * project and/or meeting) — or edit one when `task` is given. Goes through
  * POST /api/tasks and PATCH /api/tasks/[id]: those routes resolve the
- * assignee's login account and send the TASK_ASSIGNED notification, which
- * a browser can't insert itself (Notification INSERT is admin-only in RLS).
+ * assignee's login account; the TASK_ASSIGNED / TASK_UPDATED notifications
+ * come from the trg_notify_task_changed database trigger (a browser can't
+ * insert them itself — Notification INSERT is admin-only in RLS).
  */
 export function TaskFormModal({
   open,

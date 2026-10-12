@@ -1,38 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { relativeTime } from "@/lib/format";
-
-type NotificationType =
-  | "MEETING_INVITE"
-  | "MEETING_UPDATED"
-  | "MEETING_CANCELLED"
-  | "TASK_ASSIGNED"
-  | "AI_SUMMARY_READY"
-  | "REMINDER";
-
-interface NotificationRow {
-  id: string;
-  type: NotificationType;
-  title: string;
-  body: string | null;
-  isRead: boolean;
-  relatedId: string | null;
-  createdAt: string;
-}
-
-const TYPE_META: Record<NotificationType, { icon: string; href: (id: string) => string }> = {
-  MEETING_INVITE: { icon: "event", href: (id) => `/meetings/${id}` },
-  MEETING_UPDATED: { icon: "edit_calendar", href: (id) => `/meetings/${id}` },
-  MEETING_CANCELLED: { icon: "event_busy", href: (id) => `/meetings/${id}` },
-  TASK_ASSIGNED: { icon: "task_alt", href: (id) => `/tasks/${id}` },
-  AI_SUMMARY_READY: { icon: "auto_awesome", href: (id) => `/meetings/${id}` },
-  REMINDER: { icon: "notifications_active", href: (id) => `/meetings/${id}` },
-};
+import {
+  NOTIFICATION_TYPE_META,
+  announceNotificationsChanged,
+  notificationHref,
+  onNotificationsChanged,
+  type NotificationRow,
+} from "@/lib/notification-types";
 
 export function NotificationBell({ initialUnreadCount = 0 }: { initialUnreadCount?: number }) {
   const router = useRouter();
@@ -96,6 +77,11 @@ if (!error) setItems((data ?? []) as unknown as NotificationRow[]);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshUnreadCount();
   }, [pathname, refreshUnreadCount]);
+
+  // /notifications marked something read: re-read the real count now rather
+  // than at the next 30 s tick (and without a "new notification" toast — the
+  // count only goes down there).
+  useEffect(() => onNotificationsChanged("bell", () => void refreshUnreadCount()), [refreshUnreadCount]);
 
   // New notifications (an invite, a reminder from the auto-processor) are rows
   // written by someone else, so nothing on this page changes when they arrive.
@@ -178,7 +164,10 @@ if (!error) setItems((data ?? []) as unknown as NotificationRow[]);
       }
     }
     setOpen(false);
-    if (n.relatedId) router.push(TYPE_META[n.type]?.href(n.relatedId));
+    announceNotificationsChanged("bell");
+    // A type this build doesn't know (or no relatedId) has no page: just mark it read.
+    const href = notificationHref(n);
+    if (href) router.push(href);
   }
 
   async function markAllRead() {
@@ -193,6 +182,7 @@ if (unreadCount === 0) return;
         .eq("isRead", false);
       if (error) throw new Error(error.message);
       setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      announceNotificationsChanged("bell");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "บันทึกสถานะการอ่านไม่สำเร็จ", "error");
     }
@@ -243,7 +233,7 @@ if (unreadCount === 0) return;
           {!loading && items.length > 0 && (
             <ul className="max-h-[360px] overflow-y-auto divide-y divide-outline-variant/40">
               {items.map((n) => {
-                const meta = TYPE_META[n.type];
+                const meta = NOTIFICATION_TYPE_META[n.type];
                 return (
                   <li key={n.id}>
                     <button
@@ -265,10 +255,13 @@ if (unreadCount === 0) return;
                           <span className={`font-label-md text-label-md font-semibold truncate ${n.isRead ? "text-on-surface-variant" : "text-on-surface"}`}>
                             {n.title}
                           </span>
-                          {!n.isRead && <span className="w-2 h-2 rounded-full bg-error shrink-0" />}
+                          {!n.isRead && <span className="w-2 h-2 rounded-full bg-error shrink-0" aria-label="ยังไม่อ่าน" />}
                         </span>
                         {n.body && <span className="block text-xs text-on-surface-variant truncate mt-0.5">{n.body}</span>}
-                        <span className="block text-[11px] text-on-surface-variant mt-0.5">{relativeTime(n.createdAt)}</span>
+                        <span className="flex items-center gap-2 text-[11px] text-on-surface-variant mt-0.5">
+                          {meta && <span className="px-1.5 rounded bg-surface-container text-on-surface-variant">{meta.label}</span>}
+                          {relativeTime(n.createdAt)}
+                        </span>
                       </span>
                     </button>
                   </li>
@@ -276,6 +269,15 @@ if (unreadCount === 0) return;
               })}
             </ul>
           )}
+
+          {/* The dropdown only holds the latest 10; everything else lives on /notifications. */}
+          <Link
+            href="/notifications"
+            onClick={() => setOpen(false)}
+            className="block px-4 py-2.5 text-center text-sm font-label-md text-primary hover:bg-surface-container-low border-t border-outline-variant/50"
+          >
+            ดูการแจ้งเตือนทั้งหมด
+          </Link>
         </div>
       )}
     </div>

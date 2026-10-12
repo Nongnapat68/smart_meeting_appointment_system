@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 import { reminderAutoProcessIntervalSeconds } from "@/lib/reminder-auto-processor";
+import { reminderAutoProcessDecision } from "@/lib/reminder-auto-config";
 
 // Tells everyone on /reminders how due reminders get processed, so a row
 // reading "เลยกำหนด — รอระบบประมวลผล" isn't mistaken for a bug. Read on the
 // server (page.tsx is a client component); only on/off and the interval are
-// shown. Same opt-in rule as src/instrumentation.ts.
+// shown. Same rule as src/instrumentation.ts: on unless REMINDER_AUTO_PROCESS=0.
 export default function RemindersLayout({ children }: { children: ReactNode }) {
-  const auto = process.env.REMINDER_AUTO_PROCESS?.trim() === "1";
+  const auto = reminderAutoProcessDecision().start;
   const seconds = reminderAutoProcessIntervalSeconds(process.env.REMINDER_AUTO_PROCESS_INTERVAL_SECONDS);
   return (
     <>
@@ -18,7 +19,7 @@ export default function RemindersLayout({ children }: { children: ReactNode }) {
           <span className="material-symbols-outlined text-[20px] text-primary">{auto ? "autorenew" : "touch_app"}</span>
           {auto
             ? `ระบบประมวลผลการแจ้งเตือนที่ถึงเวลาโดยอัตโนมัติทุก ${seconds} วินาที — รายการที่ขึ้น "เลยกำหนด — รอระบบประมวลผล" จะถูกประมวลผลในรอบถัดไป`
-            : `ระบบยังไม่ได้เปิดการประมวลผลอัตโนมัติ การแจ้งเตือนที่ถึงเวลาจะถูกส่งเมื่อผู้ดูแลระบบกด "ประมวลผล reminder ที่ถึงเวลา" เท่านั้น — รายการที่ขึ้น "เลยกำหนด — รอระบบประมวลผล" จึงไม่ใช่ข้อผิดพลาด`}
+            : `เซิร์ฟเวอร์นี้ปิดการประมวลผลอัตโนมัติไว้ (REMINDER_AUTO_PROCESS=0) การแจ้งเตือนที่ถึงเวลาจะถูกส่งเมื่อผู้ดูแลระบบกด "ประมวลผล reminder ที่ถึงเวลา" เท่านั้น — รายการที่ขึ้น "เลยกำหนด — รอระบบประมวลผล" จึงไม่ใช่ข้อผิดพลาด`}
         </p>
       </div>
       {children}

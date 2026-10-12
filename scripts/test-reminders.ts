@@ -5,8 +5,10 @@
  * reschedule_meeting()) still behaves with the new enum value. Also: two
  * processors running at once (admin button + auto-processor) email a reminder
  * once and create one in-app REMINDER notification per account, and the
- * auto-processor started from src/instrumentation.ts is off unless
- * REMINDER_AUTO_PROCESS=1.
+ * auto-processor started from src/instrumentation.ts is on by default and off
+ * with REMINDER_AUTO_PROCESS=0. (Since 20261012090000 the REMINDER rows are
+ * written by a database trigger; scripts/test-notifications.ts covers that
+ * trigger in depth.)
  *
  * Calls src/lib/reminders.ts (what POST /api/reminders/process-due and
  * POST /api/reminders/[id]/retry run after their auth checks) with real
@@ -388,7 +390,8 @@ async function main() {
       personIds.push(person.id);
       await prisma.meetingParticipant.create({ data: { meetingId: mn.id, personId: person.id } });
     }
-    const notifs = (uid: string) => prisma.notification.findMany({ where: { userId: uid, relatedId: mn.id } });
+    // REMINDER rows only: adding the linked participants above already (rightly) sent them MEETING_INVITEs.
+    const notifs = (uid: string) => prisma.notification.findMany({ where: { userId: uid, relatedId: mn.id, type: "REMINDER" } });
     check("no REMINDER notification exists before the reminder is due", (await notifs(linkedOn)).length === 0);
     const dueN = await makeReminder(mn.id, -MIN, "PENDING");
     const futureN = await makeReminder(mn.id, 30 * MIN, "PENDING");
@@ -416,12 +419,12 @@ async function main() {
     const dueF = await makeReminder(mf.id, -MIN, "PENDING");
     await processDueReminders();
     const fRow = await load(dueF.id);
-    const orgF = await prisma.notification.count({ where: { userId: notifOrganizer, relatedId: mf.id } });
+    const orgF = await prisma.notification.count({ where: { userId: notifOrganizer, relatedId: mf.id, type: "REMINDER" } });
     check("email that throws → FAILED, organizer still notified in-app once", fRow.status === "FAILED" && orgF === 1, `${fRow.status} n=${orgF}`);
     await retryFailedReminder(await load(dueF.id));
-    check("retrying the FAILED email does not add another notification", (await prisma.notification.count({ where: { userId: notifOrganizer, relatedId: mf.id } })) === 1);
+    check("retrying the FAILED email does not add another notification", (await prisma.notification.count({ where: { userId: notifOrganizer, relatedId: mf.id, type: "REMINDER" } })) === 1);
 
-    console.log("\n[8] Auto-processor: opt-in, interval, no overlap, errors contained");
+    console.log("\n[8] Auto-processor: on by default, interval, no overlap, errors contained");
     check("interval default 60s when unset", reminderAutoProcessIntervalSeconds(undefined) === 60 && reminderAutoProcessIntervalSeconds("") === 60);
     check("interval garbage → 60s", reminderAutoProcessIntervalSeconds("abc") === 60);
     check("interval 120 → 120s", reminderAutoProcessIntervalSeconds("120") === 120);
@@ -451,24 +454,30 @@ async function main() {
     const savedRuntime = process.env.NEXT_RUNTIME;
     const savedFlag = process.env.REMINDER_AUTO_PROCESS;
     const savedInterval = process.env.REMINDER_AUTO_PROCESS_INTERVAL_SECONDS;
+    const savedPhase = process.env.NEXT_PHASE;
     process.env.NEXT_RUNTIME = "nodejs";
+    process.env.REMINDER_AUTO_PROCESS = "0";
+    await register();
+    check("REMINDER_AUTO_PROCESS=0 → register() starts nothing", !reminderAutoProcessorRunning());
+    process.env.REMINDER_AUTO_PROCESS = "false";
+    await register();
+    check("REMINDER_AUTO_PROCESS=false → also off", !reminderAutoProcessorRunning());
     delete process.env.REMINDER_AUTO_PROCESS;
+    process.env.NEXT_PHASE = "phase-production-build";
     await register();
-    check("REMINDER_AUTO_PROCESS unset → register() starts nothing (off by default)", !reminderAutoProcessorRunning());
-    process.env.REMINDER_AUTO_PROCESS = "true";
-    await register();
-    check("REMINDER_AUTO_PROCESS=true (not \"1\") → still off", !reminderAutoProcessorRunning());
-    process.env.REMINDER_AUTO_PROCESS = "1";
+    check("unset during next build (NEXT_PHASE=phase-production-build) → off", !reminderAutoProcessorRunning());
+    if (savedPhase === undefined) delete process.env.NEXT_PHASE;
+    else process.env.NEXT_PHASE = savedPhase;
     process.env.NEXT_RUNTIME = "edge";
     await register();
-    check("REMINDER_AUTO_PROCESS=1 on the edge runtime → off (Node only)", !reminderAutoProcessorRunning());
+    check("unset on the edge runtime → off (Node only)", !reminderAutoProcessorRunning());
     process.env.NEXT_RUNTIME = "nodejs";
     process.env.REMINDER_AUTO_PROCESS_INTERVAL_SECONDS = "15";
     const ma = await makeMeeting(notifOrganizer, [addr("auto")]);
     const dueA = await makeReminder(ma.id, -MIN, "PENDING");
     await register();
     await register(); // as a hot reload would — must not add a second timer
-    check("REMINDER_AUTO_PROCESS=1 → register() starts the auto-processor", reminderAutoProcessorRunning());
+    check("REMINDER_AUTO_PROCESS unset (default) → register() starts the auto-processor", reminderAutoProcessorRunning());
     let autoStatus = "";
     for (let i = 0; i < 40 && autoStatus !== "SIMULATED"; i++) {
       await new Promise((r) => setTimeout(r, 250));
