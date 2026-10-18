@@ -111,15 +111,15 @@ migration ล่าสุด `20261012090000_in_app_notifications_for_all_events
 ### 4. ใส่ข้อมูลตัวอย่าง
 
 ```bash
-SEED_DEMO_PASSWORD='<รหัสผ่านที่ต้องการ>' SEED_RESET_ALL=yes npm run db:seed                          # bash / Git Bash
-$env:SEED_DEMO_PASSWORD='<รหัสผ่านที่ต้องการ>'; $env:SEED_RESET_ALL="yes"; npm run db:seed             # PowerShell
+SEED_DEMO_PASSWORD='Passw0rd!' SEED_RESET_ALL=yes npm run db:seed                          # bash / Git Bash
+$env:SEED_DEMO_PASSWORD='Passw0rd!'; $env:SEED_RESET_ALL="yes"; npm run db:seed             # PowerShell
 ```
 
 **คำเตือน: สคริปต์นี้ลบข้อมูลทุกแถวของทุกตาราง (ไม่ใช่แค่ข้อมูลตัวอย่าง) แล้วสร้างผู้ใช้ตัวอย่าง 5 คนใน Supabase Auth +
 ข้อมูลผู้ติดต่อ/กลุ่ม/โปรเจกต์/นัดหมาย/งาน ตัวอย่างใหม่** — ใช้กับฐานข้อมูลใหม่ของตัวเองเท่านั้น ห้ามรันกับฐานข้อมูลที่ใช้ร่วมกัน
 ถ้าไม่ตั้ง `SEED_RESET_ALL=yes` สคริปต์จะปฏิเสธและไม่แตะฐานข้อมูล
 `SEED_DEMO_PASSWORD` คือรหัสผ่านที่บัญชีตัวอย่างทั้ง 5 บัญชีจะได้ ถ้าไม่ตั้ง สคริปต์จะหยุดและไม่แตะฐานข้อมูลเช่นกัน
-(ไม่มีรหัสผ่านใดเขียนไว้ใน repo)
+ให้ตั้งเป็น `Passw0rd!` เพื่อให้รหัสผ่านตรงกับบัญชีบนเว็บจริง (ดูหัวข้อ "บัญชีสำหรับทดสอบ")
 
 ### 5. รัน
 
@@ -127,7 +127,7 @@ $env:SEED_DEMO_PASSWORD='<รหัสผ่านที่ต้องการ
 npm run dev
 ```
 
-เปิด [http://localhost:3000](http://localhost:3000) แล้ว login ด้วยบัญชีทดสอบด้านล่าง (ขั้นตอนนี้สำหรับรันบนเครื่องตัวเอง —
+เปิด [http://localhost:3000](http://localhost:3000) แล้ว login ด้วยบัญชีในหัวข้อ "บัญชีสำหรับทดสอบ" ด้านล่าง (ขั้นตอนนี้สำหรับรันบนเครื่องตัวเอง —
 การขึ้นโฮสต์จริงดูหัวข้อถัดไป)
 
 ---
@@ -175,7 +175,7 @@ Environment variables (ชื่อเท่านั้น — ค่าจร�
 ชุดทดสอบเป็นสคริปต์ `tsx` ใน `scripts/` แต่ละชุดพิมพ์ผล ✅/❌ และจบด้วย exit 0 เมื่อผ่านทั้งหมด:
 
 - `npm run test:uploads`, `npm run test:format`, `npm run test:redirect` — pure function ไม่ต้องใช้ฐานข้อมูลหรือเซิร์ฟเวอร์
-- `npm run test:rls`, `npm run test:authz` — ใช้ `.env` และ**ต่อฐานข้อมูลจริง** (`test:rls` ต้องตั้ง `SEED_DEMO_PASSWORD` เป็นรหัสผ่านของบัญชีตัวอย่างด้วย): สร้าง fixture ชั่วคราวแล้วลบเอง (`test:authz` เปิด `next dev` ชั่วคราวที่พอร์ต 3199) — รันเมื่อจำเป็นเท่านั้น
+- `npm run test:rls`, `npm run test:authz` — ใช้ `.env` และ**ต่อฐานข้อมูลจริง** (`test:rls` ต้องตั้ง `SEED_DEMO_PASSWORD='Passw0rd!'` ให้ตรงกับรหัสผ่านของบัญชีตัวอย่างด้วย): สร้าง fixture ชั่วคราวแล้วลบเอง (`test:authz` เปิด `next dev` ชั่วคราวที่พอร์ต 3199) — รันเมื่อจำเป็นเท่านั้น
 - `npm run test:otp`, `npm run test:reminders`, `npm run test:notifications` — ต้องใช้ Postgres ทิ้งได้ในเครื่อง (localhost เท่านั้น สคริปต์ปฏิเสธที่อยู่อื่น) ผ่านตัวแปร `OTP_TEST_DATABASE_URL` / `REMINDER_TEST_DATABASE_URL` / `NOTIFICATION_TEST_DATABASE_URL` เช่น
   `REMINDER_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54329/otptest npm run test:reminders`
   (`test:reminders` และ `test:notifications` ต้องการฐานที่ apply ทุก migration พร้อม stand-in ของ schema `auth`; `test:otp` ใช้ฐานจาก `prisma db push` — รายละเอียดในหัวไฟล์ของแต่ละสคริปต์)
@@ -193,9 +193,11 @@ Environment variables (ชื่อเท่านั้น — ค่าจร�
 
 ---
 
-## บัญชีทดสอบ (หลัง `npm run db:seed`)
+## บัญชีสำหรับทดสอบ
 
-ทุกบัญชีใช้รหัสผ่านเดียวกัน คือค่า `SEED_DEMO_PASSWORD` ที่ตั้งตอนรัน `db:seed` (ไม่ได้เขียนไว้ใน repo — ขอจากผู้ดูแลโปรเจกต์)
+เว็บจริง: **https://smart-meeting-appointment.vercel.app**
+
+ทุกบัญชี (ทั้งบัญชีตัวอย่างและบัญชีผู้ตรวจ) ใช้รหัสผ่านเดียวกัน: **`Passw0rd!`**
 
 | อีเมล | ชื่อ | Role | ตำแหน่ง |
 |---|---|---|---|
@@ -204,6 +206,12 @@ Environment variables (ชื่อเท่านั้น — ค่าจร�
 | `wichai@smartmeeting.dev` | วิชัย พงษ์สวัสดิ์ | MEMBER | อาจารย์ประจำสาขาวิชา |
 | `narin@smartmeeting.dev` | นรินทร์ ชัยเจริญ | MEMBER | ผู้ช่วยวิจัย (Research Assistant) |
 | `kittichai@smartmeeting.dev` | กิตติชัย นามดี | MEMBER | เจ้าหน้าที่สนับสนุนระบบสารสนเทศ |
+| `reviewer.admin@smartmeeting.dev` | ผู้ตรวจ (ผู้ดูแลระบบ) | **ADMIN** | บัญชีผู้ตรวจ |
+| `reviewer.member@smartmeeting.dev` | ผู้ตรวจ (ผู้ใช้ทั่วไป) | MEMBER | บัญชีผู้ตรวจ |
+
+บัญชีตัวอย่าง 5 บัญชีแรกสร้างโดย `npm run db:seed` (ตั้ง `SEED_DEMO_PASSWORD='Passw0rd!'` ตามหัวข้อ "4. ใส่ข้อมูลตัวอย่าง")
+ส่วนบัญชีผู้ตรวจ 2 บัญชีมีเฉพาะบนฐานข้อมูลของเว็บจริง — seed ไม่ได้สร้างให้ ถ้าต้องการบนฐานข้อมูลของตัวเอง ให้สร้างตามวิธีในหัวข้อ
+"การ deploy และข้อจำกัดที่ทราบ" (ข้อ "ไม่มีหน้าสมัครสมาชิก")
 
 ---
 
