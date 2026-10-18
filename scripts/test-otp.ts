@@ -31,10 +31,15 @@
  * The Supabase Admin API call in reset-password is answered by a stubbed
  * fetch — no request leaves the machine. Exits 0 if every assertion passes.
  */
-import { randomUUID } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { readFileSync } from "fs";
 
 const TEST_DB = process.env.OTP_TEST_DATABASE_URL;
+
+// New password for the reset-password calls, fresh on every run so none is
+// committed. The "Aa1" prefix guarantees the app's rule (8+ characters, a
+// digit and an upper-case letter) whatever the random part holds.
+const NEW_PASSWORD = `Aa1${randomBytes(12).toString("base64url")}`;
 if (!TEST_DB || !/@(localhost|127\.0\.0\.1)(:\d+)?\//.test(TEST_DB)) {
   console.error("Refusing to run: set OTP_TEST_DATABASE_URL to a local throwaway Postgres (localhost / 127.0.0.1).");
   process.exit(1);
@@ -116,7 +121,7 @@ async function main() {
   const requestOtp = (email: string) => post(forgot.POST, { email });
   const verifyOtp = (email: string, otp: string) => post(verify.POST, { email, otp });
   const resetPassword = (email: string, otp: string) =>
-    post(reset.POST, { email, otp, password: "NewPassw0rd", confirmPassword: "NewPassw0rd" });
+    post(reset.POST, { email, otp, password: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
   const lastOtpFor = (email: string) => [...sentOtps].reverse().find((s) => s.to === email)?.otp;
   const emailsTo = (email: string) => sentOtps.filter((s) => s.to === email).length;
   const wrongOf = (otp: string) => String((Number(otp) + 1) % 1_000_000).padStart(6, "0");

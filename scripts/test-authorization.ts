@@ -11,6 +11,7 @@
  * Exits 0 if every assertion passes, 1 otherwise (with a printed report).
  */
 import { spawn, execSync, type ChildProcess } from "child_process";
+import { randomBytes } from "crypto";
 import { PrismaClient } from "@prisma/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -99,7 +100,10 @@ function stopServer(child: ChildProcess) {
   }
 }
 
-const PASSWORD = "TestPassw0rd!";
+// Password for the two throwaway test accounts, fresh on every run so none is
+// committed. The "Aa1" prefix guarantees the app's rule (8+ characters, a
+// digit and an upper-case letter) whatever the random part holds.
+const PASSWORD = `Aa1${randomBytes(12).toString("base64url")}`;
 
 /** Creates a real Supabase Auth user (same as step A of the auth migration)
  * and returns its uuid, for use as the matching public.User.id. */

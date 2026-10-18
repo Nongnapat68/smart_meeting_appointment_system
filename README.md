@@ -45,12 +45,12 @@ cp .env.example .env
 
 | ตัวแปร | มาจากไหน |
 |---|---|
-| `DATABASE_URL` | Supabase Dashboard → Project Settings → Database → Connection string → **Transaction pooler** (port 6543) — ใช้ตอนรันแอปจริง |
-| `DIRECT_URL` | เหมือนกันแต่เลือก **Direct connection** (port 5432) — ใช้เฉพาะตอนรัน `prisma migrate` |
+| `DATABASE_URL` | Supabase Dashboard → ปุ่ม **Connect** (เดิม Project Settings → Database → Connection string) → **Transaction pooler** (port 6543) — ใช้ตอนรันแอปจริง |
+| `DIRECT_URL` | เหมือนกันแต่เลือก **Direct connection** หรือ **Session pooler** (port 5432) — ใช้เฉพาะตอนรัน `prisma migrate` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard → Project Settings → API → **Project URL** *(ใหม่ — สำหรับ Supabase Auth)* |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase Dashboard → Project Settings → API → **Publishable key** (เดิมเรียก `anon` key) — ปลอดภัยที่จะ expose ให้ browser *(ใหม่)* |
 | `SUPABASE_SECRET_KEY` | Supabase Dashboard → Project Settings → API → **Secret key** — สิทธิ์เต็ม ใช้ฝั่ง server เท่านั้น **ห้าม** ใส่ prefix `NEXT_PUBLIC_` เด็ดขาด *(ใหม่)* |
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) — จำเป็นสำหรับฟีเจอร์ AI (สรุปก่อนประชุม/วิเคราะห์ประเด็นค้าง/แนะนำ agenda) เท่านั้น ส่วนอื่นของระบบใช้งานได้ปกติแม้ไม่ตั้งค่า |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) — ไม่บังคับ: ถ้าไม่ตั้ง ฟีเจอร์ AI ของการประชุม (สรุปก่อนประชุม/วิเคราะห์ประเด็นค้าง/แนะนำ agenda) ใช้โหมดเทมเพลตแทน ยกเว้นปุ่มจัดลำดับงานด้วย AI ในหน้า `/tasks` ที่ต้องมีคีย์ ส่วนอื่นของระบบใช้งานได้ปกติ |
 | `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM` | ไม่ต้องตั้ง — `sendEmail()` (`src/lib/email.ts`) ยังเป็น stub: ทุกอีเมล (OTP/คำเชิญ/แจ้งเตือน) ถูก log ออกทาง server console เสมอ แม้ตั้ง `SMTP_HOST` ก็ไม่ส่งจริง (โค้ดอ่านแค่ `SMTP_HOST`; อีกสี่ตัวเตรียมไว้สำหรับ transport จริงในอนาคต) |
 | `REMINDER_AUTO_PROCESS` / `REMINDER_AUTO_PROCESS_INTERVAL_SECONDS` | ไม่บังคับ — **ค่าเริ่มต้นเปิด** (`0` = ปิด) ดูหัวข้อ "ประมวลผลการแจ้งเตือนอัตโนมัติ" ด้านล่าง |
 
@@ -69,7 +69,7 @@ REMINDER_AUTO_PROCESS_INTERVAL_SECONDS="60"  # ตรวจทุกกี่ว
 
 ข้อจำกัดและคำเตือน:
 - รันสองเซิร์ฟเวอร์บนฐานข้อมูลเดียวกันได้: แต่ละการเตือนถูก "จอง" ด้วย row lock (`FOR UPDATE SKIP LOCKED`) ก่อนส่ง และการแจ้งเตือนในกระดิ่งมีคีย์กันซ้ำ จึงไม่ส่งซ้ำและไม่ขึ้นซ้ำ
-- ทำงานได้เฉพาะเซิร์ฟเวอร์ที่รันค้างตลอด — บน serverless (เช่น Vercel) ต้องใช้ cron ภายนอก และเนื่องจาก `POST /api/reminders/process-due` ต้องล็อกอินเป็นแอดมิน จึงต้องเพิ่ม route ที่ป้องกันด้วย secret ก่อน (ยังไม่มีในระบบ)
+- ทำงานได้เฉพาะเซิร์ฟเวอร์ที่รันค้างตลอด — บน serverless (เช่น Vercel) ให้ตั้ง `REMINDER_AUTO_PROCESS=0` แล้วให้ผู้ดูแลระบบกดปุ่มประมวลผลในหน้า `/reminders` แทน (ดูหัวข้อ "การ deploy และข้อจำกัดที่ทราบ") ถ้าจะใช้ cron ภายนอก ต้องเพิ่ม route ที่ป้องกันด้วย secret ก่อน เพราะ `POST /api/reminders/process-due` ต้องล็อกอินเป็นแอดมิน (ยังไม่มีในระบบ)
 - **การแจ้งเตือนทุกรายการในฐานข้อมูลที่เชื่อมอยู่จะถูกประมวลผลเมื่อถึงเวลา รวมถึงของประชุมตัวอย่าง ("ตัวอย่าง: ประชุมติดตามความคืบหน้าโครงการทุนวิจัย AI Lab ครั้งที่ 1/2")** และรายการที่ค้าง `PENDING` ของประชุมที่จบไปแล้วจะถูกเปลี่ยนเป็น `CANCELLED` ในรอบแรก (เหมือนการกดปุ่ม)
 
 #### การแจ้งเตือนในระบบ (กระดิ่ง)
@@ -127,7 +127,44 @@ $env:SEED_DEMO_PASSWORD='<รหัสผ่านที่ต้องการ
 npm run dev
 ```
 
-เปิด [http://localhost:3000](http://localhost:3000) แล้ว login ด้วยบัญชีทดสอบด้านล่าง
+เปิด [http://localhost:3000](http://localhost:3000) แล้ว login ด้วยบัญชีทดสอบด้านล่าง (ขั้นตอนนี้สำหรับรันบนเครื่องตัวเอง —
+การขึ้นโฮสต์จริงดูหัวข้อถัดไป)
+
+---
+
+## การ deploy และข้อจำกัดที่ทราบ
+
+ตั้งค่าที่ใช้กับ Vercel (โฮสต์ serverless อื่นก็คล้ายกัน):
+
+- Framework Preset: Next.js; Build Command: `npm run build` (ค่าเริ่มต้น); Install Command: ค่าเริ่มต้น (`postinstall` รัน `prisma generate` ให้เอง)
+- Node.js 20.9 ขึ้นไป (แนะนำ 24.x)
+- บนโฮสต์ไม่มีไฟล์ `.env` — ใส่ค่าทุกตัวในหน้าตั้งค่า Environment Variables ของโฮสต์แทน
+
+Environment variables (ชื่อเท่านั้น — ค่าจริงดูที่มาในตารางหัวข้อ "1. ตั้งค่า environment variables"):
+
+- **ต้องมีตอน build**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (ค่า `NEXT_PUBLIC_*` ถูกฝังลงโค้ดฝั่ง browser ตอน build)
+- **ต้องมีตอนรัน**: `DATABASE_URL` (Transaction pooler พอร์ต 6543 ต่อท้าย `?pgbouncer=true&connection_limit=1`), `DIRECT_URL`,
+  `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` และ **`REMINDER_AUTO_PROCESS=0`**
+  (บน serverless ไม่มีโปรเซสค้างให้ตัวจับเวลาทำงาน)
+- **ไม่จำเป็น**: `ANTHROPIC_API_KEY`, `REMINDER_AUTO_PROCESS_INTERVAL_SECONDS`, `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`SMTP_FROM`
+- **ห้ามตั้งบนโฮสต์**: `SEED_RESET_ALL`, `SEED_DEMO_PASSWORD`, `OTP_TEST_DATABASE_URL`, `REMINDER_TEST_DATABASE_URL`, `NOTIFICATION_TEST_DATABASE_URL`
+
+ข้อจำกัดที่ทราบ:
+
+- **อัปโหลดรูปโปรไฟล์และไฟล์แนบของงานใช้ไม่ได้บนโฮสต์ที่ดิสก์เขียนไม่ได้** (เช่น Vercel) — ไฟล์ถูกเก็บใน `public/uploads`
+  ของเซิร์ฟเวอร์เอง เมื่อเขียนไม่ได้ระบบตอบ "ฟีเจอร์อัปโหลดไฟล์ยังไม่รองรับบนเซิร์ฟเวอร์นี้" (503) และไม่บันทึกอะไรลงฐานข้อมูล
+  รูปโปรไฟล์ที่ไม่มีไฟล์จะแสดงเป็นอักษรย่อแทน
+- **ระบบอีเมลเป็นโหมดจำลอง จึงรีเซ็ตรหัสผ่านทางอีเมลไม่ได้** — รหัส OTP ไม่ถูกส่งไปกล่องจดหมายจริง (หน้าลืมรหัสผ่านแจ้งไว้แล้ว)
+  ผู้ดูแลระบบต้องตั้งรหัสใหม่ให้ใน Supabase Dashboard → Authentication → Users
+- **การเตือนก่อนประชุมไม่ประมวลผลอัตโนมัติบน serverless** — ผู้ดูแลระบบต้องกดปุ่ม "ประมวลผล reminder ที่ถึงเวลา" ในหน้า `/reminders`
+  (เมนู "การแจ้งเตือน") เพื่อเปลี่ยนสถานะและสร้างการแจ้งเตือนในกระดิ่ง
+- **ไม่มีหน้าสมัครสมาชิก** — สร้างบัญชีที่ Supabase Dashboard → Authentication → Users → Add user (เลือก Auto Confirm)
+  แล้วเพิ่มแถว `"User"` (`id` = uuid ของผู้ใช้ใน Auth, `email`, `name`, `role` = `ADMIN`/`MEMBER`, `updatedAt`) และแถว `"Person"`
+  (`id`, `name`, `email` เดียวกัน, `type` = `INTERNAL`, `status` = `ACTIVE`, `userId` = uuid เดียวกัน, `updatedAt`) ใน SQL Editor
+  — ถ้าไม่มีแถว `"User"` ผู้ใช้จะล็อกอินผ่าน Supabase ได้แต่แอปจะถือว่ายังไม่ได้เข้าสู่ระบบ
+- **AI** — ถ้าไม่ตั้ง `ANTHROPIC_API_KEY` ฟีเจอร์ AI ของการประชุมใช้โหมดเทมเพลต (ป้าย "สร้างโดยระบบ") ไม่ได้เรียก AI
+  ส่วนปุ่มจัดลำดับงานด้วย AI ในหน้า `/tasks` ใช้ไม่ได้
+- โฮสต์ serverless จำกัดขนาด request (Vercel ประมาณ 4.5MB) ไฟล์ที่ใหญ่กว่านั้นจะถูกปฏิเสธก่อนถึงแอป
 
 ---
 
@@ -138,7 +175,7 @@ npm run dev
 ชุดทดสอบเป็นสคริปต์ `tsx` ใน `scripts/` แต่ละชุดพิมพ์ผล ✅/❌ และจบด้วย exit 0 เมื่อผ่านทั้งหมด:
 
 - `npm run test:uploads`, `npm run test:format`, `npm run test:redirect` — pure function ไม่ต้องใช้ฐานข้อมูลหรือเซิร์ฟเวอร์
-- `npm run test:rls`, `npm run test:authz` — ใช้ `.env` และ**ต่อฐานข้อมูลจริง**: สร้าง fixture ชั่วคราวแล้วลบเอง (`test:authz` เปิด `next dev` ชั่วคราวที่พอร์ต 3199) — รันเมื่อจำเป็นเท่านั้น
+- `npm run test:rls`, `npm run test:authz` — ใช้ `.env` และ**ต่อฐานข้อมูลจริง** (`test:rls` ต้องตั้ง `SEED_DEMO_PASSWORD` เป็นรหัสผ่านของบัญชีตัวอย่างด้วย): สร้าง fixture ชั่วคราวแล้วลบเอง (`test:authz` เปิด `next dev` ชั่วคราวที่พอร์ต 3199) — รันเมื่อจำเป็นเท่านั้น
 - `npm run test:otp`, `npm run test:reminders`, `npm run test:notifications` — ต้องใช้ Postgres ทิ้งได้ในเครื่อง (localhost เท่านั้น สคริปต์ปฏิเสธที่อยู่อื่น) ผ่านตัวแปร `OTP_TEST_DATABASE_URL` / `REMINDER_TEST_DATABASE_URL` / `NOTIFICATION_TEST_DATABASE_URL` เช่น
   `REMINDER_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54329/otptest npm run test:reminders`
   (`test:reminders` และ `test:notifications` ต้องการฐานที่ apply ทุก migration พร้อม stand-in ของ schema `auth`; `test:otp` ใช้ฐานจาก `prisma db push` — รายละเอียดในหัวไฟล์ของแต่ละสคริปต์)
@@ -147,10 +184,11 @@ npm run dev
 
 ## ข้อจำกัดที่ยังอยู่
 
-- **อีเมลยังไม่ส่งจริง** — `sendEmail()` เป็น stub ที่ log ข้อความไว้ใน server console การเตือนที่ประมวลผลแล้วจึงมีสถานะ `SIMULATED` (จำลองการส่ง) ไม่ใช่ `SENT`
+- **อีเมลยังไม่ส่งจริง** — `sendEmail()` เป็น stub ที่ log ข้อความไว้ใน server console การเตือนที่ประมวลผลแล้วจึงมีสถานะ `SIMULATED` (จำลองการส่ง) ไม่ใช่ `SENT` และรีเซ็ตรหัสผ่านทางอีเมล (OTP) ไม่ได้จริง
 - **AI** — ไม่มี `ANTHROPIC_API_KEY` จะใช้โหมดเทมเพลต (ป้าย "สร้างโดยระบบ") ; ปุ่มจัดลำดับงานด้วย AI ในหน้า `/tasks` ต้องมีคีย์ (ไม่มีโหมดเทมเพลต)
-- **การแจ้งเตือนที่ถึงเวลา** ถูกประมวลผลเองโดยเซิร์ฟเวอร์ที่รันค้าง (ปิดด้วย `REMINDER_AUTO_PROCESS=0`) — บน serverless ต้องมี cron ภายนอก (ยังไม่มี route สำหรับ cron)
-- **ยังไม่มีสมัครสมาชิกแบบเปิด** (FR-01) — บัญชีถูกสร้างโดย `db:seed`
+- **การแจ้งเตือนที่ถึงเวลา** ถูกประมวลผลเองโดยเซิร์ฟเวอร์ที่รันค้าง (ปิดด้วย `REMINDER_AUTO_PROCESS=0`) — บน serverless ให้ผู้ดูแลระบบกดปุ่มประมวลผลในหน้า `/reminders` (ยังไม่มี route สำหรับ cron)
+- **อัปโหลดไฟล์** — เก็บในดิสก์ของเซิร์ฟเวอร์ (`public/uploads`) จึงใช้ไม่ได้บนโฮสต์ที่ดิสก์เขียนไม่ได้
+- **ยังไม่มีสมัครสมาชิกแบบเปิด** (FR-01) — บัญชีถูกสร้างโดย `db:seed` หรือสร้างเองใน Supabase Authentication แล้วเพิ่มแถว `"User"`/`"Person"` (ดูหัวข้อ "การ deploy และข้อจำกัดที่ทราบ")
 - รายการข้อจำกัดเต็ม (รวมเรื่องที่ต้องแก้ RLS/DB) อยู่ที่ [`docs/GAP_ANALYSIS.md`](docs/GAP_ANALYSIS.md) หัวข้อ "สิ่งที่ยังไม่ทำ (ของจริง)"
 
 ---
