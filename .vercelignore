@@ -1,0 +1,10 @@
+# Local-only one-off scripts (never deployed)
+scripts/local/
+
+# Real env files must never be uploaded; production values are set in Vercel
+.env
+.env.*
+!.env.example
+
+# User uploads saved on a dev machine
+public/uploads/
