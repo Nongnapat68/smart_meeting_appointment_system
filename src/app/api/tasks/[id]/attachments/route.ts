@@ -9,6 +9,7 @@ import {
   ATTACHMENT_TOO_LARGE_MESSAGE,
   checkAttachmentRequestSize,
   checkAttachmentUpload,
+  UPLOAD_STORAGE_UNAVAILABLE_MESSAGE,
 } from "@/lib/upload-validation";
 import { removeTaskUploads, taskUploadDir } from "@/lib/task-uploads";
 
@@ -48,14 +49,21 @@ export const POST = withApiErrors(async (request: Request, { params }: Params) =
   if (!checked.ok) throw new ApiError(400, checked.message);
 
   const uploadDir = path.join(process.cwd(), "public", "uploads", "tasks", taskId);
-  await mkdir(uploadDir, { recursive: true });
 
   // Stored under the validated extension (lower-cased) as the only dot in the
   // name, so "evil.html.png" can't become a double extension and the static
   // server's Content-Type always follows the checked type.
   const baseName = file.name.slice(0, file.name.lastIndexOf(".")).replace(/[^a-zA-Z0-9\-_ก-๙]/g, "_");
   const storedName = `${randomUUID()}-${baseName}.${checked.ext}`;
-  await writeFile(path.join(uploadDir, storedName), buffer);
+  // The TaskAttachment row is only created once the file is on disk, so a
+  // failed write (e.g. a read-only disk on serverless hosting) leaves no row.
+  try {
+    await mkdir(uploadDir, { recursive: true });
+    await writeFile(path.join(uploadDir, storedName), buffer);
+  } catch (err) {
+    console.error("task attachment upload: could not save the file", err);
+    throw new ApiError(503, UPLOAD_STORAGE_UNAVAILABLE_MESSAGE);
+  }
 
   const attachment = await prisma.taskAttachment.create({
     data: {

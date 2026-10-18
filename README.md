@@ -111,13 +111,15 @@ migration ล่าสุด `20261012090000_in_app_notifications_for_all_events
 ### 4. ใส่ข้อมูลตัวอย่าง
 
 ```bash
-SEED_RESET_ALL=yes npm run db:seed                     # bash / Git Bash
-$env:SEED_RESET_ALL="yes"; npm run db:seed             # PowerShell
+SEED_DEMO_PASSWORD='<รหัสผ่านที่ต้องการ>' SEED_RESET_ALL=yes npm run db:seed                          # bash / Git Bash
+$env:SEED_DEMO_PASSWORD='<รหัสผ่านที่ต้องการ>'; $env:SEED_RESET_ALL="yes"; npm run db:seed             # PowerShell
 ```
 
 **คำเตือน: สคริปต์นี้ลบข้อมูลทุกแถวของทุกตาราง (ไม่ใช่แค่ข้อมูลตัวอย่าง) แล้วสร้างผู้ใช้ตัวอย่าง 5 คนใน Supabase Auth +
 ข้อมูลผู้ติดต่อ/กลุ่ม/โปรเจกต์/นัดหมาย/งาน ตัวอย่างใหม่** — ใช้กับฐานข้อมูลใหม่ของตัวเองเท่านั้น ห้ามรันกับฐานข้อมูลที่ใช้ร่วมกัน
 ถ้าไม่ตั้ง `SEED_RESET_ALL=yes` สคริปต์จะปฏิเสธและไม่แตะฐานข้อมูล
+`SEED_DEMO_PASSWORD` คือรหัสผ่านที่บัญชีตัวอย่างทั้ง 5 บัญชีจะได้ ถ้าไม่ตั้ง สคริปต์จะหยุดและไม่แตะฐานข้อมูลเช่นกัน
+(ไม่มีรหัสผ่านใดเขียนไว้ใน repo)
 
 ### 5. รัน
 
@@ -155,7 +157,7 @@ npm run dev
 
 ## บัญชีทดสอบ (หลัง `npm run db:seed`)
 
-รหัสผ่านเดียวกันทุกบัญชี: **`Passw0rd!`**
+ทุกบัญชีใช้รหัสผ่านเดียวกัน คือค่า `SEED_DEMO_PASSWORD` ที่ตั้งตอนรัน `db:seed` (ไม่ได้เขียนไว้ใน repo — ขอจากผู้ดูแลโปรเจกต์)
 
 | อีเมล | ชื่อ | Role | ตำแหน่ง |
 |---|---|---|---|

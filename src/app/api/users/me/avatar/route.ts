@@ -9,6 +9,7 @@ import {
   AVATAR_TOO_LARGE_MESSAGE,
   checkAvatarRequestSize,
   checkAvatarUpload,
+  UPLOAD_STORAGE_UNAVAILABLE_MESSAGE,
 } from "@/lib/upload-validation";
 
 export const POST = withApiErrors(async (request: Request) => {
@@ -37,10 +38,16 @@ export const POST = withApiErrors(async (request: Request) => {
   if (!checked.ok) throw new ApiError(400, checked.message);
 
   const uploadDir = path.join(process.cwd(), "public", "uploads", "avatars");
-  await mkdir(uploadDir, { recursive: true });
-
   const storedName = `${user.id}-${randomUUID()}.${checked.ext}`;
-  await writeFile(path.join(uploadDir, storedName), buffer);
+  // Nothing is written to the database until the file is on disk, so a
+  // failed write (e.g. a read-only disk on serverless hosting) leaves no row.
+  try {
+    await mkdir(uploadDir, { recursive: true });
+    await writeFile(path.join(uploadDir, storedName), buffer);
+  } catch (err) {
+    console.error("avatar upload: could not save the file", err);
+    throw new ApiError(503, UPLOAD_STORAGE_UNAVAILABLE_MESSAGE);
+  }
 
   const avatarUrl = `/uploads/avatars/${storedName}`;
   await prisma.user.update({ where: { id: user.id }, data: { avatarUrl } });

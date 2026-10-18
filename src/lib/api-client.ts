@@ -21,8 +21,11 @@ export async function apiFetch<T = unknown>(
   }
 
   if (!res.ok) {
-    const message =
-      (data as { error?: string } | null)?.error ?? `เกิดข้อผิดพลาด (${res.status})`;
+    // A 413 without our JSON body comes from the hosting platform's own request
+    // size limit (which can be lower than the app's), before the route runs.
+    const fallback =
+      res.status === 413 ? "ไฟล์มีขนาดใหญ่เกินขีดจำกัดของเซิร์ฟเวอร์" : `เกิดข้อผิดพลาด (${res.status})`;
+    const message = (data as { error?: string } | null)?.error ?? fallback;
     throw new Error(message);
   }
 

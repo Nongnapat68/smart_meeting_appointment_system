@@ -11,10 +11,11 @@
  * Signs in with two real seeded accounts:
  *   - somchai@smartmeeting.dev  (role ADMIN)
  *   - siriporn@smartmeeting.dev (role MEMBER)
- * both with password "Passw0rd!" (see prisma/seed.ts DEMO_PASSWORD).
+ * both with the password the seed gave them (SEED_DEMO_PASSWORD, see
+ * prisma/seed.ts DEMO_PASSWORD).
  *
  * Run with:
- *   npx tsx scripts/test-rls.ts
+ *   SEED_DEMO_PASSWORD=... npx tsx scripts/test-rls.ts
  *
  * Exits 0 if every assertion passes, 1 otherwise (with a printed report).
  */
@@ -22,7 +23,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-const PASSWORD = "Passw0rd!";
+const PASSWORD = process.env.SEED_DEMO_PASSWORD?.trim() ?? "";
+if (!PASSWORD) {
+  console.error("SEED_DEMO_PASSWORD is not set — it must be the password the seeded demo accounts use.");
+  process.exit(1);
+}
 
 let failures = 0;
 let passed = 0;

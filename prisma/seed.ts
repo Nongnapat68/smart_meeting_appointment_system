@@ -4,7 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const prisma = new PrismaClient();
 const supabaseAdmin = createAdminClient();
 
-const DEMO_PASSWORD = "Passw0rd!";
+// Password for every demo account. Read from the environment so no real
+// password is committed to the (public) repository.
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD?.trim() ?? "";
 
 const SEED_USER_EMAILS = [
   "somchai@smartmeeting.dev",
@@ -32,6 +34,13 @@ async function main() {
   // The clean slate below deletes EVERY row of every table, not just the
   // sample data — on a shared database that wipes everyone's meetings. Make
   // that an explicit choice instead of something one `npm run db:seed` does.
+  if (!DEMO_PASSWORD) {
+    console.error(
+      "Refusing to seed: SEED_DEMO_PASSWORD is not set.\n" +
+        "Set the password the demo accounts should get, e.g. SEED_DEMO_PASSWORD=... SEED_RESET_ALL=yes npm run db:seed"
+    );
+    process.exit(1);
+  }
   if (process.env.SEED_RESET_ALL !== "yes") {
     console.error(
       "Refusing to seed: this script deletes ALL data in the database (every table), then recreates the sample data.\n" +
@@ -768,7 +777,7 @@ async function main() {
   console.log("");
   console.log("Demo accounts (all use the same password):");
   internalUsers.forEach((u) => console.log(`  - ${u.email}`));
-  console.log(`  password: ${DEMO_PASSWORD}`);
+  console.log("  password: the value of SEED_DEMO_PASSWORD");
 }
 
 main()

@@ -6,6 +6,20 @@ import { api } from "@/lib/api-client";
 
 type Step = "email" | "otp" | "reset" | "success";
 
+// sendEmail() (src/lib/email.ts) only logs messages today, so no OTP reaches a
+// real inbox — say so instead of letting the page imply it was emailed.
+function SimulatedEmailNotice() {
+  return (
+    <div className="rounded-lg bg-tertiary-container/15 text-tertiary-container font-label-md text-label-md px-4 py-3 flex gap-2 text-left">
+      <span className="material-symbols-outlined text-[18px] shrink-0">info</span>
+      <span>
+        ระบบอีเมลยังเป็นโหมดจำลอง ยังไม่ส่งรหัสไปยังกล่องจดหมายจริง
+        หากต้องการรีเซ็ตรหัสผ่าน กรุณาติดต่อผู้ดูแลระบบ
+      </span>
+    </div>
+  );
+}
+
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("email");
@@ -125,6 +139,9 @@ export default function ForgotPasswordPage() {
               กรุณากรอกอีเมลของคุณเพื่อรับรหัสยืนยันสำหรับรีเซ็ตรหัสผ่าน
             </p>
           </div>
+          <div className="mb-4">
+            <SimulatedEmailNotice />
+          </div>
           {error && (
             <div className="mb-4 rounded-lg bg-error-container/50 text-on-error-container font-body-md text-body-md px-4 py-3">
               {error}
@@ -179,6 +196,7 @@ export default function ForgotPasswordPage() {
               <span className="text-on-surface font-medium">{email}</span>
             </p>
           </div>
+          <SimulatedEmailNotice />
           <div className="flex justify-center gap-2">
             {otpDigits.map((digit, idx) => (
               <input

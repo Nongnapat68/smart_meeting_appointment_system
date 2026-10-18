@@ -105,6 +105,11 @@ export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 export const AVATAR_MAX_REQUEST_BYTES = AVATAR_MAX_BYTES + 512 * 1024;
 export const AVATAR_TOO_LARGE_MESSAGE = "ไฟล์มีขนาดใหญ่เกินไป (สูงสุด 5MB)";
 
+// Uploads are saved under public/uploads on the server's own disk. Where that
+// disk is read-only (serverless hosting such as Vercel) the write fails; the
+// routes answer 503 with this instead of a generic 500.
+export const UPLOAD_STORAGE_UNAVAILABLE_MESSAGE = "ฟีเจอร์อัปโหลดไฟล์ยังไม่รองรับบนเซิร์ฟเวอร์นี้";
+
 type SizeCheck = { ok: true } | { ok: false; message: string };
 
 /**
